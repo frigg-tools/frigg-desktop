@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { connectWs } from './api/ws';
 import { useAppStore, type Screen } from './store';
 import { useT, useLocale } from './i18n';
@@ -109,6 +109,49 @@ function LanguageToggle() {
   );
 }
 
+function MacProxyToggle() {
+  const t = useT();
+  const macProxy = useAppStore((s) => s.devices?.tooling.macosProxy ?? null);
+  const toggle = useAppStore((s) => s.toggleMacosProxy);
+  const [busy, setBusy] = useState(false);
+
+  if (!macProxy || macProxy.service === null) return null;
+  const on = macProxy.enabled;
+
+  return (
+    <div
+      className={`rounded-md border px-2.5 py-2 transition-colors ${
+        on ? 'border-amber-500/40 bg-amber-500/10' : 'border-zinc-800'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium text-zinc-200">{t('macProxy.label')}</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={t('macProxy.label')}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void toggle().finally(() => setBusy(false));
+          }}
+          className={`relative h-4 w-7 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+            on ? 'bg-amber-400' : 'bg-zinc-700'
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-3 w-3 rounded-full bg-zinc-950 transition-transform ${
+              on ? 'translate-x-3.5' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+      <p className="mt-1 text-[10px] leading-snug text-zinc-500">{t('macProxy.hint')}</p>
+    </div>
+  );
+}
+
 export default function App() {
   const screen = useAppStore((s) => s.screen);
   const setScreen = useAppStore((s) => s.setScreen);
@@ -173,6 +216,7 @@ export default function App() {
           })}
         </nav>
         <div className="space-y-2.5 border-t border-zinc-800/80 px-4 py-3">
+          <MacProxyToggle />
           <LanguageToggle />
           <div className="flex items-center gap-2">
             <span
