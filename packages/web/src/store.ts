@@ -72,7 +72,6 @@ export interface AppState {
   refreshMocks: () => Promise<void>;
   refreshDevices: () => Promise<void>;
   refreshStatus: () => Promise<void>;
-  toggleMacosProxy: () => Promise<void>;
   clearTraffic: () => Promise<void>;
   applyEvent: (ev: ServerEvent) => void;
 }
@@ -216,11 +215,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   refreshStatus: async () => {
     const status = await api.getStatus();
     set({ status });
-  },
-  toggleMacosProxy: async () => {
-    const current = get().devices?.tooling.macosProxy.enabled ?? false;
-    await api.setMacosProxy(!current);
-    await get().refreshDevices();
   },
   clearTraffic: async () => {
     await api.clearTraffic();
