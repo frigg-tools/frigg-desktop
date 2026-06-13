@@ -4,6 +4,9 @@ export const traffic: Bundle = {
   en: {
     'title': 'Traffic',
     'filterPlaceholder': 'filter host or path',
+    'source.label': 'Source',
+    'source.all': 'All devices',
+    'source.localhost': 'localhost',
     'pause': 'Pause',
     'resume': 'Resume',
     'clear': 'Clear',
@@ -34,6 +37,9 @@ export const traffic: Bundle = {
   pt: {
     'title': 'Tráfego',
     'filterPlaceholder': 'filtrar host ou caminho',
+    'source.label': 'Origem',
+    'source.all': 'Todos os dispositivos',
+    'source.localhost': 'localhost',
     'pause': 'Pausar',
     'resume': 'Retomar',
     'clear': 'Limpar',

@@ -1,8 +1,8 @@
-import type { LogLevel } from '@frigg/shared';
-import { useAppStore } from '../../store';
+import { useAppStore, type LogLevelFilter } from '../../store';
 import { useT } from '../../i18n';
-import { LOG_LEVELS } from './levels';
+import { LOG_LEVEL_FILTERS } from './levels';
 import LogcatDevicePicker from './LogcatDevicePicker';
+import LogcatPackagePicker from './LogcatPackagePicker';
 
 function PlayIcon() {
   return (
@@ -24,10 +24,8 @@ export default function LogcatToolbar() {
   const t = useT();
   const logStatus = useAppStore((s) => s.logStatus);
   const logTarget = useAppStore((s) => s.logTarget);
-  const logPackage = useAppStore((s) => s.logPackage);
   const minLevel = useAppStore((s) => s.logFilters.minLevel);
   const text = useAppStore((s) => s.logFilters.text);
-  const setLogPackage = useAppStore((s) => s.setLogPackage);
   const setLogFilters = useAppStore((s) => s.setLogFilters);
   const startLogs = useAppStore((s) => s.startLogs);
   const stopLogs = useAppStore((s) => s.stopLogs);
@@ -50,22 +48,15 @@ export default function LogcatToolbar() {
       </h1>
       <div className="flex-1" />
       <LogcatDevicePicker disabled={streaming} />
-      <input
-        value={logPackage}
-        onChange={(e) => setLogPackage(e.target.value)}
-        placeholder={t('logcat.package.placeholder')}
-        spellCheck={false}
-        disabled={streaming}
-        className="w-44 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
-      />
+      <LogcatPackagePicker disabled={streaming} />
       <select
         value={minLevel}
-        onChange={(e) => setLogFilters({ minLevel: e.target.value as LogLevel })}
+        onChange={(e) => setLogFilters({ minLevel: e.target.value as LogLevelFilter })}
         className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
       >
-        {LOG_LEVELS.map((level) => (
+        {LOG_LEVEL_FILTERS.map((level) => (
           <option key={level} value={level}>
-            {level} · {t(`logcat.level.${level}`)}
+            {level === 'ALL' ? t('logcat.level.ALL') : `${level} · ${t(`logcat.level.${level}`)}`}
           </option>
         ))}
       </select>

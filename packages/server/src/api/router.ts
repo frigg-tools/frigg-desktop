@@ -11,9 +11,11 @@ import type {
   MockRuleInput,
   ProxyStatus,
 } from '@frigg/shared';
+import { listApps } from '../devices/apps.ts';
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
 import { installSimCert, listBootedSimulators, xcrunStatus } from '../devices/ios.ts';
 import { getMacProxyState, setMacProxy } from '../devices/macos-proxy.ts';
+import type { DbInspector } from '../db/index.ts';
 import { serverLocale, type ServerLocale } from '../i18n.ts';
 import { getLanIp } from '../lib/net.ts';
 import type { LogcatManager } from '../logcat/index.ts';
@@ -29,6 +31,7 @@ export interface ApiDeps {
   proxyPort: number;
   apiPort: number;
   logcat: LogcatManager;
+  db: DbInspector;
 }
 
 const MAX_PATTERN_LENGTH = 2048;
@@ -200,6 +203,35 @@ function parseLogTarget(body: unknown): { target: LogTarget; packageFilter?: str
   return { target };
 }
 
+function parsePlatform(raw: unknown): LogPlatform {
+  if (raw === 'android' || raw === 'ios') return raw;
+  badRequest("platform must be one of 'android', 'ios'");
+}
+
+function parseNonEmpty(raw: unknown, label: string): string {
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    badRequest(`${label} must be a non-empty string`);
+  }
+  return raw;
+}
+
+interface DbRequestParams {
+  platform: LogPlatform;
+  id: string;
+  app: string;
+  ref: string;
+}
+
+function parseDbBody(body: unknown): DbRequestParams {
+  const record = asRecord(body, 'request');
+  return {
+    platform: parsePlatform(record.platform),
+    id: parseNonEmpty(record.id, 'id'),
+    app: parseNonEmpty(record.app, 'app'),
+    ref: parseNonEmpty(record.ref, 'ref'),
+  };
+}
+
 function localeFromRequest(req: Request): ServerLocale {
   const queryLang = req.query.lang;
   if (queryLang === 'pt' || queryLang === 'en') return queryLang;
@@ -359,6 +391,46 @@ export function buildRouter(deps: ApiDeps): Router {
   router.get('/api/logs/status', (_req, res) => {
     res.json(deps.logcat.status);
   });
+
+  router.get(
+    '/api/apps',
+    asyncHandler(async (req, res) => {
+      const platform = parsePlatform(req.query.platform);
+      const id = parseNonEmpty(req.query.id, 'id');
+      res.json(await listApps(platform, id));
+    }),
+  );
+
+  router.get(
+    '/api/db/files',
+    asyncHandler(async (req, res) => {
+      const platform = parsePlatform(req.query.platform);
+      const id = parseNonEmpty(req.query.id, 'id');
+      const app = parseNonEmpty(req.query.app, 'app');
+      res.json(await deps.db.listFiles(platform, id, app));
+    }),
+  );
+
+  router.post(
+    '/api/db/open',
+    asyncHandler(async (req, res) => {
+      const { platform, id, app, ref } = parseDbBody(req.body);
+      res.json(await deps.db.open(platform, id, app, ref));
+    }),
+  );
+
+  router.post(
+    '/api/db/query',
+    asyncHandler(async (req, res) => {
+      const { platform, id, app, ref } = parseDbBody(req.body);
+      const sql = parseNonEmpty(asRecord(req.body, 'request').sql, 'sql');
+      try {
+        res.json(await deps.db.query(platform, id, app, ref, sql));
+      } catch (error) {
+        badRequest(messageForError(error));
+      }
+    }),
+  );
 
   router.get(
     '/setup',

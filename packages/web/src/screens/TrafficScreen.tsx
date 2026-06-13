@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TrafficExchange } from '@frigg/shared';
 import { useAppStore } from '../store';
 import { useT } from '../i18n';
@@ -32,7 +32,21 @@ export default function TrafficScreen() {
 
   const [filter, setFilter] = useState('');
   const [method, setMethod] = useState('ALL');
+  const [source, setSource] = useState('');
   const [frozen, setFrozen] = useState<TrafficExchange[] | null>(null);
+
+  const sources = useMemo(() => {
+    const distinct = new Set<string>();
+    for (const exchange of exchanges) {
+      const address = exchange.request.clientAddress;
+      if (address) distinct.add(address);
+    }
+    return Array.from(distinct).sort((a, b) => a.localeCompare(b));
+  }, [exchanges]);
+
+  useEffect(() => {
+    if (source !== '' && !sources.includes(source)) setSource('');
+  }, [source, sources]);
 
   const initialIdsRef = useRef<ReadonlySet<string> | null>(null);
   if (initialIdsRef.current === null) {
@@ -45,6 +59,7 @@ export default function TrafficScreen() {
     const query = filter.trim().toLowerCase();
     const matched = base.filter((e) => {
       if (method !== 'ALL' && e.request.method.toUpperCase() !== method) return false;
+      if (source !== '' && e.request.clientAddress !== source) return false;
       if (query.length > 0) {
         const url = e.request.url.toLowerCase();
         const host = e.request.host.toLowerCase();
@@ -53,7 +68,7 @@ export default function TrafficScreen() {
       return true;
     });
     return matched.slice(-RENDER_LIMIT).reverse();
-  }, [exchanges, frozen, filter, method]);
+  }, [exchanges, frozen, filter, method, source]);
 
   const bufferedCount = useMemo(() => {
     if (frozen === null) return 0;
@@ -84,11 +99,14 @@ export default function TrafficScreen() {
       <TrafficToolbar
         filter={filter}
         method={method}
+        source={source}
+        sources={sources}
         paused={frozen !== null}
         bufferedCount={bufferedCount}
         totalCount={exchanges.length}
         onFilterChange={setFilter}
         onMethodChange={setMethod}
+        onSourceChange={setSource}
         onTogglePause={togglePause}
         onClear={handleClear}
       />

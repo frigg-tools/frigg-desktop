@@ -7,6 +7,7 @@ import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
 import type { ServerEvent } from '@frigg/shared';
 import { buildRouter } from './api/router.ts';
 import { WsHub } from './api/ws.ts';
+import { DbInspector } from './db/index.ts';
 import { disableMacProxyIfEnabledByFrigg } from './devices/macos-proxy.ts';
 import { getLanIp } from './lib/net.ts';
 import { ensureFriggDirs, mocksPath } from './lib/paths.ts';
@@ -65,10 +66,11 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   await engine.start();
 
   const logcat = new LogcatManager();
+  const db = new DbInspector();
 
   const app = express();
   app.use(express.json({ limit: '5mb' }));
-  app.use(buildRouter({ traffic, mocks, ca, proxyPort, apiPort, logcat }));
+  app.use(buildRouter({ traffic, mocks, ca, proxyPort, apiPort, logcat, db }));
   const webUiAvailable = registerWebUi(app, options.webDir ?? defaultWebDistDir());
 
   const httpServer = http.createServer(app);
@@ -94,6 +96,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
       engine.stop(),
       mocks.flush(),
       logcat.stop(),
+      db.dispose(),
       disableMacProxyIfEnabledByFrigg(),
     ]);
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
