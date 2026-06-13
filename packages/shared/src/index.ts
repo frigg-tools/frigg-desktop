@@ -126,6 +126,27 @@ export interface ProxyStatus {
 export type LogLevel = 'V' | 'D' | 'I' | 'W' | 'E' | 'F';
 export type LogPlatform = 'android' | 'ios';
 
+export interface DeviceApp {
+  id: string;
+  label: string;
+  system: boolean;
+}
+
+export interface DbFile {
+  name: string;
+  ref: string;
+  sizeBytes: number;
+}
+
+export interface DbQueryResult {
+  columns: string[];
+  rows: Array<Array<string | number | null>>;
+  rowCount: number;
+  truncated: boolean;
+}
+
+export const DB_ROW_LIMIT = 1000;
+
 export interface LogEntry {
   id: number;
   timestamp: number;

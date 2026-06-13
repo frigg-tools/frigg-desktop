@@ -1,6 +1,8 @@
 import type { LogLevel } from '@frigg/shared';
+import type { LogLevelFilter } from '../../store';
 
 export const LOG_LEVELS: LogLevel[] = ['V', 'D', 'I', 'W', 'E', 'F'];
+export const LOG_LEVEL_FILTERS: LogLevelFilter[] = ['ALL', 'V', 'D', 'I', 'W', 'E', 'F'];
 
 const LEVEL_RANK: Record<LogLevel, number> = {
   V: 0,
@@ -15,7 +17,8 @@ export function levelRank(level: LogLevel): number {
   return LEVEL_RANK[level];
 }
 
-export function meetsThreshold(level: LogLevel, minLevel: LogLevel): boolean {
+export function meetsThreshold(level: LogLevel, minLevel: LogLevelFilter): boolean {
+  if (minLevel === 'ALL') return true;
   return LEVEL_RANK[level] >= LEVEL_RANK[minLevel];
 }
 

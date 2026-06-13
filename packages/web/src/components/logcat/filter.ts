@@ -1,11 +1,12 @@
-import type { LogEntry, LogLevel } from '@frigg/shared';
+import type { LogEntry } from '@frigg/shared';
+import type { LogLevelFilter } from '../../store';
 import { meetsThreshold } from './levels';
 
 export const LOGCAT_RENDER_LIMIT = 500;
 
 export function filterLogEntries(
   entries: LogEntry[],
-  minLevel: LogLevel,
+  minLevel: LogLevelFilter,
   text: string,
   limit: number,
 ): LogEntry[] {

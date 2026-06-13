@@ -1,5 +1,8 @@
 import type {
   AndroidSetupResult,
+  DbFile,
+  DbQueryResult,
+  DeviceApp,
   DevicesSnapshot,
   LogPlatform,
   LogSessionStatus,
@@ -134,4 +137,33 @@ export function stopLogs(): Promise<LogSessionStatus> {
 
 export function clearLogs(): Promise<{ ok: boolean }> {
   return request('/api/logs', { method: 'DELETE' });
+}
+
+export function getDeviceApps(platform: LogPlatform, id: string): Promise<DeviceApp[]> {
+  return request(`/api/apps?platform=${platform}&id=${encodeURIComponent(id)}`);
+}
+
+export function getDbFiles(platform: LogPlatform, id: string, app: string): Promise<DbFile[]> {
+  return request(
+    `/api/db/files?platform=${platform}&id=${encodeURIComponent(id)}&app=${encodeURIComponent(app)}`,
+  );
+}
+
+export function openDb(
+  platform: LogPlatform,
+  id: string,
+  app: string,
+  ref: string,
+): Promise<{ tables: string[] }> {
+  return request('/api/db/open', jsonInit('POST', { platform, id, app, ref }));
+}
+
+export function queryDb(
+  platform: LogPlatform,
+  id: string,
+  app: string,
+  ref: string,
+  sql: string,
+): Promise<DbQueryResult> {
+  return request('/api/db/query', jsonInit('POST', { platform, id, app, ref, sql }));
 }

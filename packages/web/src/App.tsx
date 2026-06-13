@@ -6,6 +6,7 @@ import TrafficScreen from './screens/TrafficScreen';
 import MocksScreen from './screens/MocksScreen';
 import DevicesScreen from './screens/DevicesScreen';
 import LogcatScreen from './screens/LogcatScreen';
+import DatabaseScreen from './screens/DatabaseScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
 
 function ActivityIcon() {
@@ -74,6 +75,24 @@ function TerminalIcon() {
   );
 }
 
+function DatabaseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+      <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
+    </svg>
+  );
+}
+
 interface NavItem {
   screen: Screen;
   labelKey: string;
@@ -84,6 +103,7 @@ const NAV_ITEMS: NavItem[] = [
   { screen: 'traffic', labelKey: 'nav.traffic', icon: <ActivityIcon /> },
   { screen: 'mocks', labelKey: 'nav.mocks', icon: <BoltIcon /> },
   { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
+  { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
   { screen: 'devices', labelKey: 'nav.devices', icon: <SmartphoneIcon /> },
 ];
 
@@ -199,6 +219,8 @@ export default function App() {
           <MocksScreen />
         ) : screen === 'logcat' ? (
           <LogcatScreen />
+        ) : screen === 'database' ? (
+          <DatabaseScreen />
         ) : (
           <DevicesScreen />
         )}

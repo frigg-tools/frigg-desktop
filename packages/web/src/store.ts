@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import {
   TRAFFIC_BUFFER_LIMIT,
+  type DbFile,
+  type DbQueryResult,
+  type DeviceApp,
   type DevicesSnapshot,
   type LogEntry,
   type LogLevel,
@@ -14,12 +17,13 @@ import {
 } from '@frigg/shared';
 import * as api from './api/client';
 
-export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat';
+export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database';
+export type LogLevelFilter = LogLevel | 'ALL';
 
 const LOG_BUFFER_LIMIT = 5000;
 
 export interface LogFilters {
-  minLevel: LogLevel;
+  minLevel: LogLevelFilter;
   text: string;
 }
 export type Locale = 'en' | 'pt';
@@ -61,13 +65,34 @@ export interface AppState {
   logStatus: LogSessionStatus;
   logTarget: LogTarget | null;
   logPackage: string;
+  logApps: DeviceApp[];
   logFilters: LogFilters;
   setLogTarget: (target: LogTarget | null) => void;
   setLogPackage: (value: string) => void;
   setLogFilters: (patch: Partial<LogFilters>) => void;
+  loadLogApps: () => Promise<void>;
   startLogs: () => Promise<void>;
   stopLogs: () => Promise<void>;
   clearLogs: () => Promise<void>;
+  dbTarget: LogTarget | null;
+  dbApps: DeviceApp[];
+  dbApp: string | null;
+  dbFiles: DbFile[];
+  dbFileRef: string | null;
+  dbTables: string[];
+  dbTable: string | null;
+  dbSql: string;
+  dbResult: DbQueryResult | null;
+  dbBusy: boolean;
+  dbError: string | null;
+  setDbTarget: (target: LogTarget | null) => void;
+  loadDbApps: () => Promise<void>;
+  setDbApp: (app: string | null) => void;
+  loadDbFiles: () => Promise<void>;
+  openDbFile: (ref: string) => Promise<void>;
+  selectDbTable: (table: string) => Promise<void>;
+  setDbSql: (sql: string) => void;
+  runDbQuery: (sql: string) => Promise<void>;
   loadAll: () => Promise<void>;
   refreshMocks: () => Promise<void>;
   refreshDevices: () => Promise<void>;
@@ -161,10 +186,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   logStatus: { streaming: false, target: null, packageFilter: null, error: null },
   logTarget: null,
   logPackage: '',
-  logFilters: { minLevel: 'V', text: '' },
-  setLogTarget: (target) => set({ logTarget: target }),
+  logApps: [],
+  logFilters: { minLevel: 'ALL', text: '' },
+  setLogTarget: (target) => {
+    set({ logTarget: target, logPackage: '', logApps: [] });
+    if (target) void get().loadLogApps();
+  },
   setLogPackage: (value) => set({ logPackage: value }),
   setLogFilters: (patch) => set({ logFilters: { ...get().logFilters, ...patch } }),
+  loadLogApps: async () => {
+    const target = get().logTarget;
+    if (!target) return;
+    try {
+      const apps = await api.getDeviceApps(target.platform, target.id);
+      if (get().logTarget?.id === target.id) set({ logApps: apps });
+    } catch {
+      set({ logApps: [] });
+    }
+  },
   startLogs: async () => {
     const { logTarget, logPackage } = get();
     if (!logTarget) return;
@@ -187,6 +226,103 @@ export const useAppStore = create<AppState>((set, get) => ({
     resetPendingLogs();
     await api.clearLogs();
     set({ logEntries: [] });
+  },
+  dbTarget: null,
+  dbApps: [],
+  dbApp: null,
+  dbFiles: [],
+  dbFileRef: null,
+  dbTables: [],
+  dbTable: null,
+  dbSql: '',
+  dbResult: null,
+  dbBusy: false,
+  dbError: null,
+  setDbTarget: (target) => {
+    set({
+      dbTarget: target,
+      dbApps: [],
+      dbApp: null,
+      dbFiles: [],
+      dbFileRef: null,
+      dbTables: [],
+      dbTable: null,
+      dbResult: null,
+      dbError: null,
+    });
+    if (target) void get().loadDbApps();
+  },
+  loadDbApps: async () => {
+    const target = get().dbTarget;
+    if (!target) return;
+    set({ dbBusy: true, dbError: null });
+    try {
+      const apps = await api.getDeviceApps(target.platform, target.id);
+      if (get().dbTarget?.id === target.id) set({ dbApps: apps });
+    } catch (error) {
+      set({ dbError: error instanceof Error ? error.message : 'Failed to load apps' });
+    } finally {
+      set({ dbBusy: false });
+    }
+  },
+  setDbApp: (app) => {
+    set({
+      dbApp: app,
+      dbFiles: [],
+      dbFileRef: null,
+      dbTables: [],
+      dbTable: null,
+      dbResult: null,
+      dbError: null,
+    });
+    if (app) void get().loadDbFiles();
+  },
+  loadDbFiles: async () => {
+    const { dbTarget, dbApp } = get();
+    if (!dbTarget || !dbApp) return;
+    set({ dbBusy: true, dbError: null });
+    try {
+      const files = await api.getDbFiles(dbTarget.platform, dbTarget.id, dbApp);
+      set({ dbFiles: files });
+      if (files.length === 1) await get().openDbFile(files[0].ref);
+    } catch (error) {
+      set({ dbError: error instanceof Error ? error.message : 'Failed to list databases' });
+    } finally {
+      set({ dbBusy: false });
+    }
+  },
+  openDbFile: async (ref) => {
+    const { dbTarget, dbApp } = get();
+    if (!dbTarget || !dbApp) return;
+    set({ dbBusy: true, dbError: null, dbFileRef: ref, dbTables: [], dbTable: null, dbResult: null });
+    try {
+      const { tables } = await api.openDb(dbTarget.platform, dbTarget.id, dbApp, ref);
+      set({ dbTables: tables });
+      if (tables.length > 0) await get().selectDbTable(tables[0]);
+    } catch (error) {
+      set({ dbError: error instanceof Error ? error.message : 'Failed to open database' });
+    } finally {
+      set({ dbBusy: false });
+    }
+  },
+  selectDbTable: async (table) => {
+    const sql = `SELECT * FROM "${table}" LIMIT 200`;
+    set({ dbTable: table, dbSql: sql });
+    await get().runDbQuery(sql);
+  },
+  setDbSql: (sql) => set({ dbSql: sql }),
+  runDbQuery: async (sql) => {
+    const { dbTarget, dbApp, dbFileRef } = get();
+    if (!dbTarget || !dbApp || !dbFileRef) return;
+    set({ dbBusy: true, dbError: null });
+    try {
+      const result = await api.queryDb(dbTarget.platform, dbTarget.id, dbApp, dbFileRef, sql);
+      set({ dbResult: result });
+    } catch (error) {
+      set({ dbError: error instanceof Error ? error.message : 'Query failed', dbResult: null });
+    } finally {
+      set({ dbBusy: false });
+    }
   },
   loadAll: async () => {
     const [status, exchanges, mocks, devices] = await Promise.all([

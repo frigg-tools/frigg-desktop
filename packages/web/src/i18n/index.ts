@@ -5,6 +5,7 @@ import { mocks } from './mocks';
 import { devices } from './devices';
 import { onboarding } from './onboarding';
 import { logcat } from './logcat';
+import { database } from './database';
 
 export type { Locale };
 
@@ -13,7 +14,15 @@ export interface Bundle {
   pt: Record<string, string>;
 }
 
-const bundles: Record<string, Bundle> = { common, traffic, mocks, devices, onboarding, logcat };
+const bundles: Record<string, Bundle> = {
+  common,
+  traffic,
+  mocks,
+  devices,
+  onboarding,
+  logcat,
+  database,
+};
 
 const flattened: Record<Locale, Record<string, string>> = { en: {}, pt: {} };
 for (const [namespace, bundle] of Object.entries(bundles)) {
