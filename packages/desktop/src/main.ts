@@ -1,4 +1,6 @@
 import { app, BrowserWindow, Menu, dialog, shell, type MenuItemConstructorOptions } from 'electron';
+import { execFileSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 
 const isDev = process.env.FRIGG_DESKTOP_DEV === '1';
@@ -7,6 +9,43 @@ const DEV_URL = 'http://localhost:5173';
 let mainWindow: BrowserWindow | null = null;
 let stopServer: (() => Promise<void>) | null = null;
 let isQuitting = false;
+
+function loginShellPath(): string[] {
+  try {
+    const shellBin = process.env.SHELL ?? '/bin/zsh';
+    const output = execFileSync(shellBin, ['-ilc', 'echo $PATH'], {
+      encoding: 'utf8',
+      timeout: 4_000,
+    });
+    return output.trim().split(':').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function ensureToolingOnPath(): void {
+  if (process.platform === 'win32') return;
+  const home = os.homedir();
+  const androidHome =
+    process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT ?? path.join(home, 'Library/Android/sdk');
+  const dirs = new Set((process.env.PATH ?? '').split(':').filter(Boolean));
+  for (const dir of loginShellPath()) dirs.add(dir);
+  for (const dir of [
+    path.join(androidHome, 'platform-tools'),
+    path.join(androidHome, 'emulator'),
+    path.join(androidHome, 'cmdline-tools/latest/bin'),
+    path.join(home, 'Library/Android/sdk/platform-tools'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+  ]) {
+    dirs.add(dir);
+  }
+  process.env.PATH = Array.from(dirs).join(':');
+}
 
 async function resolveAppUrl(): Promise<string> {
   if (isDev) {
@@ -75,6 +114,7 @@ function buildMenu(): void {
 }
 
 async function bootstrap(): Promise<void> {
+  ensureToolingOnPath();
   buildMenu();
   try {
     const url = await resolveAppUrl();
