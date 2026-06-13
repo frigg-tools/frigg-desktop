@@ -7,6 +7,10 @@ export class WsHub {
 
   constructor(httpServer: http.Server, path: '/ws') {
     this.wss = new WebSocketServer({ server: httpServer, path });
+    this.wss.on('error', () => {});
+    this.wss.on('connection', (client) => {
+      client.on('error', () => {});
+    });
   }
 
   broadcast(ev: ServerEvent): void {

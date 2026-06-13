@@ -89,8 +89,13 @@ function parseHeaderMap(raw: unknown): Record<string, string> {
 
 function parseResponseSpec(raw: unknown): MockResponseSpec {
   const record = asRecord(raw, 'response');
-  if (typeof record.statusCode !== 'number' || !Number.isFinite(record.statusCode)) {
-    badRequest('response.statusCode must be a number');
+  if (
+    typeof record.statusCode !== 'number' ||
+    !Number.isInteger(record.statusCode) ||
+    record.statusCode < 100 ||
+    record.statusCode > 599
+  ) {
+    badRequest('response.statusCode must be an integer between 100 and 599');
   }
   const spec: MockResponseSpec = {
     statusCode: record.statusCode,

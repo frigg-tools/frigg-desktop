@@ -44,8 +44,32 @@ async function detectActiveService(): Promise<string | null> {
     .slice(1)
     .map((line) => line.trim())
     .filter((line) => line !== '' && !line.startsWith('*'));
+  if (services.length === 0) return null;
+
+  const routedService = await serviceForDefaultRoute(services);
+  if (routedService !== null) return routedService;
   if (services.includes('Wi-Fi')) return 'Wi-Fi';
-  return services[0] ?? null;
+  return services[0];
+}
+
+async function serviceForDefaultRoute(services: string[]): Promise<string | null> {
+  const route = await run('route', ['-n', 'get', 'default']);
+  if (!route.ok) return null;
+  const interfaceMatch = route.stdout.match(/interface:\s*(\S+)/);
+  const device = interfaceMatch?.[1];
+  if (!device) return null;
+
+  const ports = await run('networksetup', ['-listallhardwareports']);
+  if (!ports.ok) return null;
+  const blocks = ports.stdout.split(/\n(?=Hardware Port:)/);
+  for (const block of blocks) {
+    if (new RegExp(`Device:\\s*${device}\\b`).test(block)) {
+      const portMatch = block.match(/Hardware Port:\s*(.+)/);
+      const portName = portMatch?.[1]?.trim();
+      if (portName && services.includes(portName)) return portName;
+    }
+  }
+  return null;
 }
 
 function commandFailure(result: ExecResult): string {

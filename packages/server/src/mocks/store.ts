@@ -13,6 +13,27 @@ import { pickRule, type MatchInput } from './matcher.ts';
 
 const PERSIST_DEBOUNCE_MS = 100;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isValidFolder(value: unknown): value is MockFolder {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    (value.parentId === null || typeof value.parentId === 'string')
+  );
+}
+
+function isValidRule(value: unknown): value is MockRule {
+  if (!isRecord(value)) return false;
+  if (typeof value.id !== 'string') return false;
+  if (!isRecord(value.matcher) || typeof value.matcher.pathPattern !== 'string') return false;
+  if (!isRecord(value.response) || typeof value.response.statusCode !== 'number') return false;
+  return true;
+}
+
 export class MockStore extends EventEmitter {
   private folders: MockFolder[] = [];
   private rules: MockRule[] = [];
@@ -33,8 +54,8 @@ export class MockStore extends EventEmitter {
       const raw = await readFile(filePath, 'utf8');
       const parsed = JSON.parse(raw) as Partial<MocksSnapshot> | null;
       if (parsed && Array.isArray(parsed.folders) && Array.isArray(parsed.rules)) {
-        store.folders = parsed.folders;
-        store.rules = parsed.rules;
+        store.folders = parsed.folders.filter(isValidFolder);
+        store.rules = parsed.rules.filter(isValidRule);
       }
     } catch {
       store.folders = [];

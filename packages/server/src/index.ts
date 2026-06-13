@@ -83,8 +83,13 @@ async function main(): Promise<void> {
   traffic.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   mocks.on('event', (ev: ServerEvent) => hub.broadcast(ev));
 
-  await new Promise<void>((resolve) => {
-    httpServer.listen(apiPort, resolve);
+  await new Promise<void>((resolve, reject) => {
+    httpServer.once('error', reject);
+    httpServer.listen(apiPort, () => {
+      httpServer.off('error', reject);
+      httpServer.on('error', (error) => console.error(`HTTP server error: ${error.message}`));
+      resolve();
+    });
   });
 
   printBanner({ apiPort, proxyPort, lanIp: getLanIp(), fingerprint: ca.fingerprint, webUiAvailable });
@@ -96,7 +101,13 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch((error: NodeJS.ErrnoException & { port?: number }) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(
+      `Port ${error.port ?? ''} is already in use. Stop the other process or set FRIGG_API_PORT / FRIGG_PROXY_PORT.`,
+    );
+  } else {
+    console.error(error);
+  }
   process.exit(1);
 });
