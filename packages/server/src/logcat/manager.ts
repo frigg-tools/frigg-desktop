@@ -121,10 +121,18 @@ export class LogcatManager extends EventEmitter {
     };
     this.emitStatus();
 
+    let lastStderr = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => this.consume(chunk, plan.parse));
     child.stderr.setEncoding('utf8');
-    child.stderr.on('data', () => undefined);
+    child.stderr.on('data', (chunk: string) => {
+      const line = chunk
+        .split('\n')
+        .map((part) => part.trim())
+        .filter((part) => part !== '')
+        .pop();
+      if (line) lastStderr = line;
+    });
 
     child.on('error', (error) => {
       if (this.child !== child) return;
@@ -136,7 +144,10 @@ export class LogcatManager extends EventEmitter {
       if (this.child !== child) return;
       this.child = null;
       if (signal === 'SIGTERM' || signal === 'SIGKILL') return;
-      const reason = code !== null && code !== 0 ? `exit code ${code}` : signal !== null ? signal : 'stream ended';
+      const detail = lastStderr.replace(/^error:\s*/i, '').trim();
+      const fallback =
+        code !== null && code !== 0 ? `exit code ${code}` : signal !== null ? signal : 'stream ended';
+      const reason = detail !== '' ? detail : fallback;
       this.sessionStatus = {
         streaming: false,
         target,
@@ -195,7 +206,8 @@ function isSimulatorUdid(id: string): boolean {
 function buildIosPlan(udid: string, packageFilter: string | null): SpawnPlan {
   const args = ['simctl', 'spawn', udid, 'log', 'stream', '--style', 'compact', '--level', 'debug'];
   if (packageFilter !== null) {
-    args.push('--predicate', `process CONTAINS "${packageFilter}"`);
+    const escaped = packageFilter.replace(/["\\]/g, '\\$&');
+    args.push('--predicate', `process CONTAINS "${escaped}"`);
   }
   return { command: 'xcrun', args, parse: parseIosLogLine };
 }

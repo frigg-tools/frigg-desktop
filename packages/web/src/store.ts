@@ -101,6 +101,18 @@ function resetPendingLogs(): void {
   }
 }
 
+function reconcileLogTarget(
+  target: LogTarget | null,
+  devices: DevicesSnapshot | null,
+  streaming: boolean,
+): LogTarget | null {
+  if (!target || streaming) return target;
+  if (target.platform === 'android') {
+    return devices?.android.some((device) => device.serial === target.id) ? target : null;
+  }
+  return devices?.iosSimulators.some((sim) => sim.udid === target.id) ? target : null;
+}
+
 function upsertExchange(
   exchanges: TrafficExchange[],
   exchange: TrafficExchange,
@@ -167,6 +179,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ logStatus: status });
   },
   stopLogs: async () => {
+    resetPendingLogs();
     const status = await api.stopLogs();
     set({ logStatus: status });
   },
@@ -182,7 +195,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       api.getMocks(),
       api.getDevices(),
     ]);
-    set({ status, exchanges, folders: mocks.folders, rules: mocks.rules, devices });
+    set({
+      status,
+      exchanges,
+      folders: mocks.folders,
+      rules: mocks.rules,
+      devices,
+      logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming),
+    });
   },
   refreshMocks: async () => {
     const mocks = await api.getMocks();
@@ -190,7 +210,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   refreshDevices: async () => {
     const devices = await api.getDevices();
-    set({ devices });
+    set({ devices, logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming) });
   },
   refreshStatus: async () => {
     const status = await api.getStatus();

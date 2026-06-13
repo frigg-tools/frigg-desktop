@@ -10,10 +10,8 @@
     "start": "npm run build:main && electron .",
     "dist": "npm run build:main && electron-builder"
   },
-  "dependencies": {
-    "@frigg/server": "*"
-  },
   "devDependencies": {
+    "@frigg/server": "*",
     "cross-env": "^7.0.3",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
