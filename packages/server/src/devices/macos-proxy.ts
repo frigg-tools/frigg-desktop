@@ -1,6 +1,18 @@
 import { st, type ServerLocale } from '../i18n.ts';
 import { run, type ExecResult } from '../lib/exec.ts';
 
+let proxyEnabledByFrigg = false;
+
+export async function disableMacProxyIfEnabledByFrigg(): Promise<void> {
+  if (!proxyEnabledByFrigg) return;
+  const service = await detectActiveService();
+  if (service !== null) {
+    await run('networksetup', ['-setwebproxystate', service, 'off']);
+    await run('networksetup', ['-setsecurewebproxystate', service, 'off']);
+  }
+  proxyEnabledByFrigg = false;
+}
+
 export async function getMacProxyState(): Promise<{ enabled: boolean; service: string | null }> {
   const service = await detectActiveService();
   if (service === null) return { enabled: false, service: null };
@@ -40,6 +52,7 @@ export async function setMacProxy(
       };
     }
   }
+  proxyEnabledByFrigg = enabled;
   return enabled
     ? { ok: true, message: st(locale, 'macos.proxy.enabled', { service, port }) }
     : { ok: true, message: st(locale, 'macos.proxy.disabled', { service }) };

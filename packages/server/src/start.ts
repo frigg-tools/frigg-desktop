@@ -7,6 +7,7 @@ import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
 import type { ServerEvent } from '@frigg/shared';
 import { buildRouter } from './api/router.ts';
 import { WsHub } from './api/ws.ts';
+import { disableMacProxyIfEnabledByFrigg } from './devices/macos-proxy.ts';
 import { getLanIp } from './lib/net.ts';
 import { ensureFriggDirs, mocksPath } from './lib/paths.ts';
 import { LogcatManager } from './logcat/index.ts';
@@ -89,7 +90,12 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const host = lanIp ?? 'localhost';
 
   const stop = async (): Promise<void> => {
-    await Promise.allSettled([engine.stop(), mocks.flush(), logcat.stop()]);
+    await Promise.allSettled([
+      engine.stop(),
+      mocks.flush(),
+      logcat.stop(),
+      disableMacProxyIfEnabledByFrigg(),
+    ]);
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   };
 
