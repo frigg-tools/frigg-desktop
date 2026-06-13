@@ -27,6 +27,7 @@ function EditorEmptyState() {
 
 export default function MocksScreen() {
   const editingRule = useAppStore((s) => s.editingRule);
+  const draftId = useAppStore((s) => s.draftFromExchange?.id ?? null);
   const rulesCount = useAppStore((s) => s.rules.length);
 
   return (
@@ -48,7 +49,10 @@ export default function MocksScreen() {
           {editingRule === null ? (
             <EditorEmptyState />
           ) : (
-            <RuleEditor key={editingRule === 'new' ? 'new' : editingRule.id} rule={editingRule} />
+            <RuleEditor
+              key={editingRule === 'new' ? `new:${draftId ?? 'blank'}` : editingRule.id}
+              rule={editingRule}
+            />
           )}
         </div>
       </div>

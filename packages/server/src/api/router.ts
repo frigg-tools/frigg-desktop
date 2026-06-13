@@ -26,6 +26,8 @@ export interface ApiDeps {
   apiPort: number;
 }
 
+const MAX_PATTERN_LENGTH = 2048;
+
 class ValidationError extends Error {}
 
 function badRequest(message: string): never {
@@ -65,9 +67,15 @@ function parseMatcher(raw: unknown): MockMatcher {
   if (typeof pathPattern !== 'string' || pathPattern.trim() === '') {
     badRequest('matcher.pathPattern must be a non-empty string');
   }
+  if (pathPattern.length > MAX_PATTERN_LENGTH) {
+    badRequest(`matcher.pathPattern must be at most ${MAX_PATTERN_LENGTH} characters`);
+  }
   const matcher: MockMatcher = { pathPattern };
   if (typeof record.method === 'string' && record.method !== '') matcher.method = record.method;
   if (typeof record.hostPattern === 'string' && record.hostPattern !== '') {
+    if (record.hostPattern.length > MAX_PATTERN_LENGTH) {
+      badRequest(`matcher.hostPattern must be at most ${MAX_PATTERN_LENGTH} characters`);
+    }
     matcher.hostPattern = record.hostPattern;
   }
   if (typeof record.queryContains === 'string' && record.queryContains !== '') {

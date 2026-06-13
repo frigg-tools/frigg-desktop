@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import type { TrafficExchange } from '@frigg/shared';
 import { useAppStore } from '../store';
 import TrafficToolbar from '../components/traffic/TrafficToolbar';
 import TrafficRow from '../components/traffic/TrafficRow';
@@ -28,7 +29,7 @@ export default function TrafficScreen() {
 
   const [filter, setFilter] = useState('');
   const [method, setMethod] = useState('ALL');
-  const [pausedIds, setPausedIds] = useState<ReadonlySet<string> | null>(null);
+  const [frozen, setFrozen] = useState<TrafficExchange[] | null>(null);
 
   const initialIdsRef = useRef<ReadonlySet<string> | null>(null);
   if (initialIdsRef.current === null) {
@@ -37,7 +38,7 @@ export default function TrafficScreen() {
   const initialIds = initialIdsRef.current;
 
   const visible = useMemo(() => {
-    const base = pausedIds === null ? exchanges : exchanges.filter((e) => pausedIds.has(e.id));
+    const base = frozen ?? exchanges;
     const query = filter.trim().toLowerCase();
     const matched = base.filter((e) => {
       if (method !== 'ALL' && e.request.method.toUpperCase() !== method) return false;
@@ -49,24 +50,29 @@ export default function TrafficScreen() {
       return true;
     });
     return matched.slice(-RENDER_LIMIT).reverse();
-  }, [exchanges, pausedIds, filter, method]);
+  }, [exchanges, frozen, filter, method]);
 
   const bufferedCount = useMemo(() => {
-    if (pausedIds === null) return 0;
-    return exchanges.reduce((count, e) => (pausedIds.has(e.id) ? count : count + 1), 0);
-  }, [exchanges, pausedIds]);
+    if (frozen === null) return 0;
+    const frozenIds = new Set(frozen.map((e) => e.id));
+    return exchanges.reduce((count, e) => (frozenIds.has(e.id) ? count : count + 1), 0);
+  }, [exchanges, frozen]);
 
-  const selected =
-    selectedExchangeId === null
-      ? null
-      : (exchanges.find((e) => e.id === selectedExchangeId) ?? null);
+  const selected = useMemo(() => {
+    if (selectedExchangeId === null) return null;
+    if (frozen !== null) {
+      const inFrozen = frozen.find((e) => e.id === selectedExchangeId);
+      if (inFrozen) return inFrozen;
+    }
+    return exchanges.find((e) => e.id === selectedExchangeId) ?? null;
+  }, [selectedExchangeId, frozen, exchanges]);
 
   const togglePause = () => {
-    setPausedIds((current) => (current === null ? new Set(exchanges.map((e) => e.id)) : null));
+    setFrozen((current) => (current === null ? exchanges.slice() : null));
   };
 
   const handleClear = () => {
-    setPausedIds((current) => (current === null ? null : new Set()));
+    setFrozen((current) => (current === null ? null : []));
     void clearTraffic().catch(() => undefined);
   };
 
@@ -75,7 +81,7 @@ export default function TrafficScreen() {
       <TrafficToolbar
         filter={filter}
         method={method}
-        paused={pausedIds !== null}
+        paused={frozen !== null}
         bufferedCount={bufferedCount}
         totalCount={exchanges.length}
         onFilterChange={setFilter}

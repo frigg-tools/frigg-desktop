@@ -68,7 +68,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectFolder: (id) => set({ selectedFolderId: id }),
   editingRule: null,
   draftFromExchange: null,
-  openRuleEditor: (rule) => set({ editingRule: rule }),
+  openRuleEditor: (rule) => set({ editingRule: rule, draftFromExchange: null }),
   closeRuleEditor: () => set({ editingRule: null, draftFromExchange: null }),
   createMockFromExchange: (ex) =>
     set({ screen: 'mocks', editingRule: 'new', draftFromExchange: ex }),
@@ -102,9 +102,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     switch (ev.type) {
       case 'request':
       case 'response':
-      case 'abort':
-        set({ exchanges: upsertExchange(get().exchanges, ev.exchange) });
+      case 'abort': {
+        const next = upsertExchange(get().exchanges, ev.exchange);
+        const selectedId = get().selectedExchangeId;
+        const stillPresent = selectedId === null || next.some((e) => e.id === selectedId);
+        set(stillPresent ? { exchanges: next } : { exchanges: next, selectedExchangeId: null });
         break;
+      }
       case 'traffic-cleared':
         set({ exchanges: [], selectedExchangeId: null });
         break;

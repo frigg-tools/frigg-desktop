@@ -201,19 +201,32 @@ describe('match and recordHit', () => {
 });
 
 describe('events', () => {
-  it('emits mocks-updated for every mutation', async () => {
+  it('emits mocks-updated synchronously for every structural mutation', async () => {
     const store = await MockStore.load(mocksPath);
     const events: ServerEvent[] = [];
     store.on('event', (event: ServerEvent) => events.push(event));
     const rule = store.createRule(buildRuleInput());
     store.updateRule(rule.id, { name: 'x' });
-    store.recordHit(rule.id);
     store.deleteRule(rule.id);
     const folder = store.createFolder('f', null);
     store.updateFolder(folder.id, { name: 'g' });
     store.deleteFolder(folder.id);
-    expect(events).toHaveLength(7);
+    expect(events).toHaveLength(6);
     expect(events.every((event) => event.type === 'mocks-updated')).toBe(true);
+  });
+
+  it('does not emit synchronously on recordHit, coalescing hits into one throttled broadcast', async () => {
+    const store = await MockStore.load(mocksPath);
+    const rule = store.createRule(buildRuleInput());
+    const events: ServerEvent[] = [];
+    store.on('event', (event: ServerEvent) => events.push(event));
+    store.recordHit(rule.id);
+    store.recordHit(rule.id);
+    store.recordHit(rule.id);
+    expect(events).toHaveLength(0);
+    await vi.waitFor(() => expect(events.length).toBe(1), { timeout: 2000 });
+    expect(events[0]?.type).toBe('mocks-updated');
+    await store.flush();
   });
 });
 

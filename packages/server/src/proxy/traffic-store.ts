@@ -59,10 +59,19 @@ export class TrafficStore extends EventEmitter {
 
   private evictBeyondLimit(): void {
     while (this.exchanges.size > this.limit) {
-      const oldestId = this.exchanges.keys().next().value;
-      if (oldestId === undefined) return;
-      this.exchanges.delete(oldestId);
+      const evictId = this.oldestEvictableId();
+      if (evictId === undefined) return;
+      this.exchanges.delete(evictId);
     }
+  }
+
+  private oldestEvictableId(): string | undefined {
+    let oldestId: string | undefined;
+    for (const [id, exchange] of this.exchanges) {
+      if (oldestId === undefined) oldestId = id;
+      if (exchange.state !== 'pending') return id;
+    }
+    return oldestId;
   }
 
   private emitEvent(ev: ServerEvent): void {

@@ -197,9 +197,7 @@ async function captureBody(body: CompletedBody): Promise<BodyPayload> {
     if (size <= BODY_CAPTURE_LIMIT) {
       return { encoding: 'utf8', data: text, size, truncated: false };
     }
-    const cappedText = Buffer.from(text, 'utf8')
-      .subarray(0, BODY_CAPTURE_LIMIT)
-      .toString('utf8');
+    const cappedText = truncateUtf8(Buffer.from(text, 'utf8'), BODY_CAPTURE_LIMIT);
     return { encoding: 'utf8', data: cappedText, size, truncated: true };
   }
   const truncated = body.buffer.length > BODY_CAPTURE_LIMIT;
@@ -210,6 +208,14 @@ async function captureBody(body: CompletedBody): Promise<BodyPayload> {
     size: body.buffer.length,
     truncated,
   };
+}
+
+function truncateUtf8(buffer: Buffer, maxBytes: number): string {
+  let end = Math.min(maxBytes, buffer.length);
+  while (end > 0 && (buffer[end] & 0xc0) === 0x80) {
+    end -= 1;
+  }
+  return buffer.subarray(0, end).toString('utf8');
 }
 
 function toHeaderRecord(headers: Headers): Record<string, string | string[]> {

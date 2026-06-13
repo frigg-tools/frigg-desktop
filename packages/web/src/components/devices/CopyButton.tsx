@@ -11,6 +11,7 @@ export default function CopyButton({ value, label }: { value: string; label: str
   }, []);
 
   const copy = () => {
+    if (!navigator.clipboard) return;
     void navigator.clipboard
       .writeText(value)
       .then(() => {

@@ -2,12 +2,21 @@ import type { MockRule } from '@frigg/shared';
 
 const REGEX_SPECIAL_CHARS = /[.+^${}()|[\]\\]/;
 
+const compiledGlobCache = new Map<string, RegExp>();
+
 export function globToRegex(pattern: string): RegExp {
+  const cached = compiledGlobCache.get(pattern);
+  if (cached) return cached;
   let source = '^';
+  let prevWasStar = false;
   for (const char of pattern) {
     if (char === '*') {
-      source += '[\\s\\S]*';
-    } else if (char === '?') {
+      if (!prevWasStar) source += '[\\s\\S]*';
+      prevWasStar = true;
+      continue;
+    }
+    prevWasStar = false;
+    if (char === '?') {
       source += '[\\s\\S]';
     } else if (REGEX_SPECIAL_CHARS.test(char)) {
       source += `\\${char}`;
@@ -15,7 +24,10 @@ export function globToRegex(pattern: string): RegExp {
       source += char;
     }
   }
-  return new RegExp(`${source}$`, 'i');
+  const compiled = new RegExp(`${source}$`, 'i');
+  if (compiledGlobCache.size > 1000) compiledGlobCache.clear();
+  compiledGlobCache.set(pattern, compiled);
+  return compiled;
 }
 
 export interface MatchInput {

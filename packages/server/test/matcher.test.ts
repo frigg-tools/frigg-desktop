@@ -52,6 +52,16 @@ describe('globToRegex', () => {
     expect(regex.test('/api/v1/users/42')).toBe(false);
   });
 
+  it('coalesces consecutive stars so matching stays linear (no catastrophic backtracking)', () => {
+    const regex = globToRegex('**********x');
+    const nonMatching = `${'a'.repeat(50)}`;
+    const start = process.hrtime.bigint();
+    expect(regex.test(nonMatching)).toBe(false);
+    expect(regex.test(`${'a'.repeat(50)}x`)).toBe(true);
+    const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+    expect(elapsedMs).toBeLessThan(50);
+  });
+
   it('matches exactly one character with a question mark', () => {
     const regex = globToRegex('a?c');
     expect(regex.test('abc')).toBe(true);

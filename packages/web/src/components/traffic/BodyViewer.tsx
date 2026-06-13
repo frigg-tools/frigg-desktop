@@ -22,6 +22,7 @@ export default function BodyViewer({ body, contentType }: BodyViewerProps) {
   }, [body]);
 
   const copy = () => {
+    if (!navigator.clipboard) return;
     navigator.clipboard
       .writeText(text)
       .then(() => {

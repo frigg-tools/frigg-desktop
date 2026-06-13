@@ -149,12 +149,6 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
   const confirmTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    if (useAppStore.getState().draftFromExchange !== null) {
-      useAppStore.setState({ draftFromExchange: null });
-    }
-  }, []);
-
-  useEffect(() => {
     return () => {
       if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current);
     };

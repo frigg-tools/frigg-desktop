@@ -12,6 +12,7 @@ import type {
 import { pickRule, type MatchInput } from './matcher.ts';
 
 const PERSIST_DEBOUNCE_MS = 100;
+const HIT_BROADCAST_THROTTLE_MS = 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -39,6 +40,7 @@ export class MockStore extends EventEmitter {
   private rules: MockRule[] = [];
   private readonly filePath: string;
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private hitBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingWrite: Promise<void> = Promise.resolve();
   private dirty = false;
 
@@ -167,10 +169,15 @@ export class MockStore extends EventEmitter {
       return;
     }
     rule.hitCount += 1;
-    this.commit();
+    this.schedulePersist();
+    this.scheduleHitBroadcast();
   }
 
   async flush(): Promise<void> {
+    if (this.hitBroadcastTimer) {
+      clearTimeout(this.hitBroadcastTimer);
+      this.hitBroadcastTimer = null;
+    }
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;
@@ -213,13 +220,20 @@ export class MockStore extends EventEmitter {
 
   private schedulePersist(): void {
     this.dirty = true;
-    if (this.persistTimer) {
-      clearTimeout(this.persistTimer);
-    }
+    if (this.persistTimer) return;
     this.persistTimer = setTimeout(() => {
       this.persistTimer = null;
       void this.persistNow();
     }, PERSIST_DEBOUNCE_MS);
+  }
+
+  private scheduleHitBroadcast(): void {
+    if (this.hitBroadcastTimer) return;
+    this.hitBroadcastTimer = setTimeout(() => {
+      this.hitBroadcastTimer = null;
+      const event: ServerEvent = { type: 'mocks-updated' };
+      this.emit('event', event);
+    }, HIT_BROADCAST_THROTTLE_MS);
   }
 
   private persistNow(): Promise<void> {
