@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { TrafficExchange } from '@frigg/shared';
 import { useAppStore } from '../store';
+import { useT } from '../i18n';
 import TrafficToolbar from '../components/traffic/TrafficToolbar';
 import TrafficRow from '../components/traffic/TrafficRow';
 import TrafficDetail from '../components/traffic/TrafficDetail';
@@ -9,18 +10,20 @@ import TrafficEmptyState from '../components/traffic/TrafficEmptyState';
 const RENDER_LIMIT = 500;
 
 function ListHeader() {
+  const t = useT();
   return (
     <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-800/80 bg-zinc-950/90 px-3 py-1.5 text-[10px] uppercase tracking-widest text-zinc-600 backdrop-blur">
-      <span className="w-14 shrink-0 text-center">Method</span>
-      <span className="w-14 shrink-0 text-center">Status</span>
-      <span className="min-w-0 flex-1">URL</span>
-      <span className="w-16 shrink-0 text-right">Duration</span>
-      <span className="w-[4.5rem] shrink-0 text-right">Time</span>
+      <span className="w-14 shrink-0 text-center">{t('traffic.column.method')}</span>
+      <span className="w-14 shrink-0 text-center">{t('traffic.column.status')}</span>
+      <span className="min-w-0 flex-1">{t('traffic.column.url')}</span>
+      <span className="w-16 shrink-0 text-right">{t('traffic.column.duration')}</span>
+      <span className="w-[4.5rem] shrink-0 text-right">{t('traffic.column.time')}</span>
     </div>
   );
 }
 
 export default function TrafficScreen() {
+  const t = useT();
   const exchanges = useAppStore((s) => s.exchanges);
   const selectedExchangeId = useAppStore((s) => s.selectedExchangeId);
   const selectExchange = useAppStore((s) => s.selectExchange);
@@ -95,7 +98,7 @@ export default function TrafficScreen() {
             <TrafficEmptyState />
           ) : visible.length === 0 ? (
             <div className="flex h-full items-center justify-center">
-              <p className="text-[13px] text-zinc-600">No exchanges match the current filter</p>
+              <p className="text-[13px] text-zinc-600">{t('traffic.noMatch')}</p>
             </div>
           ) : (
             <>

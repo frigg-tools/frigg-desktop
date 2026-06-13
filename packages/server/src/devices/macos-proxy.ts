@@ -1,3 +1,4 @@
+import { st, type ServerLocale } from '../i18n.ts';
 import { run, type ExecResult } from '../lib/exec.ts';
 
 export async function getMacProxyState(): Promise<{ enabled: boolean; service: string | null }> {
@@ -8,13 +9,14 @@ export async function getMacProxyState(): Promise<{ enabled: boolean; service: s
   return { enabled, service };
 }
 
-export async function setMacProxy(enabled: boolean, port: number): Promise<{ ok: boolean; message: string }> {
+export async function setMacProxy(
+  enabled: boolean,
+  port: number,
+  locale: ServerLocale,
+): Promise<{ ok: boolean; message: string }> {
   const service = await detectActiveService();
   if (service === null) {
-    return {
-      ok: false,
-      message: 'No active network service found; configure the macOS proxy manually in System Settings.',
-    };
+    return { ok: false, message: st(locale, 'macos.proxy.noService') };
   }
   const commands = enabled
     ? [
@@ -28,12 +30,19 @@ export async function setMacProxy(enabled: boolean, port: number): Promise<{ ok:
   for (const args of commands) {
     const result = await run('networksetup', args);
     if (!result.ok) {
-      return { ok: false, message: `networksetup ${args[0]} failed on ${service}: ${commandFailure(result)}.` };
+      return {
+        ok: false,
+        message: st(locale, 'macos.proxy.commandFailed', {
+          command: args[0],
+          service,
+          detail: commandFailure(result),
+        }),
+      };
     }
   }
   return enabled
-    ? { ok: true, message: `macOS HTTP and HTTPS proxy on ${service} set to 127.0.0.1:${port}.` }
-    : { ok: true, message: `macOS HTTP and HTTPS proxy on ${service} disabled.` };
+    ? { ok: true, message: st(locale, 'macos.proxy.enabled', { service, port }) }
+    : { ok: true, message: st(locale, 'macos.proxy.disabled', { service }) };
 }
 
 async function detectActiveService(): Promise<string | null> {

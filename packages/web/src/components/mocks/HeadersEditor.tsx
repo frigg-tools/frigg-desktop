@@ -1,3 +1,5 @@
+import { useT } from '../../i18n';
+
 export interface HeaderRow {
   id: string;
   name: string;
@@ -32,6 +34,7 @@ interface HeadersEditorProps {
 }
 
 export default function HeadersEditor({ rows, onChange }: HeadersEditorProps) {
+  const t = useT();
   const updateRow = (id: string, patch: Partial<Pick<HeaderRow, 'name' | 'value'>>) => {
     onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
@@ -51,21 +54,21 @@ export default function HeadersEditor({ rows, onChange }: HeadersEditorProps) {
           <input
             value={row.name}
             onChange={(e) => updateRow(row.id, { name: e.target.value })}
-            placeholder="name"
+            placeholder={t('mocks.headers.namePlaceholder')}
             spellCheck={false}
             className={`${editorInputClass} w-2/5 shrink-0`}
           />
           <input
             value={row.value}
             onChange={(e) => updateRow(row.id, { value: e.target.value })}
-            placeholder="value"
+            placeholder={t('mocks.headers.valuePlaceholder')}
             spellCheck={false}
             className={`${editorInputClass} min-w-0 flex-1`}
           />
           <button
             type="button"
             onClick={() => removeRow(row.id)}
-            aria-label="Remove header"
+            aria-label={t('mocks.headers.remove')}
             className="shrink-0 rounded p-1 text-zinc-600 transition hover:text-rose-400 active:scale-[0.98]"
           >
             <svg
@@ -81,13 +84,13 @@ export default function HeadersEditor({ rows, onChange }: HeadersEditorProps) {
           </button>
         </div>
       ))}
-      {rows.length === 0 ? <p className="text-xs text-zinc-600">No headers</p> : null}
+      {rows.length === 0 ? <p className="text-xs text-zinc-600">{t('mocks.headers.empty')}</p> : null}
       <button
         type="button"
         onClick={addRow}
         className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] font-medium text-zinc-400 transition hover:text-zinc-200 active:scale-[0.98]"
       >
-        + Add header
+        {t('mocks.headers.add')}
       </button>
     </div>
   );

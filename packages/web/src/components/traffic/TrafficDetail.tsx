@@ -5,6 +5,7 @@ import StatusCode from '../StatusCode';
 import MockChip from '../MockChip';
 import HeadersTable from './HeadersTable';
 import BodyViewer from './BodyViewer';
+import { useT } from '../../i18n';
 import { findHeader, formatDuration } from './format';
 
 interface TrafficDetailProps {
@@ -17,6 +18,11 @@ type DetailTab = 'request' | 'response';
 
 const TABS: DetailTab[] = ['request', 'response'];
 
+const TAB_KEYS: Record<DetailTab, string> = {
+  request: 'traffic.tab.request',
+  response: 'traffic.tab.response',
+};
+
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <p className="px-4 pb-1.5 pt-4 text-[10px] uppercase tracking-widest text-zinc-500">
@@ -26,29 +32,31 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 function RequestPane({ exchange }: { exchange: TrafficExchange }) {
+  const t = useT();
   const { request } = exchange;
   return (
     <div className="pb-6">
       {request.query ? (
         <>
-          <SectionLabel>Query</SectionLabel>
+          <SectionLabel>{t('traffic.section.query')}</SectionLabel>
           <p className="break-all px-4 font-mono text-xs text-zinc-300">{request.query}</p>
         </>
       ) : null}
-      <SectionLabel>Headers</SectionLabel>
+      <SectionLabel>{t('traffic.section.headers')}</SectionLabel>
       <HeadersTable headers={request.headers} />
-      <SectionLabel>Body</SectionLabel>
+      <SectionLabel>{t('traffic.section.body')}</SectionLabel>
       <BodyViewer body={request.body} contentType={findHeader(request.headers, 'content-type')} />
     </div>
   );
 }
 
 function ResponsePane({ exchange }: { exchange: TrafficExchange }) {
+  const t = useT();
   const { response } = exchange;
   if (exchange.state === 'aborted') {
     return (
       <div className="px-4 py-6">
-        <p className="text-[13px] font-medium text-rose-400">Aborted</p>
+        <p className="text-[13px] font-medium text-rose-400">{t('traffic.aborted')}</p>
         {exchange.abortedReason ? (
           <p className="mt-1 font-mono text-xs text-zinc-500">{exchange.abortedReason}</p>
         ) : null}
@@ -59,7 +67,7 @@ function ResponsePane({ exchange }: { exchange: TrafficExchange }) {
     return (
       <div className="flex items-center gap-2 px-4 py-6">
         <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-zinc-500" />
-        <p className="text-[13px] text-zinc-500">Awaiting response</p>
+        <p className="text-[13px] text-zinc-500">{t('traffic.awaitingResponse')}</p>
       </div>
     );
   }
@@ -75,15 +83,16 @@ function ResponsePane({ exchange }: { exchange: TrafficExchange }) {
         </span>
         {response.mockRuleId ? <MockChip /> : null}
       </div>
-      <SectionLabel>Headers</SectionLabel>
+      <SectionLabel>{t('traffic.section.headers')}</SectionLabel>
       <HeadersTable headers={response.headers} />
-      <SectionLabel>Body</SectionLabel>
+      <SectionLabel>{t('traffic.section.body')}</SectionLabel>
       <BodyViewer body={response.body} contentType={findHeader(response.headers, 'content-type')} />
     </div>
   );
 }
 
 export default function TrafficDetail({ exchange, onClose, onCreateMock }: TrafficDetailProps) {
+  const t = useT();
   const [tab, setTab] = useState<DetailTab>('request');
   const { request, response } = exchange;
 
@@ -111,7 +120,7 @@ export default function TrafficDetail({ exchange, onClose, onCreateMock }: Traff
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close detail"
+          aria-label={t('traffic.closeDetail')}
           className="rounded p-1 text-zinc-500 transition hover:text-zinc-200"
         >
           <svg
@@ -139,7 +148,7 @@ export default function TrafficDetail({ exchange, onClose, onCreateMock }: Traff
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              {option}
+              {t(TAB_KEYS[option])}
             </button>
           ))}
         </div>
@@ -151,7 +160,7 @@ export default function TrafficDetail({ exchange, onClose, onCreateMock }: Traff
           <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
             <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
           </svg>
-          Create mock
+          {t('traffic.createMock')}
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">

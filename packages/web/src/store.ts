@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import {
   TRAFFIC_BUFFER_LIMIT,
   type DevicesSnapshot,
+  type LogEntry,
+  type LogLevel,
+  type LogSessionStatus,
+  type LogTarget,
   type MockFolder,
   type MockRule,
   type ProxyStatus,
@@ -10,11 +14,34 @@ import {
 } from '@frigg/shared';
 import * as api from './api/client';
 
-export type Screen = 'traffic' | 'mocks' | 'devices';
+export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat';
+
+const LOG_BUFFER_LIMIT = 5000;
+
+export interface LogFilters {
+  minLevel: LogLevel;
+  text: string;
+}
+export type Locale = 'en' | 'pt';
+
+const LOCALE_STORAGE_KEY = 'frigg-locale';
+
+function initialLocale(): Locale {
+  try {
+    const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (stored === 'en' || stored === 'pt') return stored;
+    if (navigator.language.toLowerCase().startsWith('pt')) return 'pt';
+  } catch {
+    return 'en';
+  }
+  return 'en';
+}
 
 export interface AppState {
   screen: Screen;
   setScreen: (s: Screen) => void;
+  locale: Locale;
+  setLocale: (locale: Locale) => void;
   status: ProxyStatus | null;
   wsConnected: boolean;
   exchanges: TrafficExchange[];
@@ -30,12 +57,28 @@ export interface AppState {
   closeRuleEditor: () => void;
   createMockFromExchange: (ex: TrafficExchange) => void;
   devices: DevicesSnapshot | null;
+  logEntries: LogEntry[];
+  logStatus: LogSessionStatus;
+  logTarget: LogTarget | null;
+  logPackage: string;
+  logFilters: LogFilters;
+  setLogTarget: (target: LogTarget | null) => void;
+  setLogPackage: (value: string) => void;
+  setLogFilters: (patch: Partial<LogFilters>) => void;
+  startLogs: () => Promise<void>;
+  stopLogs: () => Promise<void>;
+  clearLogs: () => Promise<void>;
   loadAll: () => Promise<void>;
   refreshMocks: () => Promise<void>;
   refreshDevices: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   clearTraffic: () => Promise<void>;
   applyEvent: (ev: ServerEvent) => void;
+}
+
+function appendLog(entries: LogEntry[], entry: LogEntry): LogEntry[] {
+  const next = [...entries, entry];
+  return next.length > LOG_BUFFER_LIMIT ? next.slice(next.length - LOG_BUFFER_LIMIT) : next;
 }
 
 function upsertExchange(
@@ -57,6 +100,15 @@ function upsertExchange(
 export const useAppStore = create<AppState>((set, get) => ({
   screen: 'traffic',
   setScreen: (s) => set({ screen: s }),
+  locale: initialLocale(),
+  setLocale: (locale) => {
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      void 0;
+    }
+    set({ locale });
+  },
   status: null,
   wsConnected: false,
   exchanges: [],
@@ -73,6 +125,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   createMockFromExchange: (ex) =>
     set({ screen: 'mocks', editingRule: 'new', draftFromExchange: ex }),
   devices: null,
+  logEntries: [],
+  logStatus: { streaming: false, target: null, packageFilter: null, error: null },
+  logTarget: null,
+  logPackage: '',
+  logFilters: { minLevel: 'V', text: '' },
+  setLogTarget: (target) => set({ logTarget: target }),
+  setLogPackage: (value) => set({ logPackage: value }),
+  setLogFilters: (patch) => set({ logFilters: { ...get().logFilters, ...patch } }),
+  startLogs: async () => {
+    const { logTarget, logPackage } = get();
+    if (!logTarget) return;
+    set({ logEntries: [] });
+    const status = await api.startLogs({
+      platform: logTarget.platform,
+      id: logTarget.id,
+      label: logTarget.label,
+      packageFilter: logPackage.trim() || undefined,
+    });
+    set({ logStatus: status });
+  },
+  stopLogs: async () => {
+    const status = await api.stopLogs();
+    set({ logStatus: status });
+  },
+  clearLogs: async () => {
+    await api.clearLogs();
+    set({ logEntries: [] });
+  },
   loadAll: async () => {
     const [status, exchanges, mocks, devices] = await Promise.all([
       api.getStatus(),
@@ -121,6 +201,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         void get()
           .refreshDevices()
           .catch(() => undefined);
+        break;
+      case 'log-entry':
+        set({ logEntries: appendLog(get().logEntries, ev.entry) });
+        break;
+      case 'log-cleared':
+        set({ logEntries: [] });
+        break;
+      case 'log-status':
+        set({ logStatus: ev.status });
         break;
     }
   },

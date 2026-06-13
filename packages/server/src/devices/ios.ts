@@ -1,4 +1,5 @@
 import type { IosSimulator } from '@frigg/shared';
+import { st, type ServerLocale } from '../i18n.ts';
 import { run } from '../lib/exec.ts';
 import { caCertPath } from '../lib/paths.ts';
 
@@ -33,15 +34,18 @@ export async function listBootedSimulators(): Promise<IosSimulator[]> {
   return simulators;
 }
 
-export async function installSimCert(udid: string): Promise<{ ok: boolean; message: string }> {
+export async function installSimCert(
+  udid: string,
+  locale: ServerLocale,
+): Promise<{ ok: boolean; message: string }> {
   const result = await run('xcrun', ['simctl', 'keychain', udid, 'add-root-cert', caCertPath]);
   if (result.ok) {
-    return { ok: true, message: 'Frigg CA installed and trusted in the simulator keychain.' };
+    return { ok: true, message: st(locale, 'ios.cert.installed') };
   }
   const detail = result.stderr.trim() || result.stdout.trim();
   return {
     ok: false,
-    message: detail ? `Certificate install failed: ${detail}` : 'Certificate install failed.',
+    message: detail ? st(locale, 'ios.cert.failed', { detail }) : st(locale, 'ios.cert.failedNoDetail'),
   };
 }
 

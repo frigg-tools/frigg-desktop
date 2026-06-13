@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AndroidCertMode, AndroidDevice, AndroidSetupResult } from '@frigg/shared';
+import { st, type ServerLocale } from '../i18n.ts';
 import { run, type ExecResult } from '../lib/exec.ts';
 import { androidCertName, type CaMaterial } from '../proxy/ca.ts';
 
@@ -33,31 +34,30 @@ export async function listAndroidDevices(): Promise<AndroidDevice[]> {
 
 export async function setupAndroid(
   serial: string,
-  opts: { proxyPort: number; apiPort: number; lanIp: string | null; ca: CaMaterial },
+  opts: { proxyPort: number; apiPort: number; lanIp: string | null; ca: CaMaterial; locale: ServerLocale },
 ): Promise<AndroidSetupResult> {
+  const { locale } = opts;
   const messages: string[] = [];
   const isEmulator = serial.startsWith('emulator-');
   const proxyHost = isEmulator ? '10.0.2.2' : opts.lanIp;
   let proxySet = false;
   if (proxyHost === null) {
-    messages.push(
-      `Could not detect this machine's LAN IP, so the device proxy was not configured. Connect both to the same network and set the device Wi-Fi proxy manually to <this-machine-ip>:${opts.proxyPort}.`,
-    );
+    messages.push(st(locale, 'android.proxy.noLanIp', { proxyPort: opts.proxyPort }));
   } else {
     const proxyValue = `${proxyHost}:${opts.proxyPort}`;
     const result = await run('adb', ['-s', serial, 'shell', 'settings', 'put', 'global', 'http_proxy', proxyValue]);
     if (result.ok) {
       proxySet = true;
-      messages.push(`Global HTTP proxy set to ${proxyValue}.`);
+      messages.push(st(locale, 'android.proxy.set', { proxyValue }));
     } else {
-      messages.push(`Failed to set the global HTTP proxy: ${commandFailure(result)}.`);
+      messages.push(st(locale, 'android.proxy.failed', { detail: commandFailure(result) }));
     }
   }
-  const certMode = await installCa(serial, opts, proxyHost, messages);
+  const certMode = await installCa(serial, opts, proxyHost, messages, locale);
   return { proxySet, certMode, messages };
 }
 
-export async function teardownAndroid(serial: string): Promise<void> {
+export async function teardownAndroid(serial: string, _locale: ServerLocale): Promise<void> {
   await run('adb', ['-s', serial, 'shell', 'settings', 'put', 'global', 'http_proxy', ':0']);
 }
 
@@ -91,17 +91,18 @@ async function installCa(
   opts: { apiPort: number; ca: CaMaterial },
   proxyHost: string | null,
   messages: string[],
+  locale: ServerLocale,
 ): Promise<AndroidCertMode> {
   let tempDir: string | null = null;
   try {
     tempDir = await mkdtemp(join(tmpdir(), 'frigg-ca-'));
     const localCertPath = join(tempDir, 'frigg-ca.crt');
     await writeFile(localCertPath, opts.ca.cert, 'utf8');
-    const systemInstalled = await tryInstallSystemCert(serial, opts.ca.cert, localCertPath, messages);
+    const systemInstalled = await tryInstallSystemCert(serial, opts.ca.cert, localCertPath, messages, locale);
     if (systemInstalled) return 'system';
-    return await fallbackToUserCert(serial, localCertPath, proxyHost, opts.apiPort, messages);
+    return await fallbackToUserCert(serial, localCertPath, proxyHost, opts.apiPort, messages, locale);
   } catch (error) {
-    messages.push(`CA certificate install failed: ${describeError(error)}.`);
+    messages.push(st(locale, 'android.cert.installFailed', { detail: describeError(error) }));
     return 'none';
   } finally {
     if (tempDir !== null) {
@@ -115,47 +116,42 @@ async function tryInstallSystemCert(
   certPem: string,
   localCertPath: string,
   messages: string[],
+  locale: ServerLocale,
 ): Promise<boolean> {
   const rootResult = await run('adb', ['-s', serial, 'root']);
   if (!rootResult.ok || /cannot run as root/i.test(rootResult.stdout + rootResult.stderr)) {
-    messages.push('adb root is not available on this device; falling back to manual user certificate install.');
+    messages.push(st(locale, 'android.cert.systemNoRoot'));
     return false;
   }
   const waitResult = await run('adb', ['-s', serial, 'wait-for-device']);
   if (!waitResult.ok) {
-    messages.push('Device did not come back after adb root; falling back to manual user certificate install.');
+    messages.push(st(locale, 'android.cert.systemNoDevice'));
     return false;
   }
   const remountResult = await run('adb', ['-s', serial, 'remount']);
   if (!remountResult.ok || /remount failed/i.test(remountResult.stdout + remountResult.stderr)) {
-    messages.push('Could not remount the system partition as writable; falling back to manual user certificate install.');
+    messages.push(st(locale, 'android.cert.systemNoRemount'));
     return false;
   }
   let certName: string;
   try {
     certName = await androidCertName(certPem);
   } catch (error) {
-    messages.push(
-      `Could not compute the Android certificate name (${describeError(error)}); falling back to manual user certificate install.`,
-    );
+    messages.push(st(locale, 'android.cert.systemNoName', { detail: describeError(error) }));
     return false;
   }
   const remoteCertPath = `${systemCertDir}/${certName}`;
   const pushResult = await run('adb', ['-s', serial, 'push', localCertPath, remoteCertPath]);
   if (!pushResult.ok) {
-    messages.push(
-      `Could not push the CA certificate to ${remoteCertPath}: ${commandFailure(pushResult)}; falling back to manual user certificate install.`,
-    );
+    messages.push(st(locale, 'android.cert.systemPushFailed', { path: remoteCertPath, detail: commandFailure(pushResult) }));
     return false;
   }
   const chmodResult = await run('adb', ['-s', serial, 'shell', 'chmod', '644', remoteCertPath]);
   if (!chmodResult.ok) {
-    messages.push(
-      `Could not set permissions on ${remoteCertPath}: ${commandFailure(chmodResult)}; falling back to manual user certificate install.`,
-    );
+    messages.push(st(locale, 'android.cert.systemChmodFailed', { path: remoteCertPath, detail: commandFailure(chmodResult) }));
     return false;
   }
-  messages.push(`Frigg CA installed as a system certificate at ${remoteCertPath}.`);
+  messages.push(st(locale, 'android.cert.systemInstalled', { path: remoteCertPath }));
   return true;
 }
 
@@ -165,29 +161,24 @@ async function fallbackToUserCert(
   proxyHost: string | null,
   apiPort: number,
   messages: string[],
+  locale: ServerLocale,
 ): Promise<AndroidCertMode> {
   const pushResult = await run('adb', ['-s', serial, 'push', localCertPath, downloadCertPath]);
   if (!pushResult.ok) {
-    messages.push(`Could not copy the CA certificate to ${downloadCertPath}: ${commandFailure(pushResult)}.`);
+    messages.push(st(locale, 'android.cert.userPushFailed', { path: downloadCertPath, detail: commandFailure(pushResult) }));
     if (proxyHost !== null) {
-      messages.push(`Download it on the device instead from http://${proxyHost}:${apiPort}/cert.crt.`);
+      messages.push(st(locale, 'android.cert.userDownloadHint', { host: proxyHost, apiPort }));
     }
     return 'none';
   }
-  messages.push(`Frigg CA copied to ${downloadCertPath}.`);
+  messages.push(st(locale, 'android.cert.userCopied', { path: downloadCertPath }));
   const settingsResult = await run('adb', ['-s', serial, 'shell', 'am', 'start', '-a', 'android.settings.SECURITY_SETTINGS']);
   if (!settingsResult.ok) {
-    messages.push('Could not open the security settings screen automatically; open Settings on the device.');
+    messages.push(st(locale, 'android.cert.userSettingsFailed'));
   }
-  messages.push(
-    'On the device: Settings → Security → Encryption & credentials → Install a certificate → CA certificate → pick frigg-ca.crt from Downloads.',
-  );
-  messages.push(
-    'That covers the system browser and any app that already trusts user certificates.',
-  );
-  messages.push(
-    'To intercept your OWN app over HTTPS (it targets Android 7+/API 24+), edit its DEBUG build: (1) add res/xml/network_security_config.xml with a <base-config> whose <trust-anchors> include <certificates src="user"/> and <certificates src="system"/>; (2) set android:networkSecurityConfig="@xml/network_security_config" on the <application> tag in AndroidManifest.xml. Copy-paste snippet on the setup page (Devices → Setup page).',
-  );
+  messages.push(st(locale, 'android.cert.userInstallSteps'));
+  messages.push(st(locale, 'android.cert.userCoverage'));
+  messages.push(st(locale, 'android.cert.userAppGuidance'));
   return 'user-manual';
 }
 

@@ -3,6 +3,7 @@ import type { TrafficExchange } from '@frigg/shared';
 import MethodBadge from '../MethodBadge';
 import StatusCode from '../StatusCode';
 import MockChip from '../MockChip';
+import { useT } from '../../i18n';
 import { formatClock, formatDuration } from './format';
 
 interface TrafficRowProps {
@@ -13,10 +14,11 @@ interface TrafficRowProps {
 }
 
 function StatusCell({ exchange }: { exchange: TrafficExchange }) {
+  const t = useT();
   if (exchange.state === 'aborted') {
     return (
       <span className="text-[9px] font-medium uppercase tracking-wider text-rose-400">
-        Aborted
+        {t('traffic.aborted')}
       </span>
     );
   }

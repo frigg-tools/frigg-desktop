@@ -1,3 +1,4 @@
+import { useT } from '../../i18n';
 import { flattenHeaders } from './format';
 
 export default function HeadersTable({
@@ -5,9 +6,10 @@ export default function HeadersTable({
 }: {
   headers: Record<string, string | string[]>;
 }) {
+  const t = useT();
   const entries = flattenHeaders(headers);
   if (entries.length === 0) {
-    return <p className="px-4 text-xs text-zinc-600">No headers</p>;
+    return <p className="px-4 text-xs text-zinc-600">{t('traffic.noHeaders')}</p>;
   }
   return (
     <div className="px-4">

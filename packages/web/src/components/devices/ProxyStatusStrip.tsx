@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useAppStore } from '../../store';
+import { useT } from '../../i18n';
 import CopyButton from './CopyButton';
 
 function truncateFingerprint(fingerprint: string): string {
@@ -16,6 +17,7 @@ function StripItem({ label, children }: { label: string; children: ReactNode }) 
 }
 
 export default function ProxyStatusStrip() {
+  const t = useT();
   const status = useAppStore((s) => s.status);
 
   const host = status === null ? null : (status.lanIp ?? window.location.hostname);
@@ -24,23 +26,23 @@ export default function ProxyStatusStrip() {
 
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-zinc-800/80 bg-zinc-900/60 px-4 py-3">
-      <StripItem label="Proxy">
+      <StripItem label={t('devices.strip.proxy')}>
         {proxyAddress !== null ? (
           <>
             <span className="font-mono text-[13px] tabular-nums text-zinc-200">{proxyAddress}</span>
-            <CopyButton value={proxyAddress} label="Copy proxy address" />
+            <CopyButton value={proxyAddress} label={t('devices.strip.copyProxyAddress')} />
           </>
         ) : (
           <span className="font-mono text-[13px] text-zinc-600">—</span>
         )}
       </StripItem>
-      <StripItem label="CA fingerprint">
+      <StripItem label={t('devices.strip.caFingerprint')}>
         {status !== null && status.certFingerprint.length > 0 ? (
           <>
             <span className="truncate font-mono text-[13px] text-zinc-400">
               {truncateFingerprint(status.certFingerprint)}
             </span>
-            <CopyButton value={status.certFingerprint} label="Copy full fingerprint" />
+            <CopyButton value={status.certFingerprint} label={t('devices.strip.copyFullFingerprint')} />
           </>
         ) : (
           <span className="font-mono text-[13px] text-zinc-600">—</span>
@@ -54,7 +56,7 @@ export default function ProxyStatusStrip() {
           rel="noreferrer"
           className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98]"
         >
-          Setup page
+          {t('devices.strip.setupPage')}
           <svg
             viewBox="0 0 24 24"
             fill="none"

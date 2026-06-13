@@ -4,6 +4,8 @@ import QRCode from 'qrcode';
 import type {
   BodyMatchMode,
   DevicesSnapshot,
+  LogPlatform,
+  LogTarget,
   MockMatcher,
   MockResponseSpec,
   MockRuleInput,
@@ -12,7 +14,9 @@ import type {
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
 import { installSimCert, listBootedSimulators, xcrunStatus } from '../devices/ios.ts';
 import { getMacProxyState, setMacProxy } from '../devices/macos-proxy.ts';
+import { serverLocale, type ServerLocale } from '../i18n.ts';
 import { getLanIp } from '../lib/net.ts';
+import type { LogcatManager } from '../logcat/index.ts';
 import type { MockStore } from '../mocks/store.ts';
 import { certToDer, type CaMaterial } from '../proxy/ca.ts';
 import type { TrafficStore } from '../proxy/traffic-store.ts';
@@ -24,6 +28,7 @@ export interface ApiDeps {
   ca: CaMaterial;
   proxyPort: number;
   apiPort: number;
+  logcat: LogcatManager;
 }
 
 const MAX_PATTERN_LENGTH = 2048;
@@ -177,6 +182,30 @@ function parseParentId(raw: unknown): string | null {
   return raw;
 }
 
+function parseLogTarget(body: unknown): { target: LogTarget; packageFilter?: string } {
+  const record = asRecord(body, 'log target');
+  const platform = record.platform;
+  if (platform !== 'android' && platform !== 'ios') {
+    badRequest("platform must be one of 'android', 'ios'");
+  }
+  if (typeof record.id !== 'string' || record.id.trim() === '') {
+    badRequest('id must be a non-empty string');
+  }
+  const label = typeof record.label === 'string' && record.label.trim() !== '' ? record.label : record.id;
+  const target: LogTarget = { platform: platform as LogPlatform, id: record.id, label };
+  if (record.packageFilter !== undefined) {
+    if (typeof record.packageFilter !== 'string') badRequest('packageFilter must be a string');
+    return { target, packageFilter: record.packageFilter };
+  }
+  return { target };
+}
+
+function localeFromRequest(req: Request): ServerLocale {
+  const queryLang = req.query.lang;
+  if (queryLang === 'pt' || queryLang === 'en') return queryLang;
+  return serverLocale(req.header('X-Frigg-Locale'));
+}
+
 function statusForError(error: unknown): number {
   if (error instanceof ValidationError) return 400;
   if (error instanceof Error && error.message === 'not found') return 404;
@@ -277,6 +306,7 @@ export function buildRouter(deps: ApiDeps): Router {
         apiPort: deps.apiPort,
         lanIp: getLanIp(),
         ca: deps.ca,
+        locale: localeFromRequest(req),
       });
       res.json(result);
     }),
@@ -285,7 +315,7 @@ export function buildRouter(deps: ApiDeps): Router {
   router.post(
     '/api/devices/android/:serial/teardown',
     asyncHandler(async (req, res) => {
-      await teardownAndroid(req.params.serial);
+      await teardownAndroid(req.params.serial, localeFromRequest(req));
       res.json({ ok: true });
     }),
   );
@@ -293,7 +323,7 @@ export function buildRouter(deps: ApiDeps): Router {
   router.post(
     '/api/devices/ios/:udid/install-cert',
     asyncHandler(async (req, res) => {
-      res.json(await installSimCert(req.params.udid));
+      res.json(await installSimCert(req.params.udid, localeFromRequest(req)));
     }),
   );
 
@@ -302,13 +332,37 @@ export function buildRouter(deps: ApiDeps): Router {
     asyncHandler(async (req, res) => {
       const record = asRecord(req.body, 'macos-proxy');
       if (typeof record.enabled !== 'boolean') badRequest('enabled must be a boolean');
-      res.json(await setMacProxy(record.enabled, deps.proxyPort));
+      res.json(await setMacProxy(record.enabled, deps.proxyPort, localeFromRequest(req)));
     }),
   );
 
+  router.post(
+    '/api/logs/start',
+    asyncHandler(async (req, res) => {
+      const { target, packageFilter } = parseLogTarget(req.body);
+      res.json(await deps.logcat.start(target, { packageFilter }));
+    }),
+  );
+
+  router.post(
+    '/api/logs/stop',
+    asyncHandler(async (_req, res) => {
+      res.json(await deps.logcat.stop());
+    }),
+  );
+
+  router.delete('/api/logs', (_req, res) => {
+    deps.logcat.clear();
+    res.json({ ok: true });
+  });
+
+  router.get('/api/logs/status', (_req, res) => {
+    res.json(deps.logcat.status);
+  });
+
   router.get(
     '/setup',
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
       const lanIp = getLanIp();
       const setupUrl = `http://${lanIp ?? 'localhost'}:${deps.apiPort}/setup`;
       const qrDataUrl = await QRCode.toDataURL(setupUrl, {
@@ -325,6 +379,7 @@ export function buildRouter(deps: ApiDeps): Router {
             apiPort: deps.apiPort,
             fingerprint: deps.ca.fingerprint,
             qrDataUrl,
+            locale: localeFromRequest(req),
           }),
         );
     }),

@@ -232,3 +232,24 @@ Dark, dense, data-first (HTTP-tool aesthetic). bg `zinc-950`, panels `zinc-900`,
 - No code comments (user rule) — self-explanatory naming.
 - Domain types ONLY from `@frigg/shared`.
 - Errors: server modules never crash the process on device-tool failures; degrade into result messages.
+
+---
+
+## v0.2 — i18n, Logcat, Desktop (2026-06-12)
+
+### i18n (pt-BR / English)
+- Locale lives in the web store (`locale: 'en'|'pt'`, `setLocale`), persisted to `localStorage['frigg-locale']`, default from `navigator.language` (pt* → pt).
+- `src/i18n/index.ts`: composes namespace bundles (`common`, `traffic`, `mocks`, `devices`, `onboarding`, `logcat`), exposes `useT(): (key, vars?) => string` and `useLocale()`. Keys are `namespace.key`; missing → en fallback → key. `{var}` interpolation.
+- Each namespace file exports `{ en: Record<string,string>; pt: Record<string,string> }` with identical key sets. `common` (owned, do not expand in feature agents) holds nav/status/actions.
+- Components use `const t = useT()` and replace every user-visible literal with `t('ns.key')`. Language toggle in the sidebar (EN/PT).
+- Server-facing strings: the web client sends `X-Frigg-Locale` on every API call; the server localizes device setup messages + `/setup` page (also accepts `?lang=pt|en`).
+
+### Logcat
+- Shared types: `LogEntry`, `LogLevel` (V/D/I/W/E/F), `LogPlatform`, `LogTarget`, `LogSessionStatus`; ServerEvents `log-entry` / `log-cleared` / `log-status`.
+- Server `src/logcat/manager.ts` (`LogcatManager extends EventEmitter`): one active session. `start(target, {packageFilter?})` stops any existing, spawns the device log process, parses lines → emits `{type:'log-entry', entry}`; `stop()`, `clear()`, `status`. Android: `adb -s <serial> logcat -v threadtime` (+ `--pid` resolved from `pidof <pkg>` when a package filter is set). iOS: simulator only via `xcrun simctl spawn <udid> log stream` (physical → status.error). Never crashes the process. Pure parsers in `parse-android.ts` / `parse-ios.ts` (unit-tested).
+- Routes: `POST /api/logs/start` {platform,id,label,packageFilter?} → LogSessionStatus; `POST /api/logs/stop`; `DELETE /api/logs` (clear); `GET /api/logs/status`. Wired in `start.ts`; manager events piped to the WS hub.
+- Web `screens/LogcatScreen.tsx` + `components/logcat/*`: device picker (from devices snapshot), package filter (server-side, re-starts session), client-side level + text filters, autoscroll, clear. Level-colored rows, mono message, last-N render cap. Store: `logEntries`, `logStatus`, `logTarget`, `logPackage`, `logFilters`, `startLogs/stopLogs/clearLogs`.
+
+### Desktop (Electron)
+- `packages/desktop`: Electron shell reusing the Node server. Dev: `npm run desktop` runs server + web (vite) + electron; the window loads the vite URL. Prod main calls `startFrigg()` (from `@frigg/server`) and loads `http://localhost:4848`. App menu, sane window chrome, quit stops the server. electron-builder config for packaging (best-effort).
+- Server exposes `startFrigg(opts) => FriggHandles` from `@frigg/server` (`src/start.ts`); the CLI `index.ts` is a thin wrapper (banner + SIGINT).

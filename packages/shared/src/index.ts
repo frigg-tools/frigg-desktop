@@ -123,13 +123,42 @@ export interface ProxyStatus {
   totalExchanges: number;
 }
 
+export type LogLevel = 'V' | 'D' | 'I' | 'W' | 'E' | 'F';
+export type LogPlatform = 'android' | 'ios';
+
+export interface LogEntry {
+  id: number;
+  timestamp: number;
+  level: LogLevel;
+  tag: string;
+  pid?: number;
+  message: string;
+  raw: string;
+}
+
+export interface LogTarget {
+  platform: LogPlatform;
+  id: string;
+  label: string;
+}
+
+export interface LogSessionStatus {
+  streaming: boolean;
+  target: LogTarget | null;
+  packageFilter: string | null;
+  error: string | null;
+}
+
 export type ServerEvent =
   | { type: 'request'; exchange: TrafficExchange }
   | { type: 'response'; exchange: TrafficExchange }
   | { type: 'abort'; exchange: TrafficExchange }
   | { type: 'traffic-cleared' }
   | { type: 'mocks-updated' }
-  | { type: 'devices-updated' };
+  | { type: 'devices-updated' }
+  | { type: 'log-entry'; entry: LogEntry }
+  | { type: 'log-cleared' }
+  | { type: 'log-status'; status: LogSessionStatus };
 
 export interface MocksSnapshot {
   folders: MockFolder[];

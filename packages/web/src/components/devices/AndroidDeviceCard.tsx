@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AndroidCertMode, AndroidDevice, AndroidSetupResult } from '@frigg/shared';
 import { setupAndroid, teardownAndroid } from '../../api/client';
 import { useAppStore } from '../../store';
+import { useT, type TranslateFn } from '../../i18n';
 import Spinner from './Spinner';
 
 const WARN_HINTS = [
@@ -28,10 +29,10 @@ const CERT_MODE_STYLES: Record<AndroidCertMode, string> = {
   none: 'border-zinc-700 bg-zinc-800/60 text-zinc-400',
 };
 
-const CERT_MODE_LABELS: Record<AndroidCertMode, string> = {
-  system: 'Cert · System',
-  'user-manual': 'Cert · User manual',
-  none: 'Cert · None',
+const CERT_MODE_LABEL_KEYS: Record<AndroidCertMode, string> = {
+  system: 'devices.android.certSystem',
+  'user-manual': 'devices.android.certUserManual',
+  none: 'devices.android.certNone',
 };
 
 function OkIcon() {
@@ -67,15 +68,17 @@ function WarnIcon() {
   );
 }
 
-function SetupResultBlock({ result }: { result: AndroidSetupResult }) {
+function SetupResultBlock({ result, t }: { result: AndroidSetupResult; t: TranslateFn }) {
   return (
     <div className="space-y-2 border-t border-zinc-800/80 px-4 py-3">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] uppercase tracking-widest text-zinc-500">Setup result</span>
+        <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+          {t('devices.android.setupResult')}
+        </span>
         <span
           className={`rounded-full border px-2 py-px text-[9px] font-medium uppercase tracking-widest ${CERT_MODE_STYLES[result.certMode]}`}
         >
-          {CERT_MODE_LABELS[result.certMode]}
+          {t(CERT_MODE_LABEL_KEYS[result.certMode])}
         </span>
       </div>
       <ul className="space-y-1.5">
@@ -91,6 +94,7 @@ function SetupResultBlock({ result }: { result: AndroidSetupResult }) {
 }
 
 export default function AndroidDeviceCard({ device }: { device: AndroidDevice }) {
+  const t = useT();
   const refreshDevices = useAppStore((s) => s.refreshDevices);
   const [pending, setPending] = useState<'setup' | 'teardown' | null>(null);
   const [result, setResult] = useState<AndroidSetupResult | null>(null);
@@ -105,7 +109,7 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
     try {
       setResult(await setupAndroid(device.serial));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Setup failed');
+      setError(err instanceof Error ? err.message : t('devices.android.setupFailed'));
     } finally {
       setPending(null);
       void refreshDevices().catch(() => undefined);
@@ -119,7 +123,7 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
       await teardownAndroid(device.serial);
       setResult(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Teardown failed');
+      setError(err instanceof Error ? err.message : t('devices.android.teardownFailed'));
     } finally {
       setPending(null);
       void refreshDevices().catch(() => undefined);
@@ -133,14 +137,18 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
           className={`h-1.5 w-1.5 shrink-0 rounded-full ${
             device.proxyConfigured ? 'pulse-dot bg-emerald-400' : 'bg-zinc-600'
           }`}
-          title={device.proxyConfigured ? 'Proxy configured' : 'Proxy not configured'}
+          title={
+            device.proxyConfigured
+              ? t('devices.android.proxyConfigured')
+              : t('devices.android.proxyNotConfigured')
+          }
         />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="truncate text-[13px] font-medium text-zinc-200">{device.model}</p>
             {device.isEmulator ? (
               <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-1.5 py-px text-[9px] font-medium uppercase tracking-widest text-sky-400">
-                Emulator
+                {t('devices.android.emulator')}
               </span>
             ) : null}
             {!ready ? (
@@ -153,7 +161,7 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
         </div>
         <div className="flex-1" />
         <span className="text-[10px] uppercase tracking-widest text-zinc-600">
-          {device.proxyConfigured ? 'Proxy on' : 'No proxy'}
+          {device.proxyConfigured ? t('devices.android.proxyOn') : t('devices.android.proxyOff')}
         </span>
         <button
           type="button"
@@ -162,7 +170,7 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
           className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/15 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending === 'setup' ? <Spinner /> : null}
-          Set up interception
+          {t('devices.android.setUpInterception')}
         </button>
         <button
           type="button"
@@ -171,13 +179,13 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
           className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-rose-500/30 hover:text-rose-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending === 'teardown' ? <Spinner /> : null}
-          Remove
+          {t('action.remove')}
         </button>
       </div>
       {error !== null ? (
         <p className="border-t border-zinc-800/80 px-4 py-2.5 text-xs text-rose-400">{error}</p>
       ) : null}
-      {result !== null ? <SetupResultBlock result={result} /> : null}
+      {result !== null ? <SetupResultBlock result={result} t={t} /> : null}
     </div>
   );
 }

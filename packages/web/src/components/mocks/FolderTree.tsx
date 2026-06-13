@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MockFolder } from '@frigg/shared';
 import { useAppStore } from '../../store';
+import { useT } from '../../i18n';
 import * as api from '../../api/client';
 
 interface FolderNode {
@@ -176,6 +177,7 @@ function TreeRow({ depth, active, onSelect, icon, children }: TreeRowProps) {
 }
 
 export default function FolderTree() {
+  const t = useT();
   const folders = useAppStore((s) => s.folders);
   const rules = useAppStore((s) => s.rules);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
@@ -241,7 +243,7 @@ export default function FolderTree() {
       <FolderIcon className="mr-2 h-3.5 w-3.5 shrink-0 text-zinc-600" />
       <InlineNameInput
         defaultValue=""
-        placeholder="folder name"
+        placeholder={t('mocks.folders.namePlaceholder')}
         onCommit={(name) => commitCreate(name, parentId)}
         onCancel={() => setCreatingIn(null)}
       />
@@ -268,7 +270,7 @@ export default function FolderTree() {
           {renamingId === folder.id ? (
             <InlineNameInput
               defaultValue={folder.name}
-              placeholder="folder name"
+              placeholder={t('mocks.folders.namePlaceholder')}
               onCommit={(name) => commitRename(folder.id, name)}
               onCancel={() => setRenamingId(null)}
             />
@@ -282,7 +284,7 @@ export default function FolderTree() {
                 <span className="hidden items-center gap-0.5 group-hover:flex">
                   <button
                     type="button"
-                    aria-label="Rename folder"
+                    aria-label={t('mocks.folders.rename')}
                     onClick={(e) => {
                       e.stopPropagation();
                       setRenamingId(folder.id);
@@ -300,12 +302,12 @@ export default function FolderTree() {
                       }}
                       className="rounded px-1 py-0.5 text-[10px] font-medium uppercase tracking-widest text-rose-400 transition active:scale-[0.98]"
                     >
-                      sure?
+                      {t('action.confirm')}
                     </button>
                   ) : (
                     <button
                       type="button"
-                      aria-label="Delete folder"
+                      aria-label={t('mocks.folders.delete')}
                       onClick={(e) => {
                         e.stopPropagation();
                         armDeleteConfirm(folder.id);
@@ -331,10 +333,10 @@ export default function FolderTree() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-zinc-800/80 px-3 py-2">
-        <span className="text-[10px] uppercase tracking-widest text-zinc-500">Folders</span>
+        <span className="text-[10px] uppercase tracking-widest text-zinc-500">{t('mocks.folders.label')}</span>
         <button
           type="button"
-          aria-label="New folder"
+          aria-label={t('mocks.folders.new')}
           onClick={() => setCreatingIn({ parentId: selectedFolderId })}
           className="rounded border border-zinc-800 bg-zinc-900/60 p-1 text-zinc-400 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98]"
         >
@@ -363,7 +365,7 @@ export default function FolderTree() {
             />
           }
         >
-          <span className="min-w-0 flex-1 truncate">All mocks</span>
+          <span className="min-w-0 flex-1 truncate">{t('mocks.folders.allMocks')}</span>
           <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-zinc-600">
             {rules.length > 0 ? rules.length : ''}
           </span>

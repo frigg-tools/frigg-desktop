@@ -6,6 +6,7 @@ import type {
   TrafficExchange,
 } from '@frigg/shared';
 import { useAppStore } from '../../store';
+import { useT } from '../../i18n';
 import * as api from '../../api/client';
 import HeadersEditor, {
   createHeaderRow,
@@ -132,6 +133,7 @@ interface RuleEditorProps {
 }
 
 export default function RuleEditor({ rule }: RuleEditorProps) {
+  const t = useT();
   const closeRuleEditor = useAppStore((s) => s.closeRuleEditor);
   const refreshMocks = useAppStore((s) => s.refreshMocks);
   const folders = useAppStore((s) => s.folders);
@@ -176,23 +178,23 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
   const save = () => {
     const pathPattern = form.pathPattern.trim();
     if (pathPattern.length === 0) {
-      setError('Path pattern is required');
+      setError(t('mocks.validation.pathRequired'));
       return;
     }
     const statusCode = Number.parseInt(form.statusCode, 10);
     if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) {
-      setError('Status code must be between 100 and 599');
+      setError(t('mocks.validation.statusRange'));
       return;
     }
     const priority = form.priority.trim().length === 0 ? 0 : Number.parseInt(form.priority, 10);
     if (Number.isNaN(priority)) {
-      setError('Priority must be a number');
+      setError(t('mocks.validation.priorityNumber'));
       return;
     }
     const delayRaw = form.delayMs.trim();
     const delayMs = delayRaw.length === 0 ? 0 : Number.parseInt(delayRaw, 10);
     if (Number.isNaN(delayMs) || delayMs < 0) {
-      setError('Delay must be zero or more milliseconds');
+      setError(t('mocks.validation.delayNonNegative'));
       return;
     }
 
@@ -229,7 +231,7 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
         closeRuleEditor();
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Failed to save mock');
+        setError(err instanceof Error ? err.message : t('mocks.error.saveFailed'));
         setSaving(false);
       });
   };
@@ -250,7 +252,7 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
       })
       .catch((err: unknown) => {
         setConfirmingDelete(false);
-        setError(err instanceof Error ? err.message : 'Failed to delete mock');
+        setError(err instanceof Error ? err.message : t('mocks.error.deleteFailed'));
       });
   };
 
@@ -260,12 +262,12 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
     <div className="flex h-full min-w-0 flex-col bg-zinc-900/40">
       <div className="flex items-center justify-between border-b border-zinc-800/80 px-4 py-3">
         <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-          {rule === 'new' ? 'New mock' : 'Edit mock'}
+          {rule === 'new' ? t('mocks.editor.new') : t('mocks.editor.edit')}
         </span>
         <button
           type="button"
           onClick={closeRuleEditor}
-          aria-label="Close editor"
+          aria-label={t('mocks.editor.close')}
           className="rounded p-1 text-zinc-500 transition hover:text-zinc-200"
         >
           <svg
@@ -283,21 +285,21 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
         <div>
-          <FieldLabel>Name</FieldLabel>
+          <FieldLabel>{t('mocks.editor.name')}</FieldLabel>
           <input
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
-            placeholder="What this mock does"
+            placeholder={t('mocks.editor.namePlaceholder')}
             spellCheck={false}
             className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[13px] text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
           />
         </div>
 
         <div className="space-y-3">
-          <SectionHeading>Matcher</SectionHeading>
+          <SectionHeading>{t('mocks.editor.matcher')}</SectionHeading>
           <div className="flex gap-2">
             <div className="w-28 shrink-0">
-              <FieldLabel>Method</FieldLabel>
+              <FieldLabel>{t('mocks.editor.method')}</FieldLabel>
               <select
                 value={form.method}
                 onChange={(e) => update('method', e.target.value)}
@@ -305,45 +307,45 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
               >
                 {methodOptions.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {option === 'ANY' ? t('method.any') : option}
                   </option>
                 ))}
               </select>
             </div>
             <div className="min-w-0 flex-1">
-              <FieldLabel>Host pattern</FieldLabel>
+              <FieldLabel>{t('mocks.editor.hostPattern')}</FieldLabel>
               <input
                 value={form.hostPattern}
                 onChange={(e) => update('hostPattern', e.target.value)}
-                placeholder="*.example.com (empty = any)"
+                placeholder={t('mocks.editor.hostPatternPlaceholder')}
                 spellCheck={false}
                 className={editorInputClass}
               />
             </div>
           </div>
           <div>
-            <FieldLabel>Path pattern</FieldLabel>
+            <FieldLabel>{t('mocks.editor.pathPattern')}</FieldLabel>
             <input
               value={form.pathPattern}
               onChange={(e) => update('pathPattern', e.target.value)}
-              placeholder="/api/users/*"
+              placeholder={t('mocks.editor.pathPatternPlaceholder')}
               spellCheck={false}
               className={editorInputClass}
             />
           </div>
           <div>
-            <FieldLabel>Query contains</FieldLabel>
+            <FieldLabel>{t('mocks.editor.queryContains')}</FieldLabel>
             <input
               value={form.queryContains}
               onChange={(e) => update('queryContains', e.target.value)}
-              placeholder="page=2 (empty = any)"
+              placeholder={t('mocks.editor.queryContainsPlaceholder')}
               spellCheck={false}
               className={editorInputClass}
             />
           </div>
           <div className="flex gap-2">
             <div className="w-28 shrink-0">
-              <FieldLabel>Body match</FieldLabel>
+              <FieldLabel>{t('mocks.editor.bodyMatch')}</FieldLabel>
               <select
                 value={form.bodyMatchMode}
                 onChange={(e) => update('bodyMatchMode', e.target.value as BodyMatchMode)}
@@ -351,17 +353,21 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
               >
                 {BODY_MATCH_MODES.map((mode) => (
                   <option key={mode} value={mode}>
-                    {mode}
+                    {t(`mocks.editor.bodyMatchMode.${mode}`)}
                   </option>
                 ))}
               </select>
             </div>
             <div className="min-w-0 flex-1">
-              <FieldLabel>Body value</FieldLabel>
+              <FieldLabel>{t('mocks.editor.bodyValue')}</FieldLabel>
               <input
                 value={form.bodyMatchValue}
                 onChange={(e) => update('bodyMatchValue', e.target.value)}
-                placeholder={form.bodyMatchMode === 'none' ? '—' : 'request body to match'}
+                placeholder={
+                  form.bodyMatchMode === 'none'
+                    ? t('mocks.editor.bodyValueDisabled')
+                    : t('mocks.editor.bodyValuePlaceholder')
+                }
                 disabled={form.bodyMatchMode === 'none'}
                 spellCheck={false}
                 className={`${editorInputClass} disabled:opacity-40`}
@@ -371,51 +377,51 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
         </div>
 
         <div className="space-y-3">
-          <SectionHeading>Response</SectionHeading>
+          <SectionHeading>{t('mocks.editor.response')}</SectionHeading>
           <div className="flex gap-2">
             <div className="w-28 shrink-0">
-              <FieldLabel>Status code</FieldLabel>
+              <FieldLabel>{t('mocks.editor.statusCode')}</FieldLabel>
               <input
                 value={form.statusCode}
                 onChange={(e) => update('statusCode', e.target.value)}
                 inputMode="numeric"
-                placeholder="200"
+                placeholder={t('mocks.editor.statusCodePlaceholder')}
                 spellCheck={false}
                 className={`${editorInputClass} tabular-nums`}
               />
             </div>
             <div className="w-32 shrink-0">
-              <FieldLabel>Delay ms</FieldLabel>
+              <FieldLabel>{t('mocks.editor.delayMs')}</FieldLabel>
               <input
                 value={form.delayMs}
                 onChange={(e) => update('delayMs', e.target.value)}
                 inputMode="numeric"
-                placeholder="0"
+                placeholder={t('mocks.editor.delayMsPlaceholder')}
                 spellCheck={false}
                 className={`${editorInputClass} tabular-nums`}
               />
             </div>
           </div>
           <div>
-            <FieldLabel>Headers</FieldLabel>
+            <FieldLabel>{t('mocks.editor.headers')}</FieldLabel>
             <HeadersEditor rows={form.headers} onChange={(rows) => update('headers', rows)} />
           </div>
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <FieldLabel>Body</FieldLabel>
+              <FieldLabel>{t('mocks.editor.body')}</FieldLabel>
               <button
                 type="button"
                 onClick={formatJsonBody}
                 className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-widest text-zinc-500 transition hover:text-emerald-400 active:scale-[0.98]"
               >
-                Format JSON
+                {t('mocks.editor.formatJson')}
               </button>
             </div>
             <textarea
               value={form.body}
               onChange={(e) => update('body', e.target.value)}
               rows={9}
-              placeholder='{"ok": true}'
+              placeholder={t('mocks.editor.bodyPlaceholder')}
               spellCheck={false}
               className={`${editorInputClass} resize-y leading-relaxed`}
             />
@@ -423,16 +429,16 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
         </div>
 
         <div className="space-y-3">
-          <SectionHeading>Placement</SectionHeading>
+          <SectionHeading>{t('mocks.editor.placement')}</SectionHeading>
           <div className="flex gap-2">
             <div className="min-w-0 flex-1">
-              <FieldLabel>Folder</FieldLabel>
+              <FieldLabel>{t('mocks.editor.folder')}</FieldLabel>
               <select
                 value={form.folderId}
                 onChange={(e) => update('folderId', e.target.value)}
                 className={selectClass}
               >
-                <option value="">No folder</option>
+                <option value="">{t('mocks.editor.noFolder')}</option>
                 {folderOptions.map(({ folder, depth }) => (
                   <option key={folder.id} value={folder.id}>
                     {`${'  '.repeat(depth)}${folder.name}`}
@@ -441,12 +447,12 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
               </select>
             </div>
             <div className="w-28 shrink-0">
-              <FieldLabel>Priority</FieldLabel>
+              <FieldLabel>{t('mocks.editor.priority')}</FieldLabel>
               <input
                 value={form.priority}
                 onChange={(e) => update('priority', e.target.value)}
                 inputMode="numeric"
-                placeholder="0"
+                placeholder={t('mocks.editor.priorityPlaceholder')}
                 spellCheck={false}
                 className={`${editorInputClass} tabular-nums`}
               />
@@ -466,7 +472,7 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
                 : 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-rose-500/30 hover:text-rose-400'
             }`}
           >
-            {confirmingDelete ? 'Sure?' : 'Delete'}
+            {confirmingDelete ? t('action.confirm') : t('action.delete')}
           </button>
         ) : null}
         <p className="min-w-0 flex-1 truncate text-right text-xs text-rose-400">{error ?? ''}</p>
@@ -475,7 +481,7 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
           onClick={closeRuleEditor}
           className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition hover:text-zinc-200 active:scale-[0.98]"
         >
-          Cancel
+          {t('action.cancel')}
         </button>
         <button
           type="button"
@@ -483,7 +489,7 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
           disabled={saving}
           className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/15 active:scale-[0.98] disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? t('action.saving') : t('action.save')}
         </button>
       </div>
     </div>

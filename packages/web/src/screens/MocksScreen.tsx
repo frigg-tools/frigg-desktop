@@ -1,9 +1,11 @@
 import { useAppStore } from '../store';
+import { useT } from '../i18n';
 import FolderTree from '../components/mocks/FolderTree';
 import RuleList from '../components/mocks/RuleList';
 import RuleEditor from '../components/mocks/RuleEditor';
 
 function EditorEmptyState() {
+  const t = useT();
   return (
     <div className="dot-grid flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
       <svg
@@ -17,15 +19,14 @@ function EditorEmptyState() {
       >
         <path d="M17 3.5 20.5 7 8 19.5l-4.5 1 1-4.5L17 3.5Z" />
       </svg>
-      <p className="text-sm text-zinc-500">Select a mock to edit it</p>
-      <p className="max-w-60 text-xs text-zinc-600">
-        Matching requests are answered by Frigg without touching the upstream server
-      </p>
+      <p className="text-sm text-zinc-500">{t('mocks.editor.emptyTitle')}</p>
+      <p className="max-w-60 text-xs text-zinc-600">{t('mocks.editor.emptyHint')}</p>
     </div>
   );
 }
 
 export default function MocksScreen() {
+  const t = useT();
   const editingRule = useAppStore((s) => s.editingRule);
   const draftId = useAppStore((s) => s.draftFromExchange?.id ?? null);
   const rulesCount = useAppStore((s) => s.rules.length);
@@ -33,7 +34,7 @@ export default function MocksScreen() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
-        <h1 className="font-display text-base font-semibold tracking-wide text-zinc-100">Mocks</h1>
+        <h1 className="font-display text-base font-semibold tracking-wide text-zinc-100">{t('mocks.title')}</h1>
         <span className="rounded border border-zinc-800 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-zinc-500">
           {rulesCount}
         </span>

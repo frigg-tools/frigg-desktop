@@ -1,3 +1,5 @@
+import { useT } from '../../i18n';
+
 const METHOD_OPTIONS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 interface TrafficToolbarProps {
@@ -40,9 +42,10 @@ export default function TrafficToolbar({
   onTogglePause,
   onClear,
 }: TrafficToolbarProps) {
+  const t = useT();
   return (
     <div className="flex items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
-      <h1 className="font-display text-base font-semibold tracking-wide text-zinc-100">Traffic</h1>
+      <h1 className="font-display text-base font-semibold tracking-wide text-zinc-100">{t('traffic.title')}</h1>
       <span className="rounded border border-zinc-800 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-zinc-500">
         {totalCount}
       </span>
@@ -50,7 +53,7 @@ export default function TrafficToolbar({
       <input
         value={filter}
         onChange={(e) => onFilterChange(e.target.value)}
-        placeholder="filter host or path"
+        placeholder={t('traffic.filterPlaceholder')}
         spellCheck={false}
         className="w-64 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
       />
@@ -61,7 +64,7 @@ export default function TrafficToolbar({
       >
         {METHOD_OPTIONS.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {option === 'ALL' ? t('method.any') : option}
           </option>
         ))}
       </select>
@@ -75,7 +78,7 @@ export default function TrafficToolbar({
         }`}
       >
         {paused ? <PlayIcon /> : <PauseIcon />}
-        {paused ? 'Resume' : 'Pause'}
+        {paused ? t('traffic.resume') : t('traffic.pause')}
         {paused && bufferedCount > 0 ? (
           <span className="font-mono text-[10px] tabular-nums text-amber-400/80">
             +{bufferedCount}
@@ -87,7 +90,7 @@ export default function TrafficToolbar({
         onClick={onClear}
         className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-rose-500/30 hover:text-rose-400 active:scale-[0.98]"
       >
-        Clear
+        {t('traffic.clear')}
       </button>
     </div>
   );

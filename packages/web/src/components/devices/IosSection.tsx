@@ -1,4 +1,5 @@
 import type { IosSimulator, ToolingStatus } from '@frigg/shared';
+import { useT } from '../../i18n';
 import Section from './Section';
 import EmptyHint from './EmptyHint';
 import IosSimulatorCard from './IosSimulatorCard';
@@ -10,16 +11,21 @@ interface IosSectionProps {
 }
 
 export default function IosSection({ simulators, tooling }: IosSectionProps) {
+  const t = useT();
   return (
-    <Section title="iOS Simulator" subtitle="booted simulators" count={simulators.length}>
+    <Section
+      title={t('devices.ios.title')}
+      subtitle={t('devices.ios.subtitle')}
+      count={simulators.length}
+    >
       {simulators.length === 0 ? (
         <EmptyHint
           message={
             tooling.xcrun.available
-              ? 'No booted simulators. Start one with:'
-              : 'xcrun not found — install Xcode or its command line tools, then start a simulator with:'
+              ? t('devices.ios.emptyBooted')
+              : t('devices.ios.emptyXcrunMissing')
           }
-          command="open -a Simulator"
+          command={t('devices.ios.emptyCommand')}
         />
       ) : (
         <div className="space-y-2">

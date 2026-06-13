@@ -1,14 +1,24 @@
 import { useMemo } from 'react';
 import type { MockRule } from '@frigg/shared';
 import { useAppStore } from '../../store';
+import { useT } from '../../i18n';
 import * as api from '../../api/client';
 
-function EnabledSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+function EnabledSwitch({
+  enabled,
+  label,
+  onToggle,
+}: {
+  enabled: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={enabled}
+      aria-label={label}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
@@ -27,6 +37,7 @@ function EnabledSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () =
 }
 
 function NewMockButton({ onClick }: { onClick: () => void }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -43,7 +54,7 @@ function NewMockButton({ onClick }: { onClick: () => void }) {
       >
         <path d="M12 5v14M5 12h14" />
       </svg>
-      New mock
+      {t('mocks.list.new')}
     </button>
   );
 }
@@ -59,7 +70,8 @@ function RuleRow({
   onOpen: () => void;
   onToggle: () => void;
 }) {
-  const method = (rule.matcher.method ?? 'ANY').toUpperCase();
+  const t = useT();
+  const method = (rule.matcher.method ?? t('method.any')).toUpperCase();
   return (
     <div
       role="button"
@@ -75,7 +87,11 @@ function RuleRow({
         active ? 'bg-emerald-500/5' : 'hover:bg-zinc-900/50'
       }`}
     >
-      <EnabledSwitch enabled={rule.enabled} onToggle={onToggle} />
+      <EnabledSwitch
+        enabled={rule.enabled}
+        label={t('mocks.list.enabledToggle', { name: rule.name })}
+        onToggle={onToggle}
+      />
       <div className="min-w-0 flex-1">
         <p
           className={`truncate text-[13px] font-medium ${
@@ -98,21 +114,23 @@ function RuleRow({
 }
 
 function RuleListEmptyState({ inFolder, onNew }: { inFolder: boolean; onNew: () => void }) {
+  const t = useT();
   return (
     <div className="dot-grid flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
       <svg viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7 text-zinc-700">
         <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
       </svg>
-      <p className="text-sm text-zinc-500">{inFolder ? 'No mocks in this folder' : 'No mocks yet'}</p>
-      <p className="max-w-56 text-xs text-zinc-600">
-        Create one here, or hit Create mock on any captured exchange
+      <p className="text-sm text-zinc-500">
+        {inFolder ? t('mocks.list.emptyInFolder') : t('mocks.list.empty')}
       </p>
+      <p className="max-w-56 text-xs text-zinc-600">{t('mocks.list.emptyHint')}</p>
       <NewMockButton onClick={onNew} />
     </div>
   );
 }
 
 export default function RuleList() {
+  const t = useT();
   const rules = useAppStore((s) => s.rules);
   const folders = useAppStore((s) => s.folders);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
@@ -128,8 +146,8 @@ export default function RuleList() {
 
   const folderName =
     selectedFolderId === null
-      ? 'All mocks'
-      : (folders.find((folder) => folder.id === selectedFolderId)?.name ?? 'Folder');
+      ? t('mocks.folders.allMocks')
+      : (folders.find((folder) => folder.id === selectedFolderId)?.name ?? t('mocks.folders.fallback'));
 
   const editingRuleId = editingRule !== null && editingRule !== 'new' ? editingRule.id : null;
 

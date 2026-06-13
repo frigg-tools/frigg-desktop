@@ -1,22 +1,23 @@
+import { st, type ServerLocale } from '../i18n.ts';
+
 export function setupPageHtml(opts: {
   lanIp: string | null;
   proxyPort: number;
   apiPort: number;
   fingerprint: string;
   qrDataUrl: string;
+  locale: ServerLocale;
 }): string {
+  const { locale } = opts;
   const proxyHost = opts.lanIp ?? 'this-computer-ip';
   const proxyAddress = `${proxyHost}:${opts.proxyPort}`;
-  const lanIpNote =
-    opts.lanIp === null
-      ? '<p class="warn">Frigg could not detect a LAN IP on this machine. Replace <span class="mono">this-computer-ip</span> below with this computer\'s Wi-Fi IP address.</p>'
-      : '';
+  const lanIpNote = opts.lanIp === null ? `<p class="warn">${st(locale, 'setup.lanIpNote')}</p>` : '';
   return `<!doctype html>
-<html lang="en">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Frigg — Device Setup</title>
+<title>${st(locale, 'setup.title')}</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -134,17 +135,17 @@ export function setupPageHtml(opts: {
 <div class="wrap">
   <header>
     <div>
-      <h1>Frigg <span class="accent">setup</span></h1>
-      <p class="tagline">Route this device's HTTP(S) traffic through Frigg.</p>
+      <h1>Frigg <span class="accent">${st(locale, 'setup.heading')}</span></h1>
+      <p class="tagline">${st(locale, 'setup.tagline')}</p>
     </div>
     <div>
-      <div class="qr"><img src="${opts.qrDataUrl}" alt="QR code for this setup page"></div>
-      <p class="qr-caption">Scan to open this page</p>
+      <div class="qr"><img src="${opts.qrDataUrl}" alt="${st(locale, 'setup.qrAlt')}"></div>
+      <p class="qr-caption">${st(locale, 'setup.qrCaption')}</p>
     </div>
   </header>
 
   <div class="proxy-banner">
-    <div class="label">Proxy address</div>
+    <div class="label">${st(locale, 'setup.proxyLabel')}</div>
     <div class="proxy-address mono">${proxyAddress}</div>
     ${lanIpNote}
   </div>
@@ -152,47 +153,47 @@ export function setupPageHtml(opts: {
   <section class="step">
     <div class="step-head">
       <div class="step-num">1</div>
-      <h2>Point your device at the proxy</h2>
+      <h2>${st(locale, 'setup.step1.title')}</h2>
     </div>
-    <p>Connect the device to the <strong>same Wi-Fi network</strong> as this computer, then set a manual HTTP proxy on that Wi-Fi connection:</p>
+    <p>${st(locale, 'setup.step1.intro')}</p>
     <ul>
-      <li>Server / hostname: <code>${proxyHost}</code></li>
-      <li>Port: <code>${opts.proxyPort}</code></li>
+      <li>${st(locale, 'setup.step1.server')} <code>${proxyHost}</code></li>
+      <li>${st(locale, 'setup.step1.port')} <code>${opts.proxyPort}</code></li>
     </ul>
-    <p class="dim">iOS: Settings → Wi-Fi → your network → Configure Proxy → Manual. Android: long-press your network → Modify network → Advanced → Proxy → Manual.</p>
+    <p class="dim">${st(locale, 'setup.step1.hint')}</p>
   </section>
 
   <section class="step">
     <div class="step-head">
       <div class="step-num">2</div>
-      <h2>Download the Frigg CA certificate</h2>
+      <h2>${st(locale, 'setup.step2.title')}</h2>
     </div>
-    <p>HTTPS inspection needs the Frigg certificate authority on the device. Download it here:</p>
+    <p>${st(locale, 'setup.step2.intro')}</p>
     <div class="certs">
-      <a class="cert-link" href="/cert.pem">cert.pem<span class="hint">iOS / generic PEM</span></a>
-      <a class="cert-link" href="/cert.crt">cert.crt<span class="hint">Android</span></a>
-      <a class="cert-link" href="/cert.der">cert.der<span class="hint">DER binary</span></a>
+      <a class="cert-link" href="/cert.pem">cert.pem<span class="hint">${st(locale, 'setup.step2.pemHint')}</span></a>
+      <a class="cert-link" href="/cert.crt">cert.crt<span class="hint">${st(locale, 'setup.step2.crtHint')}</span></a>
+      <a class="cert-link" href="/cert.der">cert.der<span class="hint">${st(locale, 'setup.step2.derHint')}</span></a>
     </div>
-    <p class="dim">Open this page on the device itself (scan the QR code) so the download lands directly on it.</p>
+    <p class="dim">${st(locale, 'setup.step2.hint')}</p>
   </section>
 
   <section class="step">
     <div class="step-head">
       <div class="step-num">3</div>
-      <h2>Trust the certificate</h2>
+      <h2>${st(locale, 'setup.step3.title')}</h2>
     </div>
     <div class="platform">
       <h3>iOS</h3>
       <ol>
-        <li>Settings → General → VPN &amp; Device Management → install the downloaded profile.</li>
-        <li>Settings → General → About → Certificate Trust Settings → enable full trust for <strong>Frigg CA</strong>.</li>
+        <li>${st(locale, 'setup.step3.iosStep1')}</li>
+        <li>${st(locale, 'setup.step3.iosStep2')}</li>
       </ol>
     </div>
     <div class="platform">
       <h3>Android</h3>
       <ol>
-        <li>Settings → Security → Encryption &amp; credentials → Install a certificate → CA certificate.</li>
-        <li>Pick the downloaded <code>frigg-ca.crt</code>.</li>
+        <li>${st(locale, 'setup.step3.androidStep1')}</li>
+        <li>${st(locale, 'setup.step3.androidStep2')}</li>
       </ol>
     </div>
   </section>
@@ -200,17 +201,17 @@ export function setupPageHtml(opts: {
   <section class="step">
     <div class="step-head">
       <div class="step-num">4</div>
-      <h2>Intercepting your own app's HTTPS</h2>
+      <h2>${st(locale, 'setup.step4.title')}</h2>
     </div>
-    <p>If you only use the system browser, you're done. To decrypt HTTPS from <strong>your own Android app</strong>, there's one catch: apps targeting <strong>Android 7+ (API 24)</strong> ignore user-installed CAs by default. You have two options.</p>
+    <p>${st(locale, 'setup.step4.intro')}</p>
     <div class="platform">
-      <h3>Option A — system certificate (no app changes)</h3>
-      <p class="dim">On a rooted device or most emulators (without Google Play), Frigg installs its CA as a <em>system</em> certificate automatically during "Set up interception". Every app trusts it, no code change needed.</p>
+      <h3>${st(locale, 'setup.step4.optionA.title')}</h3>
+      <p class="dim">${st(locale, 'setup.step4.optionA.body')}</p>
     </div>
     <div class="platform">
-      <h3>Option B — opt your debug build into user CAs</h3>
+      <h3>${st(locale, 'setup.step4.optionB.title')}</h3>
       <ol class="ol-tight">
-        <li>Add <code>res/xml/network_security_config.xml</code>:</li>
+        <li>${st(locale, 'setup.step4.optionB.step1')}</li>
       </ol>
       <pre class="codeblock"><span class="c">&lt;!-- res/xml/network_security_config.xml --&gt;</span>
 <span class="t">&lt;network-security-config&gt;</span>
@@ -222,15 +223,15 @@ export function setupPageHtml(opts: {
   <span class="t">&lt;/base-config&gt;</span>
 <span class="t">&lt;/network-security-config&gt;</span></pre>
       <ol class="ol-tight" start="2">
-        <li>Reference it from the <code>&lt;application&gt;</code> tag in <code>AndroidManifest.xml</code>:</li>
+        <li>${st(locale, 'setup.step4.optionB.step2')}</li>
       </ol>
       <pre class="codeblock"><span class="t">&lt;application</span>
   android:networkSecurityConfig=<span class="t">"@xml/network_security_config"</span> ... <span class="t">&gt;</span></pre>
-      <p class="warn">Ship this in <strong>debug builds only</strong> — never trust user CAs in a release build.</p>
+      <p class="warn">${st(locale, 'setup.step4.optionB.warn')}</p>
     </div>
   </section>
 
-  <p class="fingerprint">CA SHA-256 fingerprint<br><span class="mono">${opts.fingerprint}</span></p>
+  <p class="fingerprint">${st(locale, 'setup.fingerprint')}<br><span class="mono">${opts.fingerprint}</span></p>
 </div>
 </body>
 </html>`;

@@ -1,0 +1,81 @@
+import type { Bundle } from './index';
+
+export const onboarding: Bundle = {
+  en: {
+    'title.flow': 'Your device’s traffic, in the open',
+    'title.connect': 'Connect anything',
+    'title.trust': 'HTTPS needs trust',
+    'step.counter': 'Step {current} / {total}',
+    'action.skip': 'Skip',
+    'action.back': 'Back',
+    'action.next': 'Next',
+    'action.openDevices': 'Open Devices',
+    'diagram.device.label': 'Device',
+    'diagram.device.sub': 'Android · iOS',
+    'diagram.frigg.label': 'FRIGG',
+    'diagram.frigg.sub': 'proxy :{port}',
+    'diagram.internet.label': 'Internet',
+    'diagram.internet.sub': 'upstream',
+    'flow.body':
+      'Frigg sits between your device and the internet as an HTTP(S) proxy. Every request and response flows through it — watch traffic live, inspect bodies, then mock the responses you need without touching a backend.',
+    'connect.android.title': 'Android',
+    'connect.android.badge': '1-click',
+    'connect.android.copy': 'Frigg sets the proxy and installs the CA certificate over ADB.',
+    'connect.iosSimulator.title': 'iOS Simulator',
+    'connect.iosSimulator.badge': '1-click',
+    'connect.iosSimulator.copy':
+      'CA certificate goes straight into the simulator keychain; the proxy comes from macOS.',
+    'connect.anyDevice.title': 'Any device',
+    'connect.anyDevice.badge': 'proxy + QR',
+    'connect.anyDevice.copy': 'Set a manual Wi-Fi proxy and scan the QR code on the setup page.',
+    'connect.body':
+      'Emulators, simulators and physical devices all work — pick the path that matches your setup on the Devices screen.',
+    'trust.body':
+      'To decrypt HTTPS, Frigg generates a local CA certificate and re-signs traffic with it. Install and trust that certificate on each device. The CA lives only on this machine — nothing leaves your network.',
+    'trust.note.intro': 'To decrypt HTTPS from',
+    'trust.note.ownApp': 'your own Android app',
+    'trust.note.middle': '(API 24+), either let Frigg install a system cert (rooted device / most emulators — automatic), or add a',
+    'trust.note.afterConfig': 'trusting user CAs to its',
+    'trust.note.debug': 'debug',
+    'trust.note.outro': 'build. Frigg shows the exact snippet after setup.',
+  },
+  pt: {
+    'title.flow': 'O tráfego do seu dispositivo, à mostra',
+    'title.connect': 'Conecte qualquer coisa',
+    'title.trust': 'HTTPS precisa de confiança',
+    'step.counter': 'Passo {current} / {total}',
+    'action.skip': 'Pular',
+    'action.back': 'Voltar',
+    'action.next': 'Próximo',
+    'action.openDevices': 'Abrir Dispositivos',
+    'diagram.device.label': 'Dispositivo',
+    'diagram.device.sub': 'Android · iOS',
+    'diagram.frigg.label': 'FRIGG',
+    'diagram.frigg.sub': 'proxy :{port}',
+    'diagram.internet.label': 'Internet',
+    'diagram.internet.sub': 'upstream',
+    'flow.body':
+      'O Frigg fica entre o seu dispositivo e a internet como um proxy HTTP(S). Cada requisição e resposta passa por ele — acompanhe o tráfego ao vivo, inspecione os corpos e então faça mock das respostas que precisar sem mexer em nenhum backend.',
+    'connect.android.title': 'Android',
+    'connect.android.badge': '1-clique',
+    'connect.android.copy': 'O Frigg configura o proxy e instala o certificado CA via ADB.',
+    'connect.iosSimulator.title': 'iOS Simulator',
+    'connect.iosSimulator.badge': '1-clique',
+    'connect.iosSimulator.copy':
+      'O certificado CA vai direto para o keychain do simulador; o proxy vem do macOS.',
+    'connect.anyDevice.title': 'Qualquer dispositivo',
+    'connect.anyDevice.badge': 'proxy + QR',
+    'connect.anyDevice.copy':
+      'Configure um proxy Wi-Fi manual e escaneie o QR code na página de configuração.',
+    'connect.body':
+      'Emuladores, simuladores e aparelhos físicos funcionam — escolha o caminho que combina com o seu setup na tela de Dispositivos.',
+    'trust.body':
+      'Para descriptografar HTTPS, o Frigg gera um certificado CA local e reassina o tráfego com ele. Instale e confie nesse certificado em cada dispositivo. O CA fica somente nesta máquina — nada sai da sua rede.',
+    'trust.note.intro': 'Para descriptografar HTTPS do',
+    'trust.note.ownApp': 'seu próprio app Android',
+    'trust.note.middle': '(API 24+), deixe o Frigg instalar um cert de sistema (dispositivo com root / a maioria dos emuladores — automático) ou adicione um',
+    'trust.note.afterConfig': 'que confie em CAs de usuário ao seu build de',
+    'trust.note.debug': 'debug',
+    'trust.note.outro': '. O Frigg mostra o trecho exato após a configuração.',
+  },
+};

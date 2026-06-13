@@ -1,6 +1,8 @@
 import type {
   AndroidSetupResult,
   DevicesSnapshot,
+  LogPlatform,
+  LogSessionStatus,
   MockFolder,
   MockRule,
   MockRuleInput,
@@ -22,8 +24,20 @@ async function readError(res: Response): Promise<string> {
   return fallback;
 }
 
+function currentLocale(): string {
+  try {
+    const stored = localStorage.getItem('frigg-locale');
+    if (stored === 'en' || stored === 'pt') return stored;
+  } catch {
+    return 'en';
+  }
+  return 'en';
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  const headers = new Headers(init?.headers);
+  headers.set('X-Frigg-Locale', currentLocale());
+  const res = await fetch(path, { ...init, headers });
   if (!res.ok) {
     throw new Error(await readError(res));
   }
@@ -101,4 +115,23 @@ export function installIosCert(udid: string): Promise<{ ok: boolean; message: st
 
 export function setMacosProxy(enabled: boolean): Promise<{ ok: boolean; message: string }> {
   return request('/api/devices/macos-proxy', jsonInit('POST', { enabled }));
+}
+
+export interface StartLogsInput {
+  platform: LogPlatform;
+  id: string;
+  label: string;
+  packageFilter?: string;
+}
+
+export function startLogs(input: StartLogsInput): Promise<LogSessionStatus> {
+  return request('/api/logs/start', jsonInit('POST', input));
+}
+
+export function stopLogs(): Promise<LogSessionStatus> {
+  return request('/api/logs/stop', { method: 'POST' });
+}
+
+export function clearLogs(): Promise<{ ok: boolean }> {
+  return request('/api/logs', { method: 'DELETE' });
 }
