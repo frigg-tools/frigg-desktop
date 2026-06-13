@@ -68,7 +68,11 @@ export default function DevicesScreen() {
           ) : (
             <>
               <AndroidSection devices={devices.android} adb={devices.tooling.adb} />
-              <IosSection simulators={devices.iosSimulators} tooling={devices.tooling} />
+              <IosSection
+                simulators={devices.iosSimulators}
+                physicalDevices={devices.iosDevices}
+                tooling={devices.tooling}
+              />
               <ManualSection />
             </>
           )}

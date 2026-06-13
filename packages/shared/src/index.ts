@@ -102,6 +102,14 @@ export interface IosSimulator {
   state: string;
 }
 
+export interface IosPhysicalDevice {
+  udid: string;
+  name: string;
+  model: string;
+  osVersion: string;
+  paired: boolean;
+}
+
 export interface ToolingStatus {
   adb: { available: boolean; version?: string };
   xcrun: { available: boolean };
@@ -111,6 +119,7 @@ export interface ToolingStatus {
 export interface DevicesSnapshot {
   android: AndroidDevice[];
   iosSimulators: IosSimulator[];
+  iosDevices: IosPhysicalDevice[];
   tooling: ToolingStatus;
 }
 

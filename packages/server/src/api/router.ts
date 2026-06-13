@@ -13,7 +13,12 @@ import type {
 } from '@frigg/shared';
 import { listApps } from '../devices/apps.ts';
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
-import { installSimCert, listBootedSimulators, xcrunStatus } from '../devices/ios.ts';
+import {
+  installSimCert,
+  listBootedSimulators,
+  listPhysicalIosDevices,
+  xcrunStatus,
+} from '../devices/ios.ts';
 import { getMacProxyState, setMacProxy } from '../devices/macos-proxy.ts';
 import type { DbInspector } from '../db/index.ts';
 import { serverLocale, type ServerLocale } from '../i18n.ts';
@@ -314,16 +319,18 @@ export function buildRouter(deps: ApiDeps): Router {
   router.get(
     '/api/devices',
     asyncHandler(async (_req, res) => {
-      const [adb, android, xcrun, iosSimulators, macosProxy] = await Promise.all([
+      const [adb, android, xcrun, iosSimulators, iosDevices, macosProxy] = await Promise.all([
         adbStatus(),
         listAndroidDevices(),
         xcrunStatus(),
         listBootedSimulators(),
+        listPhysicalIosDevices(),
         getMacProxyState(),
       ]);
       const snapshot: DevicesSnapshot = {
         android,
         iosSimulators,
+        iosDevices,
         tooling: { adb, xcrun, macosProxy },
       };
       res.json(snapshot);

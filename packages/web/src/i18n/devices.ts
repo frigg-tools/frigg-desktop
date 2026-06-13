@@ -37,6 +37,15 @@ export const devices: Bundle = {
     'ios.booted': 'Booted',
     'ios.installCert': 'Install CA cert',
     'ios.installFailed': 'Certificate install failed',
+    'iosPhysical.heading': 'Physical devices',
+    'iosPhysical.usb': 'USB',
+    'iosPhysical.cableNote':
+      'The cable can’t intercept iOS traffic — set it up over Wi-Fi (the cable is only how Frigg detected it).',
+    'iosPhysical.step1': '1. Put the iPhone on the same Wi-Fi network as this Mac.',
+    'iosPhysical.step2': '2. Set a manual HTTP proxy on that Wi-Fi to',
+    'iosPhysical.step3':
+      '3. On the device, open the setup page below to download and trust the Frigg CA (needed for HTTPS).',
+    'iosPhysical.noLan': 'no LAN IP detected',
     'mac.title': 'macOS system proxy',
     'mac.explanation': 'Simulators have no proxy settings of their own — they inherit the Mac’s.',
     'mac.warning': 'Routes ALL Mac traffic through Frigg while enabled.',
@@ -91,6 +100,15 @@ export const devices: Bundle = {
     'ios.booted': 'Ativo',
     'ios.installCert': 'Instalar cert da CA',
     'ios.installFailed': 'Falha ao instalar o certificado',
+    'iosPhysical.heading': 'Dispositivos físicos',
+    'iosPhysical.usb': 'USB',
+    'iosPhysical.cableNote':
+      'O cabo não intercepta o tráfego do iOS — a configuração é por Wi-Fi (o cabo só serviu para o Frigg detectar o aparelho).',
+    'iosPhysical.step1': '1. Coloque o iPhone na mesma rede Wi-Fi que este Mac.',
+    'iosPhysical.step2': '2. Defina um proxy HTTP manual nessa Wi-Fi para',
+    'iosPhysical.step3':
+      '3. No aparelho, abra a página de setup abaixo para baixar e confiar no CA do Frigg (necessário para HTTPS).',
+    'iosPhysical.noLan': 'nenhum IP de LAN detectado',
     'mac.title': 'Proxy de sistema do macOS',
     'mac.explanation':
       'Simuladores não têm configurações de proxy próprias — eles herdam as do Mac.',
