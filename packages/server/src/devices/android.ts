@@ -183,7 +183,10 @@ async function fallbackToUserCert(
     'On the device: Settings → Security → Encryption & credentials → Install a certificate → CA certificate → pick frigg-ca.crt from Downloads.',
   );
   messages.push(
-    'Apps targeting API 24+ only trust user-installed CAs when their networkSecurityConfig allows it; debug builds should include that override.',
+    'That covers the system browser and any app that already trusts user certificates.',
+  );
+  messages.push(
+    'To intercept your OWN app over HTTPS (it targets Android 7+/API 24+), edit its DEBUG build: (1) add res/xml/network_security_config.xml with a <base-config> whose <trust-anchors> include <certificates src="user"/> and <certificates src="system"/>; (2) set android:networkSecurityConfig="@xml/network_security_config" on the <application> tag in AndroidManifest.xml. Copy-paste snippet on the setup page (Devices → Setup page).',
   );
   return 'user-manual';
 }

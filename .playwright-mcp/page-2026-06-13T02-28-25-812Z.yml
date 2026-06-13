@@ -1,0 +1,70 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - heading "Frigg setup" [level=1] [ref=e5]
+      - paragraph [ref=e6]: Route this device's HTTP(S) traffic through Frigg in three steps.
+    - generic [ref=e7]:
+      - img "QR code for this setup page" [ref=e9]
+      - paragraph [ref=e10]: Scan to open this page
+  - generic [ref=e11]:
+    - generic [ref=e12]: Proxy address
+    - generic [ref=e13]: 192.168.15.10:8888
+  - generic [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16]: "1"
+      - heading "Point your device at the proxy" [level=2] [ref=e17]
+    - paragraph [ref=e18]:
+      - text: Connect the device to the
+      - strong [ref=e19]: same Wi-Fi network
+      - text: "as this computer, then set a manual HTTP proxy on that Wi-Fi connection:"
+    - list [ref=e20]:
+      - listitem [ref=e21]:
+        - text: "Server / hostname:"
+        - code [ref=e22]: 192.168.15.10
+      - listitem [ref=e23]:
+        - text: "Port:"
+        - code [ref=e24]: "8888"
+    - paragraph [ref=e25]: "iOS: Settings → Wi-Fi → your network → Configure Proxy → Manual. Android: long-press your network → Modify network → Advanced → Proxy → Manual."
+  - generic [ref=e26]:
+    - generic [ref=e27]:
+      - generic [ref=e28]: "2"
+      - heading "Download the Frigg CA certificate" [level=2] [ref=e29]
+    - paragraph [ref=e30]: "HTTPS inspection needs the Frigg certificate authority on the device. Download it here:"
+    - generic [ref=e31]:
+      - link "cert.pem iOS / generic PEM" [ref=e32] [cursor=pointer]:
+        - /url: /cert.pem
+        - text: cert.pem
+        - generic [ref=e33]: iOS / generic PEM
+      - link "cert.crt Android" [ref=e34] [cursor=pointer]:
+        - /url: /cert.crt
+        - text: cert.crt
+        - generic [ref=e35]: Android
+      - link "cert.der DER binary" [ref=e36] [cursor=pointer]:
+        - /url: /cert.der
+        - text: cert.der
+        - generic [ref=e37]: DER binary
+    - paragraph [ref=e38]: Open this page on the device itself (scan the QR code) so the download lands directly on it.
+  - generic [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]: "3"
+      - heading "Trust the certificate" [level=2] [ref=e42]
+    - generic [ref=e43]:
+      - heading "iOS" [level=3] [ref=e44]
+      - list [ref=e45]:
+        - listitem [ref=e46]: Settings → General → VPN & Device Management → install the downloaded profile.
+        - listitem [ref=e47]:
+          - text: Settings → General → About → Certificate Trust Settings → enable full trust for
+          - strong [ref=e48]: Frigg CA
+          - text: .
+    - generic [ref=e49]:
+      - heading "Android" [level=3] [ref=e50]
+      - list [ref=e51]:
+        - listitem [ref=e52]: Settings → Security → Encryption & credentials → Install a certificate → CA certificate.
+        - listitem [ref=e53]:
+          - text: Pick the downloaded
+          - code [ref=e54]: frigg-ca.crt
+          - text: .
+      - paragraph [ref=e55]: Apps targeting Android 7+ (API 24) only trust user-installed CAs if their networkSecurityConfig allows it — debug builds of your own apps should add that override.
+  - paragraph [ref=e56]:
+    - text: CA SHA-256 fingerprint
+    - text: 1B:AB:10:C4:8E:3C:79:BF:D0:C8:31:C3:DE:36:F6:CF:3C:CC:CD:BB:3D:2F:4F:14:39:03:75:23:13:C5:E5:18

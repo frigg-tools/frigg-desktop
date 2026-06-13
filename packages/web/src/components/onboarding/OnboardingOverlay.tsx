@@ -146,10 +146,10 @@ function StepTrust() {
           <path d="M12 10v4.5M12 17.5v.01" />
         </svg>
         <p className="text-xs leading-relaxed text-amber-300">
-          Android apps targeting API 24+ only trust user-installed CAs when they opt in via{' '}
-          <code className="font-mono">networkSecurityConfig</code> — use debug builds for the apps
-          you want to intercept.
-        </p>
+          To decrypt HTTPS from <span className="font-medium">your own Android app</span> (API 24+),
+          either let Frigg install a system cert (rooted device / most emulators — automatic), or add
+          a <code className="font-mono">network_security_config.xml</code> trusting user CAs to its{' '}
+          <span className="font-medium">debug</span> build. Frigg shows the exact snippet after setup.</p>
       </div>
     </div>
   );

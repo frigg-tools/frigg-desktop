@@ -101,6 +101,33 @@ export function setupPageHtml(opts: {
     padding: 1px 6px;
     color: #34d399;
   }
+  pre.codeblock {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    background: #09090b;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-top: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #d4d4d8;
+  }
+  pre.codeblock .c { color: #71717a; }
+  pre.codeblock .t { color: #34d399; }
+  details.appcfg { margin-top: 12px; }
+  details.appcfg summary {
+    cursor: pointer;
+    color: #fbbf24;
+    font-weight: 600;
+    font-size: 14px;
+    list-style: none;
+  }
+  details.appcfg summary::-webkit-details-marker { display: none; }
+  details.appcfg summary::before { content: "▸ "; }
+  details.appcfg[open] summary::before { content: "▾ "; }
+  details.appcfg .body { margin-top: 10px; }
+  .ol-tight { padding-left: 22px; margin-top: 8px; display: grid; gap: 4px; }
 </style>
 </head>
 <body>
@@ -108,7 +135,7 @@ export function setupPageHtml(opts: {
   <header>
     <div>
       <h1>Frigg <span class="accent">setup</span></h1>
-      <p class="tagline">Route this device's HTTP(S) traffic through Frigg in three steps.</p>
+      <p class="tagline">Route this device's HTTP(S) traffic through Frigg.</p>
     </div>
     <div>
       <div class="qr"><img src="${opts.qrDataUrl}" alt="QR code for this setup page"></div>
@@ -167,7 +194,39 @@ export function setupPageHtml(opts: {
         <li>Settings → Security → Encryption &amp; credentials → Install a certificate → CA certificate.</li>
         <li>Pick the downloaded <code>frigg-ca.crt</code>.</li>
       </ol>
-      <p class="warn">Apps targeting Android 7+ (API 24) only trust user-installed CAs if their networkSecurityConfig allows it — debug builds of your own apps should add that override.</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="step-num">4</div>
+      <h2>Intercepting your own app's HTTPS</h2>
+    </div>
+    <p>If you only use the system browser, you're done. To decrypt HTTPS from <strong>your own Android app</strong>, there's one catch: apps targeting <strong>Android 7+ (API 24)</strong> ignore user-installed CAs by default. You have two options.</p>
+    <div class="platform">
+      <h3>Option A — system certificate (no app changes)</h3>
+      <p class="dim">On a rooted device or most emulators (without Google Play), Frigg installs its CA as a <em>system</em> certificate automatically during "Set up interception". Every app trusts it, no code change needed.</p>
+    </div>
+    <div class="platform">
+      <h3>Option B — opt your debug build into user CAs</h3>
+      <ol class="ol-tight">
+        <li>Add <code>res/xml/network_security_config.xml</code>:</li>
+      </ol>
+      <pre class="codeblock"><span class="c">&lt;!-- res/xml/network_security_config.xml --&gt;</span>
+<span class="t">&lt;network-security-config&gt;</span>
+  <span class="t">&lt;base-config&gt;</span>
+    <span class="t">&lt;trust-anchors&gt;</span>
+      <span class="t">&lt;certificates</span> src=<span class="t">"user"</span> <span class="t">/&gt;</span>
+      <span class="t">&lt;certificates</span> src=<span class="t">"system"</span> <span class="t">/&gt;</span>
+    <span class="t">&lt;/trust-anchors&gt;</span>
+  <span class="t">&lt;/base-config&gt;</span>
+<span class="t">&lt;/network-security-config&gt;</span></pre>
+      <ol class="ol-tight" start="2">
+        <li>Reference it from the <code>&lt;application&gt;</code> tag in <code>AndroidManifest.xml</code>:</li>
+      </ol>
+      <pre class="codeblock"><span class="t">&lt;application</span>
+  android:networkSecurityConfig=<span class="t">"@xml/network_security_config"</span> ... <span class="t">&gt;</span></pre>
+      <p class="warn">Ship this in <strong>debug builds only</strong> — never trust user CAs in a release build.</p>
     </div>
   </section>
 
