@@ -19,7 +19,8 @@ const flattened: Record<Locale, Record<string, string>> = { en: {}, pt: {} };
 for (const [namespace, bundle] of Object.entries(bundles)) {
   for (const locale of ['en', 'pt'] as const) {
     for (const [key, value] of Object.entries(bundle[locale])) {
-      flattened[locale][`${namespace}.${key}`] = value;
+      const fullKey = namespace === 'common' ? key : `${namespace}.${key}`;
+      flattened[locale][fullKey] = value;
     }
   }
 }

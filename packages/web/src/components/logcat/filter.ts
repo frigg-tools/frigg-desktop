@@ -1,7 +1,7 @@
 import type { LogEntry, LogLevel } from '@frigg/shared';
 import { meetsThreshold } from './levels';
 
-export const LOGCAT_RENDER_LIMIT = 2000;
+export const LOGCAT_RENDER_LIMIT = 500;
 
 export function filterLogEntries(
   entries: LogEntry[],

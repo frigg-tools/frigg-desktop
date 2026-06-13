@@ -76,9 +76,29 @@ export interface AppState {
   applyEvent: (ev: ServerEvent) => void;
 }
 
-function appendLog(entries: LogEntry[], entry: LogEntry): LogEntry[] {
-  const next = [...entries, entry];
+function appendLogs(entries: LogEntry[], incoming: LogEntry[]): LogEntry[] {
+  const next = entries.concat(incoming);
   return next.length > LOG_BUFFER_LIMIT ? next.slice(next.length - LOG_BUFFER_LIMIT) : next;
+}
+
+const LOG_FLUSH_INTERVAL_MS = 120;
+let pendingLogEntries: LogEntry[] = [];
+let logFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleLogFlush(flush: () => void): void {
+  if (logFlushTimer) return;
+  logFlushTimer = setTimeout(() => {
+    logFlushTimer = null;
+    flush();
+  }, LOG_FLUSH_INTERVAL_MS);
+}
+
+function resetPendingLogs(): void {
+  pendingLogEntries = [];
+  if (logFlushTimer) {
+    clearTimeout(logFlushTimer);
+    logFlushTimer = null;
+  }
 }
 
 function upsertExchange(
@@ -136,6 +156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   startLogs: async () => {
     const { logTarget, logPackage } = get();
     if (!logTarget) return;
+    resetPendingLogs();
     set({ logEntries: [] });
     const status = await api.startLogs({
       platform: logTarget.platform,
@@ -150,6 +171,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ logStatus: status });
   },
   clearLogs: async () => {
+    resetPendingLogs();
     await api.clearLogs();
     set({ logEntries: [] });
   },
@@ -203,9 +225,15 @@ export const useAppStore = create<AppState>((set, get) => ({
           .catch(() => undefined);
         break;
       case 'log-entry':
-        set({ logEntries: appendLog(get().logEntries, ev.entry) });
+        pendingLogEntries.push(ev.entry);
+        scheduleLogFlush(() => {
+          const batch = pendingLogEntries;
+          pendingLogEntries = [];
+          if (batch.length > 0) set({ logEntries: appendLogs(get().logEntries, batch) });
+        });
         break;
       case 'log-cleared':
+        resetPendingLogs();
         set({ logEntries: [] });
         break;
       case 'log-status':
