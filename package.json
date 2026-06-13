@@ -12,7 +12,9 @@
     "dev:web": "npm run dev -w @frigg/web",
     "build": "npm run build -w @frigg/server && npm run build -w @frigg/web",
     "start": "npm run start -w @frigg/server",
-    "test": "npm run test -w @frigg/server"
+    "test": "npm run test -w @frigg/server",
+    "desktop": "concurrently -n server,web,app -c green,cyan,magenta \"npm run dev:server\" \"npm run dev:web\" \"npm run dev -w @frigg/desktop\"",
+    "desktop:dist": "npm run build && npm run dist -w @frigg/desktop"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

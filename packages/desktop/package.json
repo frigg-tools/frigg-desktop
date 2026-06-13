@@ -1,0 +1,49 @@
+{
+  "name": "@frigg/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frigg desktop shell (Electron)",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build:main": "node esbuild.config.mjs",
+    "dev": "npm run build:main && cross-env FRIGG_DESKTOP_DEV=1 electron .",
+    "start": "npm run build:main && electron .",
+    "dist": "npm run build:main && electron-builder"
+  },
+  "dependencies": {
+    "@frigg/server": "*"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.frigg.app",
+    "productName": "Frigg",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

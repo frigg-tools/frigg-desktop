@@ -18,6 +18,7 @@ import { TrafficStore } from './proxy/traffic-store.ts';
 export interface StartFriggOptions {
   proxyPort?: number;
   apiPort?: number;
+  webDir?: string;
 }
 
 export interface FriggHandles {
@@ -31,8 +32,12 @@ export interface FriggHandles {
   stop: () => Promise<void>;
 }
 
-function registerWebUi(app: express.Express): boolean {
-  const webDistDir = fileURLToPath(new URL('../../web/dist', import.meta.url));
+function defaultWebDistDir(): string {
+  return fileURLToPath(new URL('../../web/dist', import.meta.url));
+}
+
+function registerWebUi(app: express.Express, webDir: string): boolean {
+  const webDistDir = webDir;
   if (!existsSync(webDistDir)) return false;
   const indexHtmlPath = path.join(webDistDir, 'index.html');
   app.use(express.static(webDistDir));
@@ -63,7 +68,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const app = express();
   app.use(express.json({ limit: '5mb' }));
   app.use(buildRouter({ traffic, mocks, ca, proxyPort, apiPort, logcat }));
-  const webUiAvailable = registerWebUi(app);
+  const webUiAvailable = registerWebUi(app, options.webDir ?? defaultWebDistDir());
 
   const httpServer = http.createServer(app);
   const hub = new WsHub(httpServer, '/ws');
