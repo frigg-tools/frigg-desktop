@@ -6,6 +6,7 @@ import { devices } from './devices';
 import { onboarding } from './onboarding';
 import { logcat } from './logcat';
 import { database } from './database';
+import { client } from './client';
 
 export type { Locale };
 
@@ -22,6 +23,7 @@ const bundles: Record<string, Bundle> = {
   onboarding,
   logcat,
   database,
+  client,
 };
 
 const flattened: Record<Locale, Record<string, string>> = { en: {}, pt: {} };

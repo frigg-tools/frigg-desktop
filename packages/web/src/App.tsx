@@ -7,6 +7,7 @@ import MocksScreen from './screens/MocksScreen';
 import DevicesScreen from './screens/DevicesScreen';
 import LogcatScreen from './screens/LogcatScreen';
 import DatabaseScreen from './screens/DatabaseScreen';
+import ClientScreen from './screens/ClientScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
 
 function ActivityIcon() {
@@ -93,6 +94,23 @@ function DatabaseIcon() {
   );
 }
 
+function SendIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
+    </svg>
+  );
+}
+
 interface NavItem {
   screen: Screen;
   labelKey: string;
@@ -101,6 +119,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { screen: 'traffic', labelKey: 'nav.traffic', icon: <ActivityIcon /> },
+  { screen: 'client', labelKey: 'nav.client', icon: <SendIcon /> },
   { screen: 'mocks', labelKey: 'nav.mocks', icon: <BoltIcon /> },
   { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
   { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
@@ -140,6 +159,10 @@ export default function App() {
     void useAppStore
       .getState()
       .loadAll()
+      .catch(() => undefined);
+    void useAppStore
+      .getState()
+      .loadApiClient()
       .catch(() => undefined);
     let dropped = false;
     return connectWs(
@@ -221,6 +244,8 @@ export default function App() {
           <LogcatScreen />
         ) : screen === 'database' ? (
           <DatabaseScreen />
+        ) : screen === 'client' ? (
+          <ClientScreen />
         ) : (
           <DevicesScreen />
         )}

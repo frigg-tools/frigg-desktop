@@ -5,6 +5,91 @@ export interface BodyPayload {
   truncated: boolean;
 }
 
+export interface ApiKeyValue {
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
+export type ApiBodyMode = 'none' | 'json' | 'raw' | 'form';
+
+export interface ApiBody {
+  mode: ApiBodyMode;
+  raw: string;
+  form: ApiKeyValue[];
+}
+
+export interface ApiRequest {
+  id: string;
+  workspaceId: string;
+  folderId: string | null;
+  name: string;
+  method: string;
+  url: string;
+  query: ApiKeyValue[];
+  headers: ApiKeyValue[];
+  body: ApiBody;
+  preScript: string;
+  testScript: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type ApiRequestInput = Omit<ApiRequest, 'id' | 'createdAt' | 'updatedAt'>;
+
+export interface ApiFolder {
+  id: string;
+  workspaceId: string;
+  parentId: string | null;
+  name: string;
+  createdAt: number;
+}
+
+export interface ApiEnvironment {
+  id: string;
+  workspaceId: string;
+  name: string;
+  variables: ApiKeyValue[];
+}
+
+export interface ApiWorkspace {
+  id: string;
+  name: string;
+  variables: ApiKeyValue[];
+  activeEnvironmentId: string | null;
+  createdAt: number;
+}
+
+export interface ApiClientSnapshot {
+  workspaces: ApiWorkspace[];
+  folders: ApiFolder[];
+  requests: ApiRequest[];
+  environments: ApiEnvironment[];
+}
+
+export interface ApiTestResult {
+  name: string;
+  passed: boolean;
+  error?: string;
+}
+
+export interface ApiRunResult {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  bodyText: string;
+  bodyTruncated: boolean;
+  durationMs: number;
+  sizeBytes: number;
+  scriptLogs: string[];
+  tests: ApiTestResult[];
+  error: string | null;
+  effectiveUrl: string;
+}
+
+export const API_RESPONSE_LIMIT = 2_000_000;
+
 export interface CapturedRequest {
   id: string;
   timestamp: number;

@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import {
   TRAFFIC_BUFFER_LIMIT,
+  type ApiEnvironment,
+  type ApiFolder,
+  type ApiRequest,
+  type ApiRunResult,
+  type ApiWorkspace,
   type DbFile,
   type DbQueryResult,
   type DeviceApp,
@@ -17,7 +22,7 @@ import {
 } from '@frigg/shared';
 import * as api from './api/client';
 
-export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database';
+export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client';
 export type LogLevelFilter = LogLevel | 'ALL';
 
 const LOG_BUFFER_LIMIT = 5000;
@@ -93,12 +98,51 @@ export interface AppState {
   selectDbTable: (table: string) => Promise<void>;
   setDbSql: (sql: string) => void;
   runDbQuery: (sql: string) => Promise<void>;
+  apiWorkspaces: ApiWorkspace[];
+  apiFolders: ApiFolder[];
+  apiRequests: ApiRequest[];
+  apiEnvironments: ApiEnvironment[];
+  activeWorkspaceId: string | null;
+  selectedApiRequestId: string | null;
+  apiRunResult: ApiRunResult | null;
+  apiRunning: boolean;
+  loadApiClient: () => Promise<void>;
+  setActiveWorkspace: (id: string) => void;
+  createWorkspace: (name: string) => Promise<void>;
+  renameWorkspace: (id: string, name: string) => Promise<void>;
+  deleteWorkspace: (id: string) => Promise<void>;
+  createApiFolder: (name: string, parentId: string | null) => Promise<void>;
+  renameApiFolder: (id: string, name: string) => Promise<void>;
+  deleteApiFolder: (id: string) => Promise<void>;
+  createApiRequest: (folderId: string | null) => Promise<void>;
+  updateApiRequest: (id: string, patch: Partial<ApiRequest>) => Promise<void>;
+  deleteApiRequest: (id: string) => Promise<void>;
+  selectApiRequest: (id: string | null) => void;
+  createEnvironment: (name: string) => Promise<void>;
+  updateEnvironment: (id: string, patch: Partial<ApiEnvironment>) => Promise<void>;
+  deleteEnvironment: (id: string) => Promise<void>;
+  setActiveEnvironment: (envId: string | null) => Promise<void>;
+  runApiRequest: (request: ApiRequest) => Promise<void>;
   loadAll: () => Promise<void>;
   refreshMocks: () => Promise<void>;
   refreshDevices: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   clearTraffic: () => Promise<void>;
   applyEvent: (ev: ServerEvent) => void;
+}
+
+function applyApiSnapshot(snapshot: {
+  workspaces: ApiWorkspace[];
+  folders: ApiFolder[];
+  requests: ApiRequest[];
+  environments: ApiEnvironment[];
+}) {
+  return {
+    apiWorkspaces: snapshot.workspaces,
+    apiFolders: snapshot.folders,
+    apiRequests: snapshot.requests,
+    apiEnvironments: snapshot.environments,
+  };
 }
 
 function appendLogs(entries: LogEntry[], incoming: LogEntry[]): LogEntry[] {
@@ -322,6 +366,113 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ dbError: error instanceof Error ? error.message : 'Query failed', dbResult: null });
     } finally {
       set({ dbBusy: false });
+    }
+  },
+  apiWorkspaces: [],
+  apiFolders: [],
+  apiRequests: [],
+  apiEnvironments: [],
+  activeWorkspaceId: null,
+  selectedApiRequestId: null,
+  apiRunResult: null,
+  apiRunning: false,
+  loadApiClient: async () => {
+    const snapshot = await api.getApiClient();
+    set(applyApiSnapshot(snapshot));
+    if (!get().activeWorkspaceId && snapshot.workspaces.length > 0) {
+      set({ activeWorkspaceId: snapshot.workspaces[0].id });
+    }
+  },
+  setActiveWorkspace: (id) =>
+    set({ activeWorkspaceId: id, selectedApiRequestId: null, apiRunResult: null }),
+  createWorkspace: async (name) => {
+    const { snapshot, id } = await api.createWorkspace(name);
+    set({ ...applyApiSnapshot(snapshot), activeWorkspaceId: id, selectedApiRequestId: null });
+  },
+  renameWorkspace: async (id, name) => {
+    set(applyApiSnapshot(await api.updateWorkspace(id, { name })));
+  },
+  deleteWorkspace: async (id) => {
+    const snapshot = await api.deleteWorkspace(id);
+    const patch = applyApiSnapshot(snapshot);
+    if (get().activeWorkspaceId === id) {
+      set({ ...patch, activeWorkspaceId: snapshot.workspaces[0]?.id ?? null, selectedApiRequestId: null });
+    } else {
+      set(patch);
+    }
+  },
+  createApiFolder: async (name, parentId) => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) return;
+    const { snapshot } = await api.createApiFolder(workspaceId, name, parentId);
+    set(applyApiSnapshot(snapshot));
+  },
+  renameApiFolder: async (id, name) => {
+    set(applyApiSnapshot(await api.updateApiFolder(id, { name })));
+  },
+  deleteApiFolder: async (id) => {
+    set(applyApiSnapshot(await api.deleteApiFolder(id)));
+  },
+  createApiRequest: async (folderId) => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) return;
+    const { snapshot, id } = await api.createApiRequest(workspaceId, folderId);
+    set({ ...applyApiSnapshot(snapshot), selectedApiRequestId: id, apiRunResult: null });
+  },
+  updateApiRequest: async (id, patch) => {
+    set(applyApiSnapshot(await api.updateApiRequest(id, patch)));
+  },
+  deleteApiRequest: async (id) => {
+    const snapshot = await api.deleteApiRequest(id);
+    const patch = applyApiSnapshot(snapshot);
+    if (get().selectedApiRequestId === id) {
+      set({ ...patch, selectedApiRequestId: null, apiRunResult: null });
+    } else {
+      set(patch);
+    }
+  },
+  selectApiRequest: (id) => set({ selectedApiRequestId: id, apiRunResult: null }),
+  createEnvironment: async (name) => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) return;
+    const { snapshot } = await api.createEnvironment(workspaceId, name);
+    set(applyApiSnapshot(snapshot));
+  },
+  updateEnvironment: async (id, patch) => {
+    set(applyApiSnapshot(await api.updateEnvironment(id, patch)));
+  },
+  deleteEnvironment: async (id) => {
+    set(applyApiSnapshot(await api.deleteEnvironment(id)));
+  },
+  setActiveEnvironment: async (envId) => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) return;
+    set(applyApiSnapshot(await api.updateWorkspace(workspaceId, { activeEnvironmentId: envId })));
+  },
+  runApiRequest: async (request) => {
+    set({ apiRunning: true });
+    try {
+      const result = await api.runApiRequest(request);
+      set({ apiRunResult: result, ...applyApiSnapshot(await api.getApiClient()) });
+    } catch (error) {
+      set({
+        apiRunResult: {
+          ok: false,
+          status: 0,
+          statusText: '',
+          headers: {},
+          bodyText: '',
+          bodyTruncated: false,
+          durationMs: 0,
+          sizeBytes: 0,
+          scriptLogs: [],
+          tests: [],
+          error: error instanceof Error ? error.message : 'Run failed',
+          effectiveUrl: request.url,
+        },
+      });
+    } finally {
+      set({ apiRunning: false });
     }
   },
   loadAll: async () => {

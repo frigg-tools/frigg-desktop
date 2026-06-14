@@ -1,5 +1,11 @@
 import type {
   AndroidSetupResult,
+  ApiClientSnapshot,
+  ApiEnvironment,
+  ApiFolder,
+  ApiRequest,
+  ApiRunResult,
+  ApiWorkspace,
   DbFile,
   DbQueryResult,
   DeviceApp,
@@ -13,6 +19,11 @@ import type {
   ProxyStatus,
   TrafficExchange,
 } from '@frigg/shared';
+
+interface CreatedWithSnapshot {
+  snapshot: ApiClientSnapshot;
+  id: string;
+}
 
 async function readError(res: Response): Promise<string> {
   const fallback = `${res.status} ${res.statusText}`.trim();
@@ -166,4 +177,76 @@ export function queryDb(
   sql: string,
 ): Promise<DbQueryResult> {
   return request('/api/db/query', jsonInit('POST', { platform, id, app, ref, sql }));
+}
+
+export function getApiClient(): Promise<ApiClientSnapshot> {
+  return request('/api/client');
+}
+
+export function createWorkspace(name: string): Promise<CreatedWithSnapshot> {
+  return request('/api/client/workspaces', jsonInit('POST', { name }));
+}
+
+export function updateWorkspace(
+  id: string,
+  patch: Partial<Pick<ApiWorkspace, 'name' | 'activeEnvironmentId' | 'variables'>>,
+): Promise<ApiClientSnapshot> {
+  return request(`/api/client/workspaces/${encodeURIComponent(id)}`, jsonInit('PUT', patch));
+}
+
+export function deleteWorkspace(id: string): Promise<ApiClientSnapshot> {
+  return request(`/api/client/workspaces/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function createApiFolder(
+  workspaceId: string,
+  name: string,
+  parentId: string | null,
+): Promise<CreatedWithSnapshot> {
+  return request('/api/client/folders', jsonInit('POST', { workspaceId, name, parentId }));
+}
+
+export function updateApiFolder(
+  id: string,
+  patch: { name?: string; parentId?: string | null },
+): Promise<ApiClientSnapshot> {
+  return request(`/api/client/folders/${encodeURIComponent(id)}`, jsonInit('PUT', patch));
+}
+
+export function deleteApiFolder(id: string): Promise<ApiClientSnapshot> {
+  return request(`/api/client/folders/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function createApiRequest(
+  workspaceId: string,
+  folderId: string | null,
+): Promise<CreatedWithSnapshot> {
+  return request('/api/client/requests', jsonInit('POST', { workspaceId, folderId }));
+}
+
+export function updateApiRequest(id: string, patch: Partial<ApiRequest>): Promise<ApiClientSnapshot> {
+  return request(`/api/client/requests/${encodeURIComponent(id)}`, jsonInit('PUT', patch));
+}
+
+export function deleteApiRequest(id: string): Promise<ApiClientSnapshot> {
+  return request(`/api/client/requests/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function createEnvironment(workspaceId: string, name: string): Promise<CreatedWithSnapshot> {
+  return request('/api/client/environments', jsonInit('POST', { workspaceId, name }));
+}
+
+export function updateEnvironment(
+  id: string,
+  patch: Partial<Pick<ApiEnvironment, 'name' | 'variables'>>,
+): Promise<ApiClientSnapshot> {
+  return request(`/api/client/environments/${encodeURIComponent(id)}`, jsonInit('PUT', patch));
+}
+
+export function deleteEnvironment(id: string): Promise<ApiClientSnapshot> {
+  return request(`/api/client/environments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function runApiRequest(apiRequest: ApiRequest): Promise<ApiRunResult> {
+  return request('/api/client/run', jsonInit('POST', { request: apiRequest }));
 }
