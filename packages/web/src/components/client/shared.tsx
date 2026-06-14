@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { ApiKeyValue } from '@frigg/shared';
 import { useT } from '../../i18n';
+import VariableField, { type VariableSuggestion } from './VariableField';
 
 export const inputClass =
   'w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[13px] text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40';
@@ -118,9 +119,10 @@ interface KeyValueEditorProps {
   rows: ApiKeyValueRow[];
   onChange: (rows: ApiKeyValueRow[]) => void;
   mono?: boolean;
+  variables?: VariableSuggestion[];
 }
 
-export function KeyValueEditor({ rows, onChange, mono = true }: KeyValueEditorProps) {
+export function KeyValueEditor({ rows, onChange, mono = true, variables = [] }: KeyValueEditorProps) {
   const t = useT();
   const cellClass = mono ? monoInputClass : inputClass;
 
@@ -166,12 +168,14 @@ export function KeyValueEditor({ rows, onChange, mono = true }: KeyValueEditorPr
             spellCheck={false}
             className={`${cellClass} ${row.enabled ? '' : 'opacity-50'}`}
           />
-          <input
+          <VariableField
             value={row.value}
-            onChange={(e) => updateRow(row.id, { value: e.target.value })}
+            onChange={(value) => updateRow(row.id, { value })}
+            variables={variables}
             placeholder={t('client.kv.valuePlaceholder')}
-            spellCheck={false}
+            ariaLabel={t('client.kv.valuePlaceholder')}
             className={`${cellClass} ${row.enabled ? '' : 'opacity-50'}`}
+            wrapperClassName="min-w-0"
           />
           <button
             type="button"

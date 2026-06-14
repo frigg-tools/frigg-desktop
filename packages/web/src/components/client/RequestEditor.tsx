@@ -13,6 +13,7 @@ import {
   toRows,
   type ApiKeyValueRow,
 } from './shared';
+import VariableField, { type VariableSuggestion } from './VariableField';
 
 type EditorTab = 'params' | 'headers' | 'body' | 'pre' | 'tests';
 
@@ -94,6 +95,23 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
   const updateApiRequest = useAppStore((s) => s.updateApiRequest);
   const runApiRequest = useAppStore((s) => s.runApiRequest);
   const apiRunning = useAppStore((s) => s.apiRunning);
+  const workspaces = useAppStore((s) => s.apiWorkspaces);
+  const environments = useAppStore((s) => s.apiEnvironments);
+  const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+
+  const variables = useMemo<VariableSuggestion[]>(() => {
+    const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (!workspace) return [];
+    const environment = environments.find((e) => e.id === workspace.activeEnvironmentId);
+    const merged = new Map<string, string>();
+    for (const variable of workspace.variables) {
+      if (variable.enabled && variable.key) merged.set(variable.key, variable.value);
+    }
+    for (const variable of environment?.variables ?? []) {
+      if (variable.enabled && variable.key) merged.set(variable.key, variable.value);
+    }
+    return [...merged].map(([name, value]) => ({ name, value }));
+  }, [workspaces, environments, activeWorkspaceId]);
 
   const [draft, setDraft] = useState<DraftState>(() => draftFromRequest(request));
   const [tab, setTab] = useState<EditorTab>('params');
@@ -178,13 +196,15 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
             </option>
           ))}
         </select>
-        <input
+        <VariableField
           value={draft.url}
-          onChange={(e) => patchDraft({ url: e.target.value })}
+          onChange={(url) => patchDraft({ url })}
           onBlur={flushSave}
+          variables={variables}
           placeholder={t('client.editor.urlPlaceholder')}
-          spellCheck={false}
-          className={`${monoInputClass} min-w-0 flex-1`}
+          ariaLabel="URL"
+          className={`${monoInputClass}`}
+          wrapperClassName="min-w-0 flex-1"
         />
         <button
           type="button"
@@ -234,11 +254,19 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {tab === 'params' ? (
-          <KeyValueEditor rows={draft.query} onChange={(rows) => patchDraft({ query: rows })} />
+          <KeyValueEditor
+            rows={draft.query}
+            onChange={(rows) => patchDraft({ query: rows })}
+            variables={variables}
+          />
         ) : null}
 
         {tab === 'headers' ? (
-          <KeyValueEditor rows={draft.headers} onChange={(rows) => patchDraft({ headers: rows })} />
+          <KeyValueEditor
+            rows={draft.headers}
+            onChange={(rows) => patchDraft({ headers: rows })}
+            variables={variables}
+          />
         ) : null}
 
         {tab === 'body' ? (
@@ -274,17 +302,20 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
             ) : null}
 
             {draft.bodyMode === 'json' || draft.bodyMode === 'raw' ? (
-              <textarea
+              <VariableField
                 value={draft.bodyRaw}
-                onChange={(e) => patchDraft({ bodyRaw: e.target.value })}
+                onChange={(bodyRaw) => patchDraft({ bodyRaw })}
                 onBlur={flushSave}
+                variables={variables}
+                multiline
+                codeAssist
                 rows={12}
                 placeholder={
                   draft.bodyMode === 'json'
                     ? t('client.editor.bodyJsonPlaceholder')
                     : t('client.editor.bodyRawPlaceholder')
                 }
-                spellCheck={false}
+                ariaLabel={t('client.editor.body')}
                 className={monoTextareaClass}
               />
             ) : null}
@@ -293,6 +324,7 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
               <KeyValueEditor
                 rows={draft.bodyForm}
                 onChange={(rows) => patchDraft({ bodyForm: rows })}
+                variables={variables}
               />
             ) : null}
           </div>
@@ -301,13 +333,16 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
         {tab === 'pre' ? (
           <div>
             <FieldLabel>{t('client.editor.preRequest')}</FieldLabel>
-            <textarea
+            <VariableField
               value={draft.preScript}
-              onChange={(e) => patchDraft({ preScript: e.target.value })}
+              onChange={(preScript) => patchDraft({ preScript })}
               onBlur={flushSave}
+              variables={[]}
+              multiline
+              codeAssist
               rows={12}
               placeholder={t('client.editor.preScriptPlaceholder')}
-              spellCheck={false}
+              ariaLabel={t('client.editor.preRequest')}
               className={monoTextareaClass}
             />
             <ScriptHint>{PRE_SCRIPT_HINT}</ScriptHint>
@@ -317,13 +352,16 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
         {tab === 'tests' ? (
           <div>
             <FieldLabel>{t('client.editor.tests')}</FieldLabel>
-            <textarea
+            <VariableField
               value={draft.testScript}
-              onChange={(e) => patchDraft({ testScript: e.target.value })}
+              onChange={(testScript) => patchDraft({ testScript })}
               onBlur={flushSave}
+              variables={[]}
+              multiline
+              codeAssist
               rows={12}
               placeholder={t('client.editor.testScriptPlaceholder')}
-              spellCheck={false}
+              ariaLabel={t('client.editor.tests')}
               className={monoTextareaClass}
             />
             <ScriptHint>{TEST_SCRIPT_HINT}</ScriptHint>
