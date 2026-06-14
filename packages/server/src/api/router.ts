@@ -2,6 +2,9 @@ import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import QRCode from 'qrcode';
 import type {
+  ApiBody,
+  ApiKeyValue,
+  ApiRequest,
   BodyMatchMode,
   DevicesSnapshot,
   LogPlatform,
@@ -11,6 +14,8 @@ import type {
   MockRuleInput,
   ProxyStatus,
 } from '@frigg/shared';
+import { ApiClientStore } from '../api-client/store.ts';
+import { runRequest } from '../api-client/runner.ts';
 import { listApps } from '../devices/apps.ts';
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
 import {
@@ -37,6 +42,7 @@ export interface ApiDeps {
   apiPort: number;
   logcat: LogcatManager;
   db: DbInspector;
+  apiClient: ApiClientStore;
 }
 
 const MAX_PATTERN_LENGTH = 2048;
@@ -234,6 +240,89 @@ function parseDbBody(body: unknown): DbRequestParams {
     id: parseNonEmpty(record.id, 'id'),
     app: parseNonEmpty(record.app, 'app'),
     ref: parseNonEmpty(record.ref, 'ref'),
+  };
+}
+
+function parseKeyValueArray(raw: unknown, label: string): ApiKeyValue[] {
+  if (!Array.isArray(raw)) {
+    badRequest(`${label} must be an array`);
+  }
+  return raw.map((entry, index) => {
+    const record = asRecord(entry, `${label}[${index}]`);
+    if (typeof record.key !== 'string') badRequest(`${label}[${index}].key must be a string`);
+    if (typeof record.value !== 'string') badRequest(`${label}[${index}].value must be a string`);
+    const enabled = typeof record.enabled === 'boolean' ? record.enabled : true;
+    return { key: record.key, value: record.value, enabled };
+  });
+}
+
+function parseApiBody(raw: unknown): ApiBody {
+  const record = asRecord(raw, 'body');
+  const mode = record.mode;
+  if (mode !== 'none' && mode !== 'json' && mode !== 'raw' && mode !== 'form') {
+    badRequest('body.mode must be one of none, json, raw, form');
+  }
+  return {
+    mode,
+    raw: typeof record.raw === 'string' ? record.raw : '',
+    form: record.form === undefined ? [] : parseKeyValueArray(record.form, 'body.form'),
+  };
+}
+
+function parseRequestPatch(body: unknown): Partial<Omit<ApiRequest, 'id' | 'createdAt' | 'updatedAt'>> {
+  const record = asRecord(body, 'request');
+  const patch: Partial<Omit<ApiRequest, 'id' | 'createdAt' | 'updatedAt'>> = {};
+  if ('folderId' in record) patch.folderId = parseParentId(record.folderId);
+  if (record.name !== undefined) {
+    if (typeof record.name !== 'string') badRequest('name must be a string');
+    patch.name = record.name;
+  }
+  if (record.method !== undefined) {
+    if (typeof record.method !== 'string' || record.method.trim() === '') {
+      badRequest('method must be a non-empty string');
+    }
+    patch.method = record.method;
+  }
+  if (record.url !== undefined) {
+    if (typeof record.url !== 'string') badRequest('url must be a string');
+    patch.url = record.url;
+  }
+  if (record.query !== undefined) patch.query = parseKeyValueArray(record.query, 'query');
+  if (record.headers !== undefined) patch.headers = parseKeyValueArray(record.headers, 'headers');
+  if (record.body !== undefined) patch.body = parseApiBody(record.body);
+  if (record.preScript !== undefined) {
+    if (typeof record.preScript !== 'string') badRequest('preScript must be a string');
+    patch.preScript = record.preScript;
+  }
+  if (record.testScript !== undefined) {
+    if (typeof record.testScript !== 'string') badRequest('testScript must be a string');
+    patch.testScript = record.testScript;
+  }
+  return patch;
+}
+
+function parseRunRequest(raw: unknown): ApiRequest {
+  const record = asRecord(raw, 'request');
+  if (typeof record.method !== 'string' || record.method.trim() === '') {
+    badRequest('request.method must be a non-empty string');
+  }
+  if (typeof record.url !== 'string') {
+    badRequest('request.url must be a string');
+  }
+  return {
+    id: typeof record.id === 'string' ? record.id : '',
+    workspaceId: typeof record.workspaceId === 'string' ? record.workspaceId : '',
+    folderId: typeof record.folderId === 'string' ? record.folderId : null,
+    name: typeof record.name === 'string' ? record.name : '',
+    method: record.method,
+    url: record.url,
+    query: parseKeyValueArray(record.query ?? [], 'request.query'),
+    headers: parseKeyValueArray(record.headers ?? [], 'request.headers'),
+    body: parseApiBody(record.body),
+    preScript: typeof record.preScript === 'string' ? record.preScript : '',
+    testScript: typeof record.testScript === 'string' ? record.testScript : '',
+    createdAt: typeof record.createdAt === 'number' ? record.createdAt : 0,
+    updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : 0,
   };
 }
 
@@ -436,6 +525,110 @@ export function buildRouter(deps: ApiDeps): Router {
       } catch (error) {
         badRequest(messageForError(error));
       }
+    }),
+  );
+
+  router.get('/api/client', (_req, res) => {
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.post('/api/client/workspaces', (req, res) => {
+    const record = asRecord(req.body, 'workspace');
+    const name = parseFolderName(record.name);
+    const workspace = deps.apiClient.createWorkspace(name);
+    res.json({ snapshot: deps.apiClient.snapshot(), id: workspace.id });
+  });
+
+  router.put('/api/client/workspaces/:id', (req, res) => {
+    const record = asRecord(req.body, 'workspace');
+    const patch: { name?: string; variables?: ApiKeyValue[]; activeEnvironmentId?: string | null } = {};
+    if (record.name !== undefined) patch.name = parseFolderName(record.name);
+    if (record.variables !== undefined) {
+      patch.variables = parseKeyValueArray(record.variables, 'variables');
+    }
+    if ('activeEnvironmentId' in record) {
+      patch.activeEnvironmentId = parseParentId(record.activeEnvironmentId);
+    }
+    deps.apiClient.updateWorkspace(req.params.id, patch);
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.delete('/api/client/workspaces/:id', (req, res) => {
+    deps.apiClient.deleteWorkspace(req.params.id);
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.post('/api/client/folders', (req, res) => {
+    const record = asRecord(req.body, 'folder');
+    const workspaceId = parseNonEmpty(record.workspaceId, 'workspaceId');
+    const name = parseFolderName(record.name);
+    const parentId = parseParentId(record.parentId);
+    const folder = deps.apiClient.createFolder(workspaceId, name, parentId);
+    res.json({ snapshot: deps.apiClient.snapshot(), id: folder.id });
+  });
+
+  router.put('/api/client/folders/:id', (req, res) => {
+    const record = asRecord(req.body, 'folder');
+    const patch: { name?: string; parentId?: string | null } = {};
+    if (record.name !== undefined) patch.name = parseFolderName(record.name);
+    if ('parentId' in record) patch.parentId = parseParentId(record.parentId);
+    deps.apiClient.updateFolder(req.params.id, patch);
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.delete('/api/client/folders/:id', (req, res) => {
+    deps.apiClient.deleteFolder(req.params.id);
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.post('/api/client/requests', (req, res) => {
+    const record = asRecord(req.body, 'request');
+    const workspaceId = parseNonEmpty(record.workspaceId, 'workspaceId');
+    const folderId = parseParentId(record.folderId);
+    const request = deps.apiClient.createRequest(workspaceId, folderId);
+    res.json({ snapshot: deps.apiClient.snapshot(), id: request.id });
+  });
+
+  router.put('/api/client/requests/:id', (req, res) => {
+    deps.apiClient.updateRequest(req.params.id, parseRequestPatch(req.body));
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.delete('/api/client/requests/:id', (req, res) => {
+    deps.apiClient.deleteRequest(req.params.id);
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.post('/api/client/environments', (req, res) => {
+    const record = asRecord(req.body, 'environment');
+    const workspaceId = parseNonEmpty(record.workspaceId, 'workspaceId');
+    const name = parseFolderName(record.name);
+    const environment = deps.apiClient.createEnvironment(workspaceId, name);
+    res.json({ snapshot: deps.apiClient.snapshot(), id: environment.id });
+  });
+
+  router.put('/api/client/environments/:id', (req, res) => {
+    const record = asRecord(req.body, 'environment');
+    const patch: { name?: string; variables?: ApiKeyValue[] } = {};
+    if (record.name !== undefined) patch.name = parseFolderName(record.name);
+    if (record.variables !== undefined) {
+      patch.variables = parseKeyValueArray(record.variables, 'variables');
+    }
+    deps.apiClient.updateEnvironment(req.params.id, patch);
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.delete('/api/client/environments/:id', (req, res) => {
+    deps.apiClient.deleteEnvironment(req.params.id);
+    res.json(deps.apiClient.snapshot());
+  });
+
+  router.post(
+    '/api/client/run',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'run');
+      const request = parseRunRequest(record.request);
+      res.json(await runRequest(deps.apiClient, request));
     }),
   );
 

@@ -5,12 +5,13 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
 import type { ServerEvent } from '@frigg/shared';
+import { ApiClientStore } from './api-client/store.ts';
 import { buildRouter } from './api/router.ts';
 import { WsHub } from './api/ws.ts';
 import { DbInspector } from './db/index.ts';
 import { disableMacProxyIfEnabledByFrigg } from './devices/macos-proxy.ts';
 import { getLanIp } from './lib/net.ts';
-import { ensureFriggDirs, mocksPath } from './lib/paths.ts';
+import { apiClientPath, ensureFriggDirs, mocksPath } from './lib/paths.ts';
 import { LogcatManager } from './logcat/index.ts';
 import { MockStore } from './mocks/store.ts';
 import { ensureCa } from './proxy/ca.ts';
@@ -67,10 +68,11 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
 
   const logcat = new LogcatManager();
   const db = new DbInspector();
+  const apiClient = await ApiClientStore.load(apiClientPath);
 
   const app = express();
   app.use(express.json({ limit: '5mb' }));
-  app.use(buildRouter({ traffic, mocks, ca, proxyPort, apiPort, logcat, db }));
+  app.use(buildRouter({ traffic, mocks, ca, proxyPort, apiPort, logcat, db, apiClient }));
   const webUiAvailable = registerWebUi(app, options.webDir ?? defaultWebDistDir());
 
   const httpServer = http.createServer(app);
@@ -95,6 +97,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     await Promise.allSettled([
       engine.stop(),
       mocks.flush(),
+      apiClient.flush(),
       logcat.stop(),
       db.dispose(),
       disableMacProxyIfEnabledByFrigg(),
