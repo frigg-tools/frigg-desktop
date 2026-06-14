@@ -131,7 +131,10 @@ export function KeyValueEditor({ rows, onChange, mono = true }: KeyValueEditorPr
   return (
     <div className="space-y-1.5">
       {rows.map((row) => (
-        <div key={row.id} className="flex items-center gap-1.5">
+        <div
+          key={row.id}
+          className="grid grid-cols-[auto_minmax(0,2fr)_minmax(0,3fr)_auto] items-center gap-1.5"
+        >
           <button
             type="button"
             role="checkbox"
@@ -161,14 +164,14 @@ export function KeyValueEditor({ rows, onChange, mono = true }: KeyValueEditorPr
             onChange={(e) => updateRow(row.id, { key: e.target.value })}
             placeholder={t('client.kv.keyPlaceholder')}
             spellCheck={false}
-            className={`${cellClass} w-2/5 shrink-0 ${row.enabled ? '' : 'opacity-50'}`}
+            className={`${cellClass} ${row.enabled ? '' : 'opacity-50'}`}
           />
           <input
             value={row.value}
             onChange={(e) => updateRow(row.id, { value: e.target.value })}
             placeholder={t('client.kv.valuePlaceholder')}
             spellCheck={false}
-            className={`${cellClass} min-w-0 flex-1 ${row.enabled ? '' : 'opacity-50'}`}
+            className={`${cellClass} ${row.enabled ? '' : 'opacity-50'}`}
           />
           <button
             type="button"
