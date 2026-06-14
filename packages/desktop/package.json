@@ -23,6 +23,7 @@
     "productName": "Frigg",
     "electronVersion": "33.4.11",
     "npmRebuild": false,
+    "beforePack": "scripts/before-pack.cjs",
     "directories": {
       "output": "release"
     },
