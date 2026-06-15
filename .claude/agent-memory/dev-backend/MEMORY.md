@@ -1,0 +1,2 @@
+- [Project: frigg-mcp package](project-frigg-mcp.md) — MCP server bridging Frigg REST API; installed and smoke-tested
+- [Frigg API endpoints](reference-frigg-api.md) — REST routes for traffic, mocks, devices, API client

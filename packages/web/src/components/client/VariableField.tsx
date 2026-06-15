@@ -4,12 +4,16 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from 'react';
 
 export interface VariableSuggestion {
   name: string;
   value: string;
 }
+
+const LAYER_CLASS =
+  'm-0 w-full whitespace-pre-wrap break-words px-2.5 py-2 font-mono text-xs leading-relaxed';
 
 interface VariableFieldProps {
   value: string;
@@ -23,6 +27,7 @@ interface VariableFieldProps {
   multiline?: boolean;
   rows?: number;
   codeAssist?: boolean;
+  highlight?: (value: string) => ReactNode;
 }
 
 interface OpenToken {
@@ -30,8 +35,8 @@ interface OpenToken {
   partial: string;
 }
 
-const OPEN_PAIRS: Record<string, string> = { '{': '}', '[': ']', '(': ')', '"': '"' };
-const CLOSERS = new Set(['}', ']', ')', '"']);
+const OPEN_PAIRS: Record<string, string> = { '{': '}', '[': ']', '(': ')' };
+const CLOSERS = new Set(['}', ']', ')']);
 const INDENT = '  ';
 
 function findOpenToken(value: string, caret: number): OpenToken | null {
@@ -62,10 +67,11 @@ export default function VariableField({
   multiline = false,
   rows,
   codeAssist = false,
+  highlight,
 }: VariableFieldProps) {
   const fieldRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const [token, setToken] = useState<OpenToken | null>(null);
-  const [highlight, setHighlight] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
   const pendingCaret = useRef<number | null>(null);
 
   const matches = token
@@ -74,7 +80,7 @@ export default function VariableField({
   const open = token !== null && matches.length > 0;
 
   useEffect(() => {
-    setHighlight(0);
+    setActiveIndex(0);
   }, [token?.partial]);
 
   useLayoutEffect(() => {
@@ -149,16 +155,17 @@ export default function VariableField({
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent) => {
+    if (event.nativeEvent.isComposing || event.key === 'Dead') return;
     if (open) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
-        setHighlight((h) => (h + 1) % matches.length);
+        setActiveIndex((h) => (h + 1) % matches.length);
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
-        setHighlight((h) => (h - 1 + matches.length) % matches.length);
+        setActiveIndex((h) => (h - 1 + matches.length) % matches.length);
       } else if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
-        accept(matches[highlight]);
+        accept(matches[activeIndex]);
       } else if (event.key === 'Escape') {
         event.preventDefault();
         setToken(null);
@@ -188,9 +195,30 @@ export default function VariableField({
     className,
   };
 
+  const highlightMode = highlight !== undefined && multiline;
+
   return (
     <div className={`relative ${wrapperClassName ?? ''}`}>
-      {multiline ? <textarea {...shared} rows={rows} /> : <input {...shared} />}
+      {highlightMode ? (
+        <div className="relative rounded-md border border-zinc-800 bg-zinc-900/60 focus-within:border-emerald-500/40 focus-within:ring-2 focus-within:ring-emerald-500/40">
+          <pre
+            aria-hidden
+            className={`${LAYER_CLASS} pointer-events-none text-zinc-300`}
+            style={{ minHeight: `${(rows ?? 8) * 1.4}rem` }}
+          >
+            {highlight(value)}
+            {'\n'}
+          </pre>
+          <textarea
+            {...shared}
+            className={`${LAYER_CLASS} absolute inset-0 resize-none overflow-hidden bg-transparent text-transparent caret-emerald-400 outline-none`}
+          />
+        </div>
+      ) : multiline ? (
+        <textarea {...shared} rows={rows} />
+      ) : (
+        <input {...shared} />
+      )}
       {open ? (
         <div className="absolute left-0 top-full z-30 mt-1 max-h-56 w-full min-w-[12rem] max-w-sm overflow-y-auto rounded-md border border-zinc-700/80 bg-zinc-900 py-1 shadow-2xl">
           {matches.map((match, index) => (
@@ -201,9 +229,9 @@ export default function VariableField({
                 e.preventDefault();
                 accept(match);
               }}
-              onMouseEnter={() => setHighlight(index)}
+              onMouseEnter={() => setActiveIndex(index)}
               className={`flex w-full items-center gap-2 px-2.5 py-1 text-left font-mono text-[11px] ${
-                index === highlight ? 'bg-emerald-500/10' : ''
+                index === activeIndex ? 'bg-emerald-500/10' : ''
               }`}
             >
               <span className="shrink-0 text-emerald-400">{`{{${match.name}}}`}</span>

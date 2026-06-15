@@ -14,6 +14,7 @@ import {
   type ApiKeyValueRow,
 } from './shared';
 import VariableField, { type VariableSuggestion } from './VariableField';
+import { highlightJson, jsonError } from './highlightJson';
 
 type EditorTab = 'params' | 'headers' | 'body' | 'pre' | 'tests';
 
@@ -120,6 +121,11 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
   const dirty = useRef(false);
 
   draftRef.current = draft;
+
+  const bodyJsonError = useMemo(
+    () => (draft.bodyMode === 'json' ? jsonError(draft.bodyRaw) : null),
+    [draft.bodyMode, draft.bodyRaw],
+  );
 
   const flushSave = useCallback(() => {
     if (saveTimer.current !== null) {
@@ -301,7 +307,35 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
               <p className="text-xs text-zinc-600">{t('client.editor.bodyNone')}</p>
             ) : null}
 
-            {draft.bodyMode === 'json' || draft.bodyMode === 'raw' ? (
+            {draft.bodyMode === 'json' ? (
+              <div>
+                <VariableField
+                  value={draft.bodyRaw}
+                  onChange={(bodyRaw) => patchDraft({ bodyRaw })}
+                  onBlur={flushSave}
+                  variables={variables}
+                  multiline
+                  codeAssist
+                  highlight={highlightJson}
+                  rows={12}
+                  placeholder={t('client.editor.bodyJsonPlaceholder')}
+                  ariaLabel={t('client.editor.body')}
+                  className={monoTextareaClass}
+                />
+                {bodyJsonError ? (
+                  <p className="mt-1.5 flex items-start gap-1.5 font-mono text-[11px] text-rose-400">
+                    <span className="select-none">⨯</span>
+                    {bodyJsonError.message}
+                  </p>
+                ) : draft.bodyRaw.trim() !== '' ? (
+                  <p className="mt-1.5 font-mono text-[11px] text-emerald-500/70">
+                    {t('client.editor.jsonValid')}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {draft.bodyMode === 'raw' ? (
               <VariableField
                 value={draft.bodyRaw}
                 onChange={(bodyRaw) => patchDraft({ bodyRaw })}
@@ -310,11 +344,7 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
                 multiline
                 codeAssist
                 rows={12}
-                placeholder={
-                  draft.bodyMode === 'json'
-                    ? t('client.editor.bodyJsonPlaceholder')
-                    : t('client.editor.bodyRawPlaceholder')
-                }
+                placeholder={t('client.editor.bodyRawPlaceholder')}
                 ariaLabel={t('client.editor.body')}
                 className={monoTextareaClass}
               />

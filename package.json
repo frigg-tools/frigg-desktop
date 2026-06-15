@@ -14,12 +14,17 @@
     "start": "npm run start -w @frigg/server",
     "test": "npm run test -w @frigg/server",
     "desktop": "concurrently -n server,web,app -c green,cyan,magenta \"npm run dev:server\" \"npm run dev:web\" \"npm run dev -w @frigg/desktop\"",
-    "desktop:dist": "npm run build && npm run dist -w @frigg/desktop"
+    "desktop:dist": "npm run build && npm run dist -w @frigg/desktop",
+    "mcp": "tsx packages/mcp/src/index.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
   }
 }
