@@ -1,7 +1,7 @@
 {
   "name": "frigg",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Intercept, inspect and mock HTTP(S) traffic from Android/iOS devices, emulators and simulators",
   "workspaces": [
     "packages/*"
