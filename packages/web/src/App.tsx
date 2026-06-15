@@ -8,6 +8,7 @@ import DevicesScreen from './screens/DevicesScreen';
 import LogcatScreen from './screens/LogcatScreen';
 import DatabaseScreen from './screens/DatabaseScreen';
 import ClientScreen from './screens/ClientScreen';
+import McpScreen from './screens/McpScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
 
 function ActivityIcon() {
@@ -111,6 +112,23 @@ function SendIcon() {
   );
 }
 
+function McpIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M12 2 4 6v6c0 5 3.4 7.5 8 10 4.6-2.5 8-5 8-10V6l-8-4Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
 interface NavItem {
   screen: Screen;
   labelKey: string;
@@ -124,6 +142,7 @@ const NAV_ITEMS: NavItem[] = [
   { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
   { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
   { screen: 'devices', labelKey: 'nav.devices', icon: <SmartphoneIcon /> },
+  { screen: 'mcp', labelKey: 'nav.mcp', icon: <McpIcon /> },
 ];
 
 function LanguageToggle() {
@@ -246,6 +265,8 @@ export default function App() {
           <DatabaseScreen />
         ) : screen === 'client' ? (
           <ClientScreen />
+        ) : screen === 'mcp' ? (
+          <McpScreen />
         ) : (
           <DevicesScreen />
         )}

@@ -90,6 +90,14 @@ export interface ApiRunResult {
 
 export const API_RESPONSE_LIMIT = 2_000_000;
 
+export interface McpServerInfo {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  available: boolean;
+  toolCount: number;
+}
+
 export interface CapturedRequest {
   id: string;
   timestamp: number;

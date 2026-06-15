@@ -12,6 +12,7 @@ import type {
   DevicesSnapshot,
   LogPlatform,
   LogSessionStatus,
+  McpServerInfo,
   MockFolder,
   MockRule,
   MockRuleInput,
@@ -249,4 +250,12 @@ export function deleteEnvironment(id: string): Promise<ApiClientSnapshot> {
 
 export function runApiRequest(apiRequest: ApiRequest): Promise<ApiRunResult> {
   return request('/api/client/run', jsonInit('POST', { request: apiRequest }));
+}
+
+export function getMcpInfo(): Promise<McpServerInfo> {
+  return request('/api/mcp/info');
+}
+
+export function installMcpClaudeCode(): Promise<{ ok: boolean; message: string }> {
+  return request('/api/mcp/install/claude-code', { method: 'POST' });
 }

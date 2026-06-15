@@ -7,6 +7,7 @@ import { onboarding } from './onboarding';
 import { logcat } from './logcat';
 import { database } from './database';
 import { client } from './client';
+import { mcp } from './mcp';
 
 export type { Locale };
 
@@ -24,6 +25,7 @@ const bundles: Record<string, Bundle> = {
   logcat,
   database,
   client,
+  mcp,
 };
 
 const flattened: Record<Locale, Record<string, string>> = { en: {}, pt: {} };

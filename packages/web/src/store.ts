@@ -22,7 +22,7 @@ import {
 } from '@frigg/shared';
 import * as api from './api/client';
 
-export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client';
+export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp';
 export type LogLevelFilter = LogLevel | 'ALL';
 
 const LOG_BUFFER_LIMIT = 5000;

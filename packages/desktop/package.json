@@ -34,6 +34,10 @@
       {
         "from": "../web/dist",
         "to": "web"
+      },
+      {
+        "from": "dist/mcp",
+        "to": "mcp"
       }
     ],
     "mac": {
