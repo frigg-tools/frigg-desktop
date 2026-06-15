@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useAppStore } from '../store';
 import { useT } from '../i18n';
 import CollectionSidebar from '../components/client/CollectionSidebar';
-import CollectionRunReport from '../components/client/CollectionRunReport';
 import ClientTabs from '../components/client/ClientTabs';
 import RequestEditor from '../components/client/RequestEditor';
 import ResponsePanel from '../components/client/ResponsePanel';
@@ -60,8 +59,7 @@ export default function ClientScreen() {
           <CollectionSidebar />
         </div>
         <ResizeHandle axis="x" onPointerDown={sidebar.onPointerDown} />
-        <div className="relative flex min-w-0 flex-1 flex-col">
-          <CollectionRunReport />
+        <div className="flex min-w-0 flex-1 flex-col">
           <ClientTabs />
           {selectedRequest ? (
             <>

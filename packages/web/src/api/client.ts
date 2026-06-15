@@ -9,12 +9,10 @@ import type {
   BreakpointResume,
   BreakpointRuleInput,
   BreakpointsSnapshot,
-  CollectionRunResult,
   DbFile,
   DbQueryResult,
   DeviceApp,
   DevicesSnapshot,
-  LoginResult,
   LogPlatform,
   LogSessionStatus,
   McpServerInfo,
@@ -195,7 +193,7 @@ export function createWorkspace(name: string): Promise<CreatedWithSnapshot> {
 
 export function updateWorkspace(
   id: string,
-  patch: Partial<Pick<ApiWorkspace, 'name' | 'activeEnvironmentId' | 'variables' | 'authRequestId'>>,
+  patch: Partial<Pick<ApiWorkspace, 'name' | 'activeEnvironmentId' | 'variables'>>,
 ): Promise<ApiClientSnapshot> {
   return request(`/api/client/workspaces/${encodeURIComponent(id)}`, jsonInit('PUT', patch));
 }
@@ -255,18 +253,6 @@ export function deleteEnvironment(id: string): Promise<ApiClientSnapshot> {
 
 export function runApiRequest(apiRequest: ApiRequest): Promise<ApiRunResult> {
   return request('/api/client/run', jsonInit('POST', { request: apiRequest }));
-}
-
-export function runCollection(
-  workspaceId: string,
-  folderId: string | null,
-  stopOnError?: boolean,
-): Promise<CollectionRunResult> {
-  return request('/api/client/run-collection', jsonInit('POST', { workspaceId, folderId, stopOnError }));
-}
-
-export function login(workspaceId: string): Promise<LoginResult> {
-  return request('/api/client/login', jsonInit('POST', { workspaceId }));
 }
 
 export function getMcpInfo(): Promise<McpServerInfo> {

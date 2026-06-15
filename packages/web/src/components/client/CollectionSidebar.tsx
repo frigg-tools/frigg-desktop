@@ -55,31 +55,6 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-function PlayIcon({ className = 'h-3 w-3' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M8 5v14l11-7L8 5Z" />
-    </svg>
-  );
-}
-
-function KeyIcon({ className = 'h-3 w-3' }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <circle cx="7.5" cy="15.5" r="4" />
-      <path d="m10.5 12.5 8-8M16 7l2 2M19 4l2 2" />
-    </svg>
-  );
-}
-
 function buildFolderTree(folders: ApiFolder[]): FolderNode[] {
   const nodes = new Map<string, FolderNode>(
     folders.map((folder) => [folder.id, { folder, children: [] }]),
@@ -117,21 +92,17 @@ function HoverActions({ children }: { children: ReactNode }) {
 function RequestRow({
   request,
   active,
-  isLogin,
   onSelect,
   onRename,
   onDelete,
-  onToggleLogin,
   renaming,
   confirming,
 }: {
   request: ApiRequest;
   active: boolean;
-  isLogin: boolean;
   onSelect: () => void;
   onRename: () => void;
   onDelete: () => void;
-  onToggleLogin: () => void;
   renaming: ReactNode | null;
   confirming: boolean;
 }) {
@@ -158,29 +129,7 @@ function RequestRow({
           <span className="min-w-0 flex-1 truncate">
             {request.name.trim().length > 0 ? request.name : t('client.tree.untitledRequest')}
           </span>
-          {isLogin ? (
-            <span
-              title={t('client.tree.loginRequest')}
-              className="shrink-0 text-amber-400 group-hover:hidden"
-            >
-              <KeyIcon className="h-3 w-3" />
-            </span>
-          ) : null}
           <HoverActions>
-            <button
-              type="button"
-              aria-label={isLogin ? t('client.tree.clearLogin') : t('client.tree.setAsLogin')}
-              title={isLogin ? t('client.tree.clearLogin') : t('client.tree.setAsLogin')}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleLogin();
-              }}
-              className={`rounded p-1 transition active:scale-[0.98] ${
-                isLogin ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-500 hover:text-amber-400'
-              }`}
-            >
-              <KeyIcon />
-            </button>
             <button
               type="button"
               aria-label={t('action.rename')}
@@ -244,12 +193,6 @@ export default function CollectionSidebar() {
   const selectApiRequest = useAppStore((s) => s.selectApiRequest);
   const createEnvironment = useAppStore((s) => s.createEnvironment);
   const setActiveEnvironment = useAppStore((s) => s.setActiveEnvironment);
-  const runCollection = useAppStore((s) => s.runCollection);
-  const setAuthRequest = useAppStore((s) => s.setAuthRequest);
-  const login = useAppStore((s) => s.login);
-  const loginRunning = useAppStore((s) => s.loginRunning);
-  const loginTokensSet = useAppStore((s) => s.loginTokensSet);
-  const loginError = useAppStore((s) => s.loginError);
 
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [renamingWorkspace, setRenamingWorkspace] = useState(false);
@@ -431,18 +374,12 @@ export default function CollectionSidebar() {
         <RequestRow
           request={request}
           active={request.id === selectedApiRequestId}
-          isLogin={request.id === activeWorkspace?.authRequestId}
           onSelect={() => selectApiRequest(request.id)}
           onRename={() => setRenamingRequestId(request.id)}
           onDelete={() =>
             confirmRequestId === request.id
               ? void deleteApiRequest(request.id).catch(() => undefined)
               : armConfirm(setConfirmRequestId, request.id)
-          }
-          onToggleLogin={() =>
-            void setAuthRequest(
-              request.id === activeWorkspace?.authRequestId ? null : request.id,
-            ).catch(() => undefined)
           }
           confirming={confirmRequestId === request.id}
           renaming={
@@ -499,15 +436,6 @@ export default function CollectionSidebar() {
                 <span className="min-w-0 flex-1 truncate font-medium">{folder.name}</span>
               </button>
               <HoverActions>
-                <button
-                  type="button"
-                  aria-label={t('client.tree.runFolder')}
-                  title={t('client.tree.runFolder')}
-                  onClick={() => void runCollection(folder.id).catch(() => undefined)}
-                  className="rounded p-1 text-zinc-500 transition hover:text-emerald-400 active:scale-[0.98]"
-                >
-                  <PlayIcon className="h-3 w-3" />
-                </button>
                 <button
                   type="button"
                   aria-label={t('client.tree.newRequest')}
@@ -758,28 +686,6 @@ export default function CollectionSidebar() {
                 className="w-full rounded border border-emerald-500/40 bg-zinc-900/80 px-2 py-1.5 text-[13px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
               />
             </div>
-          ) : null}
-        </div>
-
-        <div>
-          <button
-            type="button"
-            disabled={loginRunning || activeWorkspace.authRequestId === null}
-            title={activeWorkspace.authRequestId === null ? t('client.login.needsRequest') : undefined}
-            onClick={() => void login().catch(() => undefined)}
-            className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/15 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-amber-500/10"
-          >
-            <KeyIcon className="h-3.5 w-3.5" />
-            {loginRunning ? t('client.login.running') : t('client.login.button')}
-          </button>
-          {loginError ? (
-            <p className="mt-1.5 break-all text-[11px] text-rose-400">{loginError}</p>
-          ) : loginTokensSet ? (
-            <p className="mt-1.5 text-[11px] text-emerald-400">
-              {loginTokensSet.length > 0
-                ? t('client.login.tokensSet', { count: loginTokensSet.length })
-                : t('client.login.noTokens')}
-            </p>
           ) : null}
         </div>
       </div>

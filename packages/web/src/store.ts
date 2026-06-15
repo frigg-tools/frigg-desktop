@@ -9,7 +9,6 @@ import {
   type BreakpointResume,
   type BreakpointRuleInput,
   type BreakpointsSnapshot,
-  type CollectionRunResult,
   type DbFile,
   type DbQueryResult,
   type DeviceApp,
@@ -130,16 +129,6 @@ export interface AppState {
   deleteEnvironment: (id: string) => Promise<void>;
   setActiveEnvironment: (envId: string | null) => Promise<void>;
   runApiRequest: (request: ApiRequest) => Promise<void>;
-  collectionRun: CollectionRunResult | null;
-  collectionRunning: boolean;
-  runCollection: (folderId: string | null) => Promise<void>;
-  clearCollectionRun: () => void;
-  loginRunning: boolean;
-  loginTokensSet: string[] | null;
-  loginError: string | null;
-  login: () => Promise<void>;
-  clearLoginResult: () => void;
-  setAuthRequest: (requestId: string | null) => Promise<void>;
   breakpoints: BreakpointsSnapshot;
   loadBreakpoints: () => Promise<void>;
   toggleBreakpoints: (enabled: boolean) => Promise<void>;
@@ -456,9 +445,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedApiRequestId: selectedId,
       apiRunResult: null,
       apiRunResultByRequest: {},
-      collectionRun: null,
-      loginTokensSet: null,
-      loginError: null,
     });
   },
   createWorkspace: async (name) => {
@@ -616,46 +602,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     } finally {
       set({ apiRunning: false });
     }
-  },
-  collectionRun: null,
-  collectionRunning: false,
-  runCollection: async (folderId) => {
-    const workspaceId = get().activeWorkspaceId;
-    if (!workspaceId) return;
-    set({ collectionRunning: true, collectionRun: null });
-    try {
-      const run = await api.runCollection(workspaceId, folderId);
-      set({ collectionRun: run, ...applyApiSnapshot(await api.getApiClient()) });
-    } finally {
-      set({ collectionRunning: false });
-    }
-  },
-  clearCollectionRun: () => set({ collectionRun: null }),
-  loginRunning: false,
-  loginTokensSet: null,
-  loginError: null,
-  login: async () => {
-    const workspaceId = get().activeWorkspaceId;
-    if (!workspaceId) return;
-    set({ loginRunning: true, loginTokensSet: null, loginError: null });
-    try {
-      const { result, tokensSet, snapshot } = await api.login(workspaceId);
-      set({
-        ...applyApiSnapshot(snapshot),
-        loginTokensSet: tokensSet,
-        loginError: result.error,
-      });
-    } catch (error) {
-      set({ loginError: error instanceof Error ? error.message : 'Login failed' });
-    } finally {
-      set({ loginRunning: false });
-    }
-  },
-  clearLoginResult: () => set({ loginTokensSet: null, loginError: null }),
-  setAuthRequest: async (requestId) => {
-    const workspaceId = get().activeWorkspaceId;
-    if (!workspaceId) return;
-    set(applyApiSnapshot(await api.updateWorkspace(workspaceId, { authRequestId: requestId })));
   },
   breakpoints: { enabled: false, rules: [], paused: [] },
   loadBreakpoints: async () => {

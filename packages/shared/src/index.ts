@@ -57,7 +57,6 @@ export interface ApiWorkspace {
   name: string;
   variables: ApiKeyValue[];
   activeEnvironmentId: string | null;
-  authRequestId: string | null;
   createdAt: number;
 }
 
@@ -87,35 +86,6 @@ export interface ApiRunResult {
   tests: ApiTestResult[];
   error: string | null;
   effectiveUrl: string;
-}
-
-export interface CollectionRunStep {
-  requestId: string;
-  name: string;
-  method: string;
-  url: string;
-  ok: boolean;
-  status: number;
-  durationMs: number;
-  tests: ApiTestResult[];
-  error: string | null;
-  skipped: boolean;
-}
-
-export interface CollectionRunResult {
-  workspaceId: string;
-  folderId: string | null;
-  startedAt: number;
-  finishedAt: number;
-  steps: CollectionRunStep[];
-  passed: number;
-  failed: number;
-}
-
-export interface LoginResult {
-  result: ApiRunResult;
-  tokensSet: string[];
-  snapshot: ApiClientSnapshot;
 }
 
 export const API_RESPONSE_LIMIT = 2_000_000;
