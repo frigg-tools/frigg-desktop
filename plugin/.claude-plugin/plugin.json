@@ -1,0 +1,20 @@
+{
+  "name": "frigg",
+  "version": "1.0.0",
+  "description": "Drive Frigg — intercept, inspect and mock mobile HTTP(S) traffic — from Claude. Bundles the Frigg MCP server plus slash commands and a debugging skill. Requires a running Frigg server (the desktop app or `npm run dev`) on http://localhost:4848.",
+  "author": {
+    "name": "frigg-tools",
+    "url": "https://github.com/frigg-tools/frigg-desktop"
+  },
+  "homepage": "https://github.com/frigg-tools/frigg-desktop",
+  "keywords": ["http", "https", "proxy", "mock", "mobile", "android", "ios", "debugging", "mcp"],
+  "mcpServers": {
+    "frigg": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/frigg-mcp.mjs"],
+      "env": {
+        "FRIGG_API_URL": "http://localhost:4848"
+      }
+    }
+  }
+}

@@ -57,6 +57,26 @@ The packaged app boots the server in-process and serves the bundled UI — no te
 - **Devices** — one-click interception setup (see below).
 - **MCP** — exposes Frigg over a Model Context Protocol server so agents can drive traffic, mocks and the API client.
 
+## Claude Code plugin
+
+Drive Frigg straight from Claude Code. The plugin bundles the Frigg MCP server (18 tools) plus `/frigg:*` slash commands and a debugging skill:
+
+```text
+/plugin marketplace add frigg-tools/frigg-desktop
+/plugin install frigg@frigg-tools
+```
+
+With a Frigg server running (the desktop app or `npm run dev`, API on `:4848`):
+
+- `/frigg:status` — proxy status + connected devices
+- `/frigg:traffic [filter]` — recently captured traffic
+- `/frigg:mock <spec>` — create a mock rule (from a description or a captured request)
+- `/frigg:run <request>` — run a saved API-client request
+- `/frigg:setup` — check the connection and how to start Frigg
+- the **frigg-debug** skill guides inspect-and-mock debugging
+
+The MCP talks to the server's HTTP API; set `FRIGG_API_URL` if Frigg runs on a custom port. After changing the MCP source, rebuild the bundled server with `npm run build:plugin`.
+
 ## Connecting a device
 
 ### Android (emulator or USB device) — one click

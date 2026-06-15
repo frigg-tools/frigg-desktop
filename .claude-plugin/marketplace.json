@@ -1,0 +1,14 @@
+{
+  "name": "frigg-tools",
+  "owner": {
+    "name": "frigg-tools",
+    "url": "https://github.com/frigg-tools"
+  },
+  "plugins": [
+    {
+      "name": "frigg",
+      "source": "./plugin",
+      "description": "Intercept, inspect and mock mobile HTTP(S) traffic from Claude via the Frigg MCP server, with /frigg slash commands and a debugging skill. Requires a running Frigg server on http://localhost:4848."
+    }
+  ]
+}
