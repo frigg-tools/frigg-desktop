@@ -18,6 +18,43 @@ interface FolderNode {
   children: FolderNode[];
 }
 
+const EXPANDED_STORAGE_KEY = 'frigg-client-expanded';
+
+function loadExpanded(workspaceId: string): Set<string> {
+  try {
+    const all = JSON.parse(localStorage.getItem(EXPANDED_STORAGE_KEY) ?? '{}') as Record<string, string[]>;
+    return new Set(all[workspaceId] ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveExpanded(workspaceId: string, expanded: Set<string>): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(EXPANDED_STORAGE_KEY) ?? '{}') as Record<string, string[]>;
+    all[workspaceId] = [...expanded];
+    localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    return;
+  }
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`h-3 w-3 shrink-0 text-zinc-600 transition-transform ${open ? 'rotate-90' : ''}`}
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
 function buildFolderTree(folders: ApiFolder[]): FolderNode[] {
   const nodes = new Map<string, FolderNode>(
     folders.map((folder) => [folder.id, { folder, children: [] }]),
@@ -167,6 +204,10 @@ export default function CollectionSidebar() {
   const [renamingRequestId, setRenamingRequestId] = useState<string | null>(null);
   const [confirmFolderId, setConfirmFolderId] = useState<string | null>(null);
   const [confirmRequestId, setConfirmRequestId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(() =>
+    loadExpanded(activeWorkspaceId ?? ''),
+  );
   const confirmTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -174,6 +215,31 @@ export default function CollectionSidebar() {
       if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    setExpanded(loadExpanded(activeWorkspaceId ?? ''));
+    setQuery('');
+  }, [activeWorkspaceId]);
+
+  const toggleFolder = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      saveExpanded(activeWorkspaceId ?? '', next);
+      return next;
+    });
+  };
+
+  const ensureExpanded = (id: string) => {
+    setExpanded((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      saveExpanded(activeWorkspaceId ?? '', next);
+      return next;
+    });
+  };
 
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.id === activeWorkspaceId) ?? null,
@@ -197,6 +263,18 @@ export default function CollectionSidebar() {
 
   const tree = useMemo(() => buildFolderTree(workspaceFolders), [workspaceFolders]);
 
+  const search = query.trim().toLowerCase();
+
+  const matchingRequestIds = useMemo(() => {
+    if (search === '') return null;
+    const matches = new Set<string>();
+    for (const request of requests) {
+      if (request.workspaceId !== activeWorkspaceId) continue;
+      if (request.name.toLowerCase().includes(search)) matches.add(request.id);
+    }
+    return matches;
+  }, [requests, activeWorkspaceId, search]);
+
   const requestsByFolder = useMemo(() => {
     const map = new Map<string | null, ApiRequest[]>();
     for (const request of requests) {
@@ -210,6 +288,35 @@ export default function CollectionSidebar() {
     }
     return map;
   }, [requests, activeWorkspaceId]);
+
+  const visibleFolders = useMemo(() => {
+    if (matchingRequestIds === null) return null;
+    const visible = new Set<string>();
+    const visit = (node: FolderNode): boolean => {
+      let hasMatch = (requestsByFolder.get(node.folder.id) ?? []).some((r) =>
+        matchingRequestIds.has(r.id),
+      );
+      for (const child of node.children) {
+        if (visit(child)) hasMatch = true;
+      }
+      if (hasMatch) visible.add(node.folder.id);
+      return hasMatch;
+    };
+    for (const node of tree) visit(node);
+    return visible;
+  }, [matchingRequestIds, tree, requestsByFolder]);
+
+  const expandAll = () => {
+    const next = new Set(workspaceFolders.map((f) => f.id));
+    setExpanded(next);
+    saveExpanded(activeWorkspaceId ?? '', next);
+  };
+
+  const collapseAll = () => {
+    const next = new Set<string>();
+    setExpanded(next);
+    saveExpanded(activeWorkspaceId ?? '', next);
+  };
 
   const armConfirm = (set: (value: string | null) => void, id: string) => {
     set(id);
@@ -260,7 +367,8 @@ export default function CollectionSidebar() {
   };
 
   const renderRequests = (folderId: string | null, depth: number) => {
-    const list = requestsByFolder.get(folderId) ?? [];
+    let list = requestsByFolder.get(folderId) ?? [];
+    if (matchingRequestIds !== null) list = list.filter((r) => matchingRequestIds.has(r.id));
     return list.map((request) => (
       <div key={request.id} style={{ paddingLeft: `${depth * 14}px` }}>
         <RequestRow
@@ -294,32 +402,47 @@ export default function CollectionSidebar() {
 
   const renderFolder = (node: FolderNode, depth: number): ReactNode => {
     const { folder } = node;
+    if (visibleFolders !== null && !visibleFolders.has(folder.id)) return null;
     const confirming = confirmFolderId === folder.id;
+    const isOpen = matchingRequestIds !== null ? true : expanded.has(folder.id);
     return (
       <div key={folder.id}>
         <div
-          className="group flex h-8 items-center gap-2 pr-2 text-[13px] text-zinc-300 transition-colors hover:bg-zinc-900/60"
+          className="group flex h-8 items-center gap-1.5 pr-2 text-[13px] text-zinc-300 transition-colors hover:bg-zinc-900/60"
           style={indentStyle(depth)}
         >
-          <FolderIcon className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
           {renamingFolderId === folder.id ? (
-            <InlineNameInput
-              defaultValue={folder.name}
-              placeholder={t('client.tree.folderNamePlaceholder')}
-              onCommit={(name) => {
-                setRenamingFolderId(null);
-                void renameApiFolder(folder.id, name).catch(() => undefined);
-              }}
-              onCancel={() => setRenamingFolderId(null)}
-            />
+            <>
+              <FolderIcon className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
+              <InlineNameInput
+                defaultValue={folder.name}
+                placeholder={t('client.tree.folderNamePlaceholder')}
+                onCommit={(name) => {
+                  setRenamingFolderId(null);
+                  void renameApiFolder(folder.id, name).catch(() => undefined);
+                }}
+                onCancel={() => setRenamingFolderId(null)}
+              />
+            </>
           ) : (
             <>
-              <span className="min-w-0 flex-1 truncate font-medium">{folder.name}</span>
+              <button
+                type="button"
+                onClick={() => toggleFolder(folder.id)}
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+              >
+                <Chevron open={isOpen} />
+                <FolderIcon className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
+                <span className="min-w-0 flex-1 truncate font-medium">{folder.name}</span>
+              </button>
               <HoverActions>
                 <button
                   type="button"
                   aria-label={t('client.tree.newRequest')}
-                  onClick={() => setPendingCreate({ type: 'request', parentId: folder.id })}
+                  onClick={() => {
+                    ensureExpanded(folder.id);
+                    setPendingCreate({ type: 'request', parentId: folder.id });
+                  }}
                   className="rounded p-1 text-zinc-500 transition hover:text-emerald-400 active:scale-[0.98]"
                 >
                   <PlusIcon className="h-3 w-3" />
@@ -327,7 +450,10 @@ export default function CollectionSidebar() {
                 <button
                   type="button"
                   aria-label={t('client.tree.newFolder')}
-                  onClick={() => setPendingCreate({ type: 'folder', parentId: folder.id })}
+                  onClick={() => {
+                    ensureExpanded(folder.id);
+                    setPendingCreate({ type: 'folder', parentId: folder.id });
+                  }}
                   className="rounded p-1 text-zinc-500 transition hover:text-emerald-400 active:scale-[0.98]"
                 >
                   <FolderIcon className="h-3 w-3" />
@@ -365,8 +491,12 @@ export default function CollectionSidebar() {
         {pendingCreate && pendingCreate.parentId === folder.id
           ? renderCreateInput(depth + 1)
           : null}
-        {node.children.map((child) => renderFolder(child, depth + 1))}
-        {renderRequests(folder.id, depth + 1)}
+        {isOpen ? (
+          <>
+            {node.children.map((child) => renderFolder(child, depth + 1))}
+            {renderRequests(folder.id, depth + 1)}
+          </>
+        ) : null}
       </div>
     );
   };
@@ -405,6 +535,12 @@ export default function CollectionSidebar() {
   const rootRequests = renderRequests(null, 0);
   const treeEmpty =
     tree.length === 0 && (requestsByFolder.get(null)?.length ?? 0) === 0 && !pendingCreate;
+  const rootMatchCount =
+    matchingRequestIds === null
+      ? (requestsByFolder.get(null)?.length ?? 0)
+      : (requestsByFolder.get(null)?.filter((r) => matchingRequestIds.has(r.id)).length ?? 0);
+  const noMatches =
+    matchingRequestIds !== null && (visibleFolders?.size ?? 0) === 0 && rootMatchCount === 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -554,27 +690,68 @@ export default function CollectionSidebar() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-b border-zinc-800/80 px-3 py-2">
-        <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-          {t('client.tree.label')}
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label={t('client.tree.newFolder')}
-            onClick={() => setPendingCreate({ type: 'folder', parentId: null })}
-            className="rounded border border-zinc-800 bg-zinc-900/60 p-1 text-zinc-400 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98]"
+      <div className="space-y-2 border-b border-zinc-800/80 px-3 py-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+            {t('client.tree.label')}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={t('client.tree.collapseAll')}
+              onClick={expanded.size > 0 ? collapseAll : expandAll}
+              className="rounded border border-zinc-800 bg-zinc-900/60 p-1 text-zinc-400 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98]"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-3 w-3"
+              >
+                {expanded.size > 0 ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label={t('client.tree.newFolder')}
+              onClick={() => setPendingCreate({ type: 'folder', parentId: null })}
+              className="rounded border border-zinc-800 bg-zinc-900/60 p-1 text-zinc-400 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98]"
+            >
+              <FolderIcon className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              aria-label={t('client.tree.newRequest')}
+              onClick={() => setPendingCreate({ type: 'request', parentId: null })}
+              className="rounded border border-zinc-800 bg-zinc-900/60 p-1 text-zinc-400 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98]"
+            >
+              <PlusIcon />
+            </button>
+          </div>
+        </div>
+        <div className="relative">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600"
           >
-            <FolderIcon className="h-3 w-3" />
-          </button>
-          <button
-            type="button"
-            aria-label={t('client.tree.newRequest')}
-            onClick={() => setPendingCreate({ type: 'request', parentId: null })}
-            className="rounded border border-zinc-800 bg-zinc-900/60 p-1 text-zinc-400 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98]"
-          >
-            <PlusIcon />
-          </button>
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('client.tree.searchPlaceholder')}
+            spellCheck={false}
+            className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 py-1.5 pl-7 pr-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          />
         </div>
       </div>
 
@@ -591,6 +768,8 @@ export default function CollectionSidebar() {
               {t('client.tree.newRequest')}
             </button>
           </div>
+        ) : noMatches ? (
+          <p className="px-3 py-6 text-center text-xs text-zinc-600">{t('client.tree.noMatch')}</p>
         ) : (
           <>
             {tree.map((node) => renderFolder(node, 0))}
