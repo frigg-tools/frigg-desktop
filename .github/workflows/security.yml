@@ -1,16 +1,18 @@
-name: Secret scan
+name: Security
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
 
 jobs:
   gitleaks:
-    name: gitleaks
+    name: gitleaks (secret scan)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,3 +28,22 @@ jobs:
 
       - name: Scan full history
         run: gitleaks git --no-banner --redact --verbose
+
+  audit:
+    name: npm audit (dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Runtime dependencies (fail on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Full audit incl. build/dev tooling (informational)
+        run: npm audit || true
