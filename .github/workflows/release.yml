@@ -15,12 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-14
-            arch: arm64
-          - os: macos-13
-            arch: x64
-    runs-on: ${{ matrix.os }}
+        arch: [arm64, x64]
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -31,8 +27,15 @@ jobs:
 
       - run: npm ci
 
-      - name: Build desktop dmg
-        run: npm run desktop:dist
+      - name: Build web + server
+        run: npm run build
+
+      - name: Bundle desktop main
+        run: npm run build:main --workspace @frigg/desktop
+
+      - name: Package ${{ matrix.arch }} dmg
+        working-directory: packages/desktop
+        run: npx electron-builder --mac dmg --${{ matrix.arch }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 

@@ -21,6 +21,7 @@
   "build": {
     "appId": "com.frigg.app",
     "productName": "Frigg",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "electronVersion": "33.4.11",
     "npmRebuild": false,
     "beforePack": "scripts/before-pack.cjs",
