@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpServerInfo } from '@frigg/shared';
 
-const MCP_TOOL_COUNT = 18;
+const MCP_TOOL_COUNT = 19;
 
 function packagedEntry(): string | null {
   const resources = (process as { resourcesPath?: string }).resourcesPath;

@@ -104,7 +104,7 @@ server.tool(
     method: z.string().optional().describe('HTTP method to match (omit for any method)'),
     hostPattern: z.string().optional().describe('Glob pattern matched against the request host'),
     body: z.string().optional().describe('Response body string'),
-    headers: z.record(z.string()).optional().describe('Response headers as key-value object'),
+    headers: z.record(z.string(), z.string()).optional().describe('Response headers as key-value object'),
     enabled: z.boolean().optional().describe('Whether the rule is active (default true)'),
     priority: z.number().optional().describe('Rule priority — higher wins when multiple rules match (default 0)'),
     folderId: z.string().optional().describe('Folder to place this rule in'),
@@ -155,7 +155,7 @@ server.tool(
     hostPattern: z.string().optional(),
     statusCode: z.number().int().min(100).max(599).optional(),
     body: z.string().optional(),
-    headers: z.record(z.string()).optional(),
+    headers: z.record(z.string(), z.string()).optional(),
     delayMs: z.number().optional(),
     queryContains: z.string().optional(),
   },
@@ -228,6 +228,32 @@ server.tool(
   async ({ name }) => {
     try {
       return ok(await post('/api/client/workspaces', { name }));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
+  'frigg_set_client_certs',
+  'Set the workspace mTLS client certificates (replaces the whole list). Each cert is matched by host; the request runner presents it during the TLS handshake for requests whose host matches. certPath/keyPath/caPath are file paths on the machine running Frigg.',
+  {
+    workspaceId: z.string().describe('Workspace ID'),
+    clientCerts: z
+      .array(
+        z.object({
+          host: z.string().min(1).describe('Host or host:port to match, e.g. qa.boss4u.com.br'),
+          certPath: z.string().min(1).describe('Path to the client certificate PEM file'),
+          keyPath: z.string().min(1).describe('Path to the client private key PEM file'),
+          caPath: z.string().optional().describe('Path to a CA PEM file (optional)'),
+          passphrase: z.string().optional().describe('Private key passphrase (optional)'),
+        }),
+      )
+      .describe('Full replacement list of client certificates for the workspace'),
+  },
+  async ({ workspaceId, clientCerts }) => {
+    try {
+      return ok(await put(`/api/client/workspaces/${encodeURIComponent(workspaceId)}`, { clientCerts }));
     } catch (e) {
       return err(e);
     }

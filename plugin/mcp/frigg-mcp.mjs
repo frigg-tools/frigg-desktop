@@ -31068,7 +31068,7 @@ server.tool(
     method: external_exports.string().optional().describe("HTTP method to match (omit for any method)"),
     hostPattern: external_exports.string().optional().describe("Glob pattern matched against the request host"),
     body: external_exports.string().optional().describe("Response body string"),
-    headers: external_exports.record(external_exports.string()).optional().describe("Response headers as key-value object"),
+    headers: external_exports.record(external_exports.string(), external_exports.string()).optional().describe("Response headers as key-value object"),
     enabled: external_exports.boolean().optional().describe("Whether the rule is active (default true)"),
     priority: external_exports.number().optional().describe("Rule priority \u2014 higher wins when multiple rules match (default 0)"),
     folderId: external_exports.string().optional().describe("Folder to place this rule in"),
@@ -31115,7 +31115,7 @@ server.tool(
     hostPattern: external_exports.string().optional(),
     statusCode: external_exports.number().int().min(100).max(599).optional(),
     body: external_exports.string().optional(),
-    headers: external_exports.record(external_exports.string()).optional(),
+    headers: external_exports.record(external_exports.string(), external_exports.string()).optional(),
     delayMs: external_exports.number().optional(),
     queryContains: external_exports.string().optional()
   },
@@ -31181,6 +31181,29 @@ server.tool(
   async ({ name }) => {
     try {
       return ok(await post("/api/client/workspaces", { name }));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool(
+  "frigg_set_client_certs",
+  "Set the workspace mTLS client certificates (replaces the whole list). Each cert is matched by host; the request runner presents it during the TLS handshake for requests whose host matches. certPath/keyPath/caPath are file paths on the machine running Frigg.",
+  {
+    workspaceId: external_exports.string().describe("Workspace ID"),
+    clientCerts: external_exports.array(
+      external_exports.object({
+        host: external_exports.string().min(1).describe("Host or host:port to match, e.g. qa.boss4u.com.br"),
+        certPath: external_exports.string().min(1).describe("Path to the client certificate PEM file"),
+        keyPath: external_exports.string().min(1).describe("Path to the client private key PEM file"),
+        caPath: external_exports.string().optional().describe("Path to a CA PEM file (optional)"),
+        passphrase: external_exports.string().optional().describe("Private key passphrase (optional)")
+      })
+    ).describe("Full replacement list of client certificates for the workspace")
+  },
+  async ({ workspaceId, clientCerts }) => {
+    try {
+      return ok(await put(`/api/client/workspaces/${encodeURIComponent(workspaceId)}`, { clientCerts }));
     } catch (e) {
       return err(e);
     }
