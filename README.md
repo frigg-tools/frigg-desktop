@@ -1,13 +1,13 @@
 # Frigg
 
-Intercept, inspect and **mock** HTTP(S) traffic from Android/iOS devices, emulators and simulators — HTTP Toolkit style, with one-click device setup.
+Intercept, inspect and **mock** HTTP(S) traffic from Android/iOS devices, emulators and simulators — HTTP Toolkit style, with one-click device setup. Plus a built-in **API client**, **Logcat** streaming, a **database** browser and in-flight **breakpoints**. Runs in the browser or as a native **desktop app**. Bilingual UI (English / pt-BR).
 
 ```
 ┌──────────────┐    HTTP(S)     ┌─────────────────────┐
 │ Android / iOS │ ────────────▶ │  Frigg proxy :8888  │ ──▶ internet
 │ device / emu  │               │  (TLS interception) │
 └──────────────┘               └──────────┬──────────┘
-                                          │ live feed + mocks
+                                          │ live feed + mocks + breakpoints
                                 ┌─────────▼──────────┐
                                 │  Frigg UI  :4848   │
                                 └────────────────────┘
@@ -20,7 +20,7 @@ npm install
 npm run dev        # server (API :4848, proxy :8888) + web UI (:5173)
 ```
 
-Open <http://localhost:5173>. First run shows a 3-step onboarding; then head to **Devices**.
+Open <http://localhost:5173>. First run shows a short onboarding; then head to **Devices**.
 
 Production-ish run (UI served by the server at :4848):
 
@@ -28,6 +28,26 @@ Production-ish run (UI served by the server at :4848):
 npm run build
 npm start
 ```
+
+## Desktop app
+
+```bash
+npm run desktop        # boots server + web and opens a native window
+npm run desktop:dist   # builds the installer → packages/desktop/release/ (.dmg / .exe / AppImage)
+```
+
+The packaged app boots the server in-process and serves the bundled UI — no terminal needed. Targets: macOS → `.dmg`, Windows → `.exe` (nsis), Linux → AppImage (build on the matching OS).
+
+## What's inside
+
+- **Traffic** — every request flows live; filter by host/path and by device. Click one → **⚡ Create mock** prefills a rule from the real exchange.
+- **API client** — Postman-style: workspaces, nested folders, environments and variables. `{{variables}}` are highlighted and autocompleted everywhere; the JSON body is colorized with error hints. Open several requests at once as **tabs**. Pre-request and test **scripts** run in a sandbox with a Postman-like `pm` API (`pm.environment.get/set`, `pm.response.json`, `pm.test`, `pm.expect`). Adding a variable can seed it across every environment; creating an environment can copy the keys from the others.
+- **Breakpoints** — pause a matching request or response in-flight, edit method/URL/headers/body (or status), then continue, answer with a custom response, or abort. Match rules by method + URL, for the request side, the response side, or both.
+- **Mocks** — rules in nested folders, matched on method, host/path globs (`*`, `?`), query substring and body; answer with your status/headers/body and optional delay. Higher priority wins; matched requests never reach upstream and show a ⚡ MOCK chip.
+- **Logcat** — stream Android `logcat` / iOS `log`, filtered by app package, level and text.
+- **Database** — open and query the local databases (Android Room / iOS) of installed apps.
+- **Devices** — one-click interception setup (see below).
+- **MCP** — exposes Frigg over a Model Context Protocol server so agents can drive traffic, mocks and the API client.
 
 ## Connecting a device
 
@@ -58,19 +78,21 @@ Open the **setup page** (`http://<your-lan-ip>:4848/setup`, linked + QR'd from t
 2. Download the CA cert from the page.
 3. Trust it — iOS: install the profile (Settings → General → VPN & Device Management), then enable full trust in Settings → General → About → Certificate Trust Settings. Android: Settings → Security → Install CA certificate.
 
-## Mocking
-
-- **Traffic** screen: every request flows live. Click one → **⚡ Create mock** prefills a rule from the real exchange.
-- **Mocks** screen: rules organized in nested **folders**. A rule matches on method, host pattern, path pattern (globs: `*`, `?`), query substring and body; it answers with your status/headers/body, optional delay. Toggle rules on/off; higher priority wins.
-- Matched requests never reach the upstream server and show a ⚡ MOCK chip in the traffic list.
-
-Everything persists in `~/.frigg/` (CA keypair + `mocks.json`).
+Everything persists in `~/.frigg/` (CA keypair, `mocks.json`, API-client data).
 
 ## Stack
 
-npm workspaces monorepo — `packages/shared` (types), `packages/server` (Node + TypeScript, [mockttp](https://github.com/httptoolkit/mockttp) proxy engine, Express + WebSocket API), `packages/web` (React 19, Vite, Tailwind v4, zustand). Architecture and module contracts: [DESIGN.md](./DESIGN.md).
+npm workspaces monorepo:
+
+- **`packages/shared`** — domain types.
+- **`packages/server`** — Node + TypeScript, [mockttp](https://github.com/httptoolkit/mockttp) TLS-intercepting proxy, Express + WebSocket API, device connectors (adb / simctl / networksetup), Logcat streaming.
+- **`packages/web`** — React 19, Vite, Tailwind v4, zustand.
+- **`packages/desktop`** — Electron shell (esbuild-bundled main).
+- **`packages/mcp`** — Model Context Protocol server bridging to the Frigg HTTP API.
+
+Architecture and module contracts: [DESIGN.md](./DESIGN.md).
 
 ```bash
-npm test           # server unit tests (matcher + mock store)
+npm test           # server unit tests (matcher, mock store, traffic, logcat, api-client)
 FRIGG_PROXY_PORT=9999 FRIGG_API_PORT=4040 npm start   # custom ports
 ```
