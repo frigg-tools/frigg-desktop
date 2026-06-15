@@ -32,7 +32,7 @@ function isKeyValueArray(value: unknown): value is ApiKeyValue[] {
   );
 }
 
-function isValidWorkspace(value: unknown): value is ApiWorkspace {
+function isValidWorkspace(value: unknown): value is Omit<ApiWorkspace, 'authRequestId'> {
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&
@@ -41,6 +41,14 @@ function isValidWorkspace(value: unknown): value is ApiWorkspace {
     (value.activeEnvironmentId === null || typeof value.activeEnvironmentId === 'string') &&
     typeof value.createdAt === 'number'
   );
+}
+
+function normalizeWorkspace(value: Omit<ApiWorkspace, 'authRequestId'>): ApiWorkspace {
+  const authRequestId = (value as Record<string, unknown>).authRequestId;
+  return {
+    ...value,
+    authRequestId: typeof authRequestId === 'string' ? authRequestId : null,
+  };
 }
 
 function isValidFolder(value: unknown): value is ApiFolder {
@@ -127,7 +135,7 @@ export class ApiClientStore extends EventEmitter {
         Array.isArray(parsed.requests) &&
         Array.isArray(parsed.environments)
       ) {
-        store.workspaces = parsed.workspaces.filter(isValidWorkspace);
+        store.workspaces = parsed.workspaces.filter(isValidWorkspace).map(normalizeWorkspace);
         store.folders = parsed.folders.filter(isValidFolder);
         store.requests = parsed.requests.filter(isValidRequest);
         store.environments = parsed.environments.filter(isValidEnvironment);
@@ -159,6 +167,7 @@ export class ApiClientStore extends EventEmitter {
       name,
       variables: [],
       activeEnvironmentId: null,
+      authRequestId: null,
       createdAt: Date.now(),
     };
     this.workspaces.push(workspace);
@@ -168,7 +177,12 @@ export class ApiClientStore extends EventEmitter {
 
   updateWorkspace(
     id: string,
-    patch: { name?: string; variables?: ApiKeyValue[]; activeEnvironmentId?: string | null },
+    patch: {
+      name?: string;
+      variables?: ApiKeyValue[];
+      activeEnvironmentId?: string | null;
+      authRequestId?: string | null;
+    },
   ): ApiWorkspace {
     const workspace = this.requireWorkspace(id);
     if (patch.name !== undefined) workspace.name = patch.name;
@@ -178,6 +192,12 @@ export class ApiClientStore extends EventEmitter {
         this.requireEnvironmentInWorkspace(patch.activeEnvironmentId, id);
       }
       workspace.activeEnvironmentId = patch.activeEnvironmentId;
+    }
+    if (patch.authRequestId !== undefined) {
+      if (patch.authRequestId !== null) {
+        this.requireRequestInWorkspace(patch.authRequestId, id);
+      }
+      workspace.authRequestId = patch.authRequestId;
     }
     this.commit();
     return structuredClone(workspace);
@@ -296,7 +316,13 @@ export class ApiClientStore extends EventEmitter {
     if (index === -1) {
       throw new Error('not found');
     }
+    const removed = this.requests[index];
     this.requests.splice(index, 1);
+    for (const workspace of this.workspaces) {
+      if (workspace.authRequestId === removed.id) {
+        workspace.authRequestId = null;
+      }
+    }
     this.commit();
   }
 
@@ -383,6 +409,7 @@ export class ApiClientStore extends EventEmitter {
       name: 'My Workspace',
       variables: [],
       activeEnvironmentId: null,
+      authRequestId: null,
       createdAt: Date.now(),
     };
     const environment: ApiEnvironment = {
@@ -424,6 +451,14 @@ export class ApiClientStore extends EventEmitter {
   private requireRequest(id: string): ApiRequest {
     const request = this.requests.find((candidate) => candidate.id === id);
     if (!request) {
+      throw new Error('not found');
+    }
+    return request;
+  }
+
+  private requireRequestInWorkspace(id: string, workspaceId: string): ApiRequest {
+    const request = this.requireRequest(id);
+    if (request.workspaceId !== workspaceId) {
       throw new Error('not found');
     }
     return request;

@@ -22,6 +22,7 @@ import type {
 } from '@frigg/shared';
 import { ApiClientStore } from '../api-client/store.ts';
 import { runRequest } from '../api-client/runner.ts';
+import { runCollection, runLogin, LoginValidationError } from '../api-client/collection-runner.ts';
 import { listApps } from '../devices/apps.ts';
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
 import {
@@ -434,6 +435,7 @@ function localeFromRequest(req: Request): ServerLocale {
 
 function statusForError(error: unknown): number {
   if (error instanceof ValidationError) return 400;
+  if (error instanceof LoginValidationError) return 400;
   if (error instanceof Error && error.message === 'not found') return 404;
   if (error instanceof Error && error.message === 'cycle') return 400;
   return 500;
@@ -669,13 +671,24 @@ export function buildRouter(deps: ApiDeps): Router {
 
   router.put('/api/client/workspaces/:id', (req, res) => {
     const record = asRecord(req.body, 'workspace');
-    const patch: { name?: string; variables?: ApiKeyValue[]; activeEnvironmentId?: string | null } = {};
+    const patch: {
+      name?: string;
+      variables?: ApiKeyValue[];
+      activeEnvironmentId?: string | null;
+      authRequestId?: string | null;
+    } = {};
     if (record.name !== undefined) patch.name = parseFolderName(record.name);
     if (record.variables !== undefined) {
       patch.variables = parseKeyValueArray(record.variables, 'variables');
     }
     if ('activeEnvironmentId' in record) {
       patch.activeEnvironmentId = parseParentId(record.activeEnvironmentId);
+    }
+    if ('authRequestId' in record) {
+      if (record.authRequestId !== null && typeof record.authRequestId !== 'string') {
+        badRequest('authRequestId must be a string or null');
+      }
+      patch.authRequestId = record.authRequestId;
     }
     deps.apiClient.updateWorkspace(req.params.id, patch);
     res.json(deps.apiClient.snapshot());
@@ -757,6 +770,27 @@ export function buildRouter(deps: ApiDeps): Router {
       const record = asRecord(req.body, 'run');
       const request = parseRunRequest(record.request);
       res.json(await runRequest(deps.apiClient, request));
+    }),
+  );
+
+  router.post(
+    '/api/client/run-collection',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'run-collection');
+      const workspaceId = parseNonEmpty(record.workspaceId, 'workspaceId');
+      const folderId = parseParentId(record.folderId);
+      const stopOnError = record.stopOnError === undefined ? false : record.stopOnError;
+      if (typeof stopOnError !== 'boolean') badRequest('stopOnError must be a boolean');
+      res.json(await runCollection(deps.apiClient, workspaceId, folderId, { stopOnError }));
+    }),
+  );
+
+  router.post(
+    '/api/client/login',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'login');
+      const workspaceId = parseNonEmpty(record.workspaceId, 'workspaceId');
+      res.json(await runLogin(deps.apiClient, workspaceId));
     }),
   );
 
