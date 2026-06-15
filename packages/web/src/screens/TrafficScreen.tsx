@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TrafficExchange } from '@frigg/shared';
 import { useAppStore } from '../store';
+import { ResizeHandle, useResizable } from '../components/ResizeHandle';
 import { useT } from '../i18n';
 import TrafficToolbar from '../components/traffic/TrafficToolbar';
 import TrafficRow from '../components/traffic/TrafficRow';
@@ -85,6 +86,8 @@ export default function TrafficScreen() {
     return exchanges.find((e) => e.id === selectedExchangeId) ?? null;
   }, [selectedExchangeId, frozen, exchanges]);
 
+  const detail = useResizable('traffic.detail', 560, { axis: 'x', min: 360, max: 1100, invert: true });
+
   const togglePause = () => {
     setFrozen((current) => (current === null ? exchanges.slice() : null));
   };
@@ -134,14 +137,20 @@ export default function TrafficScreen() {
           )}
         </div>
         {selected ? (
-          <div className="w-[45%] min-w-[380px] shrink-0 border-l border-zinc-800/80">
-            <TrafficDetail
-              key={selected.id}
-              exchange={selected}
-              onClose={() => selectExchange(null)}
-              onCreateMock={createMockFromExchange}
-            />
-          </div>
+          <>
+            <ResizeHandle axis="x" onPointerDown={detail.onPointerDown} />
+            <div
+              style={{ width: detail.size }}
+              className="shrink-0 border-l border-zinc-800/80"
+            >
+              <TrafficDetail
+                key={selected.id}
+                exchange={selected}
+                onClose={() => selectExchange(null)}
+                onCreateMock={createMockFromExchange}
+              />
+            </div>
+          </>
         ) : null}
       </div>
     </div>

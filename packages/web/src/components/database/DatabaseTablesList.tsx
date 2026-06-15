@@ -9,7 +9,7 @@ export default function DatabaseTablesList() {
   const selectDbTable = useAppStore((s) => s.selectDbTable);
 
   return (
-    <aside className="flex w-52 shrink-0 flex-col border-r border-zinc-800/80">
+    <aside className="flex h-full w-full flex-col border-r border-zinc-800/80">
       <div className="border-b border-zinc-800/80 px-3 py-2">
         <span className="text-[10px] uppercase tracking-widest text-zinc-500">
           {t('database.tables.title')}

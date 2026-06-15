@@ -4,6 +4,7 @@ import { useT } from '../i18n';
 import CollectionSidebar from '../components/client/CollectionSidebar';
 import RequestEditor from '../components/client/RequestEditor';
 import ResponsePanel from '../components/client/ResponsePanel';
+import { ResizeHandle, useResizable } from '../components/ResizeHandle';
 
 function NoRequestState() {
   const t = useT();
@@ -39,6 +40,9 @@ export default function ClientScreen() {
     [requests, selectedApiRequestId],
   );
 
+  const sidebar = useResizable('client.sidebar', 256, { axis: 'x', min: 180, max: 520 });
+  const response = useResizable('client.response', 280, { axis: 'y', min: 120, max: 700, invert: true });
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
@@ -50,16 +54,21 @@ export default function ClientScreen() {
         </span>
       </div>
       <div className="flex min-h-0 flex-1">
-        <div className="w-64 shrink-0 border-r border-zinc-800/80">
+        <div style={{ width: sidebar.size }} className="shrink-0 border-r border-zinc-800/80">
           <CollectionSidebar />
         </div>
+        <ResizeHandle axis="x" onPointerDown={sidebar.onPointerDown} />
         <div className="flex min-w-0 flex-1 flex-col">
           {selectedRequest ? (
             <>
-              <div className="flex min-h-0 flex-[3] flex-col border-b border-zinc-800/80">
+              <div className="flex min-h-0 flex-1 flex-col">
                 <RequestEditor key={selectedRequest.id} request={selectedRequest} />
               </div>
-              <div className="flex min-h-0 flex-[2] flex-col">
+              <ResizeHandle axis="y" onPointerDown={response.onPointerDown} />
+              <div
+                style={{ height: response.size }}
+                className="flex shrink-0 flex-col border-t border-zinc-800/80"
+              >
                 <ResponsePanel result={apiRunResult} running={apiRunning} />
               </div>
             </>

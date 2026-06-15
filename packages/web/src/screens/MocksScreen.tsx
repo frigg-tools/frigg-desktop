@@ -3,6 +3,7 @@ import { useT } from '../i18n';
 import FolderTree from '../components/mocks/FolderTree';
 import RuleList from '../components/mocks/RuleList';
 import RuleEditor from '../components/mocks/RuleEditor';
+import { ResizeHandle, useResizable } from '../components/ResizeHandle';
 
 function EditorEmptyState() {
   const t = useT();
@@ -31,6 +32,9 @@ export default function MocksScreen() {
   const draftId = useAppStore((s) => s.draftFromExchange?.id ?? null);
   const rulesCount = useAppStore((s) => s.rules.length);
 
+  const tree = useResizable('mocks.tree', 240, { axis: 'x', min: 160, max: 420 });
+  const editor = useResizable('mocks.editor', 460, { axis: 'x', min: 320, max: 900, invert: true });
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
@@ -40,13 +44,15 @@ export default function MocksScreen() {
         </span>
       </div>
       <div className="flex min-h-0 flex-1">
-        <div className="w-60 shrink-0 border-r border-zinc-800/80">
+        <div style={{ width: tree.size }} className="shrink-0 border-r border-zinc-800/80">
           <FolderTree />
         </div>
+        <ResizeHandle axis="x" onPointerDown={tree.onPointerDown} />
         <div className="min-w-0 flex-1 border-r border-zinc-800/80">
           <RuleList />
         </div>
-        <div className="w-[42%] min-w-[400px] shrink-0">
+        <ResizeHandle axis="x" onPointerDown={editor.onPointerDown} />
+        <div style={{ width: editor.size }} className="shrink-0">
           {editingRule === null ? (
             <EditorEmptyState />
           ) : (

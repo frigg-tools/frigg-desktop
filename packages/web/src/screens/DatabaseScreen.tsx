@@ -5,6 +5,7 @@ import DatabaseTablesList from '../components/database/DatabaseTablesList';
 import DatabaseQueryEditor from '../components/database/DatabaseQueryEditor';
 import DatabaseResultsTable from '../components/database/DatabaseResultsTable';
 import DatabaseEmptyState from '../components/database/DatabaseEmptyState';
+import { ResizeHandle, useResizable } from '../components/ResizeHandle';
 
 export default function DatabaseScreen() {
   const t = useT();
@@ -13,6 +14,7 @@ export default function DatabaseScreen() {
   const dbFileRef = useAppStore((s) => s.dbFileRef);
   const dbResult = useAppStore((s) => s.dbResult);
   const dbApps = useAppStore((s) => s.dbApps);
+  const tables = useResizable('database.tables', 208, { axis: 'x', min: 150, max: 420 });
 
   const stage = (() => {
     if (dbTarget === null) return 'noDevice' as const;
@@ -40,7 +42,10 @@ export default function DatabaseScreen() {
         <DatabaseEmptyState kind="noFile" />
       ) : (
         <div className="flex min-h-0 flex-1">
-          <DatabaseTablesList />
+          <div style={{ width: tables.size }} className="shrink-0">
+            <DatabaseTablesList />
+          </div>
+          <ResizeHandle axis="x" onPointerDown={tables.onPointerDown} />
           <div className="flex min-w-0 flex-1 flex-col">
             <DatabaseQueryEditor />
             {dbResult ? (
