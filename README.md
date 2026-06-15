@@ -13,7 +13,15 @@ Intercept, inspect and **mock** HTTP(S) traffic from Android/iOS devices, emulat
                                 └────────────────────┘
 ```
 
-## Quick start
+## Download
+
+Grab the latest desktop build from the [**Releases**](https://github.com/frigg-tools/frigg-desktop/releases/latest) page — `arm64` for Apple Silicon, `x64` for Intel Macs. Open the `.dmg` and drag Frigg to Applications.
+
+> The build is unsigned, so on first launch macOS Gatekeeper blocks it. Right-click the app → **Open** (once), or run `xattr -dr com.apple.quarantine /Applications/Frigg.app`.
+
+Each tagged release (`vX.Y.Z`) is built and published automatically by CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)).
+
+## Quick start (from source)
 
 ```bash
 npm install
