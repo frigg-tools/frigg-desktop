@@ -124,7 +124,7 @@ export interface AppState {
   deleteApiRequest: (id: string) => Promise<void>;
   selectApiRequest: (id: string | null) => void;
   closeTab: (id: string) => void;
-  createEnvironment: (name: string) => Promise<void>;
+  createEnvironment: (name: string) => Promise<string | null>;
   updateEnvironment: (id: string, patch: Partial<ApiEnvironment>) => Promise<void>;
   deleteEnvironment: (id: string) => Promise<void>;
   setActiveEnvironment: (envId: string | null) => Promise<void>;
@@ -556,9 +556,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   createEnvironment: async (name) => {
     const workspaceId = get().activeWorkspaceId;
-    if (!workspaceId) return;
-    const { snapshot } = await api.createEnvironment(workspaceId, name);
+    if (!workspaceId) return null;
+    const { snapshot, id } = await api.createEnvironment(workspaceId, name);
     set(applyApiSnapshot(snapshot));
+    return id;
   },
   updateEnvironment: async (id, patch) => {
     set(applyApiSnapshot(await api.updateEnvironment(id, patch)));

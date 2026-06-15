@@ -4,6 +4,7 @@ import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
 import MethodBadge from '../MethodBadge';
 import EnvironmentEditor from './EnvironmentEditor';
+import CreateEnvironmentDialog from './CreateEnvironmentDialog';
 import {
   FolderIcon,
   InlineNameInput,
@@ -192,6 +193,7 @@ export default function CollectionSidebar() {
   const deleteApiRequest = useAppStore((s) => s.deleteApiRequest);
   const selectApiRequest = useAppStore((s) => s.selectApiRequest);
   const createEnvironment = useAppStore((s) => s.createEnvironment);
+  const updateEnvironment = useAppStore((s) => s.updateEnvironment);
   const setActiveEnvironment = useAppStore((s) => s.setActiveEnvironment);
 
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
@@ -673,20 +675,6 @@ export default function CollectionSidebar() {
               </option>
             ))}
           </select>
-          {creatingEnvironment ? (
-            <div className="mt-1.5">
-              <InlineNameInput
-                defaultValue=""
-                placeholder={t('client.env.namePlaceholder')}
-                onCommit={(name) => {
-                  setCreatingEnvironment(false);
-                  void createEnvironment(name).catch(() => undefined);
-                }}
-                onCancel={() => setCreatingEnvironment(false)}
-                className="w-full rounded border border-emerald-500/40 bg-zinc-900/80 px-2 py-1.5 text-[13px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-              />
-            </div>
-          ) : null}
         </div>
       </div>
 
@@ -783,6 +771,24 @@ export default function CollectionSidebar() {
         <EnvironmentEditor
           environment={activeEnvironment}
           onClose={() => setEditingEnvironment(false)}
+        />
+      ) : null}
+
+      {creatingEnvironment ? (
+        <CreateEnvironmentDialog
+          environments={workspaceEnvironments}
+          onCancel={() => setCreatingEnvironment(false)}
+          onConfirm={(name, variables) => {
+            setCreatingEnvironment(false);
+            void (async () => {
+              const id = await createEnvironment(name);
+              if (!id) return;
+              if (variables.length > 0) {
+                await updateEnvironment(id, { variables });
+              }
+              await setActiveEnvironment(id);
+            })().catch(() => undefined);
+          }}
         />
       ) : null}
     </div>

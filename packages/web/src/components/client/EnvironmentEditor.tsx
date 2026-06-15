@@ -1,15 +1,37 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ApiEnvironment } from '@frigg/shared';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ApiEnvironment, ApiKeyValue } from '@frigg/shared';
 import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
+import AddVariableDialog from './AddVariableDialog';
 import {
   CloseIcon,
   KeyValueEditor,
+  PlusIcon,
   TrashIcon,
   fromRows,
   toRows,
   type ApiKeyValueRow,
 } from './shared';
+
+function mergeRows(rows: ApiKeyValueRow[], key: string, value: string): ApiKeyValueRow[] {
+  const idx = rows.findIndex((r) => r.key === key);
+  if (idx >= 0) {
+    const next = rows.slice();
+    next[idx] = { ...next[idx], value, enabled: true };
+    return next;
+  }
+  return [...rows, { id: crypto.randomUUID(), key, value, enabled: true }];
+}
+
+function mergeVars(vars: ApiKeyValue[], key: string, value: string): ApiKeyValue[] {
+  const idx = vars.findIndex((v) => v.key === key);
+  if (idx >= 0) {
+    const next = vars.slice();
+    next[idx] = { ...next[idx], value, enabled: true };
+    return next;
+  }
+  return [...vars, { key, value, enabled: true }];
+}
 
 interface EnvironmentEditorProps {
   environment: ApiEnvironment;
@@ -20,12 +42,43 @@ export default function EnvironmentEditor({ environment, onClose }: EnvironmentE
   const t = useT();
   const updateEnvironment = useAppStore((s) => s.updateEnvironment);
   const deleteEnvironment = useAppStore((s) => s.deleteEnvironment);
+  const apiEnvironments = useAppStore((s) => s.apiEnvironments);
 
   const [name, setName] = useState(environment.name);
   const [rows, setRows] = useState<ApiKeyValueRow[]>(() => toRows(environment.variables));
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [addingVar, setAddingVar] = useState(false);
   const confirmTimer = useRef<number | null>(null);
+
+  const workspaceEnvironments = useMemo(
+    () => apiEnvironments.filter((e) => e.workspaceId === environment.workspaceId),
+    [apiEnvironments, environment.workspaceId],
+  );
+
+  const envOptions = useMemo(
+    () => workspaceEnvironments.map((e) => ({ id: e.id, name: e.name })),
+    [workspaceEnvironments],
+  );
+
+  const existingValue = useCallback(
+    (envId: string, key: string) => {
+      if (envId === environment.id) return rows.find((r) => r.key === key)?.value ?? '';
+      const env = workspaceEnvironments.find((e) => e.id === envId);
+      return env?.variables.find((v) => v.key === key)?.value ?? '';
+    },
+    [rows, workspaceEnvironments, environment.id],
+  );
+
+  const confirmAddVar = (key: string, valuesByEnv: Record<string, string>) => {
+    for (const env of workspaceEnvironments) {
+      if (env.id === environment.id) continue;
+      const merged = mergeVars(env.variables, key, valuesByEnv[env.id] ?? '');
+      void updateEnvironment(env.id, { variables: merged }).catch(() => undefined);
+    }
+    setRows((prev) => mergeRows(prev, key, valuesByEnv[environment.id] ?? ''));
+    setAddingVar(false);
+  };
 
   useEffect(() => {
     return () => {
@@ -90,7 +143,17 @@ export default function EnvironmentEditor({ environment, onClose }: EnvironmentE
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          <p className="mb-3 text-xs text-zinc-500">{t('client.env.editHint')}</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-xs text-zinc-500">{t('client.env.editHint')}</p>
+            <button
+              type="button"
+              onClick={() => setAddingVar(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[11px] font-medium text-zinc-400 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98]"
+            >
+              <PlusIcon />
+              {t('client.env.addVarAll')}
+            </button>
+          </div>
           <KeyValueEditor rows={rows} onChange={setRows} />
         </div>
 
@@ -125,6 +188,16 @@ export default function EnvironmentEditor({ environment, onClose }: EnvironmentE
           </button>
         </div>
       </div>
+
+      {addingVar ? (
+        <AddVariableDialog
+          environments={envOptions}
+          currentEnvId={environment.id}
+          existingValue={existingValue}
+          onConfirm={confirmAddVar}
+          onCancel={() => setAddingVar(false)}
+        />
+      ) : null}
     </div>
   );
 }
