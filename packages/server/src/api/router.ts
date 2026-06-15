@@ -19,6 +19,7 @@ import type {
   MockMatcher,
   MockResponseSpec,
   MockRuleInput,
+  ProxyClientCert,
   ProxyStatus,
 } from '@frigg/shared';
 import { ApiClientStore } from '../api-client/store.ts';
@@ -41,6 +42,7 @@ import type { LogcatManager } from '../logcat/index.ts';
 import type { MockStore } from '../mocks/store.ts';
 import type { BreakpointManager } from '../proxy/breakpoint-manager.ts';
 import { certToDer, type CaMaterial } from '../proxy/ca.ts';
+import type { ProxyCertStore } from '../proxy/proxy-cert-store.ts';
 import type { TrafficStore } from '../proxy/traffic-store.ts';
 import { setupPageHtml } from './setup-page.ts';
 
@@ -54,6 +56,8 @@ export interface ApiDeps {
   db: DbInspector;
   apiClient: ApiClientStore;
   breakpoints: BreakpointManager;
+  proxyCerts: ProxyCertStore;
+  reloadProxy: () => Promise<void>;
 }
 
 const MAX_PATTERN_LENGTH = 2048;
@@ -286,6 +290,29 @@ function parseClientCerts(raw: unknown, label: string): ApiClientCert[] {
       if (typeof record.caPath !== 'string') badRequest(`${label}[${index}].caPath must be a string`);
       cert.caPath = record.caPath;
     }
+    if (record.passphrase !== undefined) {
+      if (typeof record.passphrase !== 'string') {
+        badRequest(`${label}[${index}].passphrase must be a string`);
+      }
+      cert.passphrase = record.passphrase;
+    }
+    return cert;
+  });
+}
+
+function parseProxyClientCerts(raw: unknown, label: string): ProxyClientCert[] {
+  if (!Array.isArray(raw)) {
+    badRequest(`${label} must be an array`);
+  }
+  return raw.map((entry, index) => {
+    const record = asRecord(entry, `${label}[${index}]`);
+    const host = parseNonEmpty(record.host, `${label}[${index}].host`);
+    const pfxPath = parseNonEmpty(record.pfxPath, `${label}[${index}].pfxPath`);
+    const cert: ProxyClientCert = {
+      id: typeof record.id === 'string' ? record.id : '',
+      host,
+      pfxPath,
+    };
     if (record.passphrase !== undefined) {
       if (typeof record.passphrase !== 'string') {
         badRequest(`${label}[${index}].passphrase must be a string`);
@@ -562,6 +589,22 @@ export function buildRouter(deps: ApiDeps): Router {
     deps.breakpoints.resume(req.params.id, parseBreakpointResume(req.body));
     res.json({ ok: true });
   });
+
+  router.get('/api/proxy-certs', (_req, res) => {
+    res.json(deps.proxyCerts.snapshot());
+  });
+
+  router.put(
+    '/api/proxy-certs',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'proxy-certs');
+      const certs = parseProxyClientCerts(record.certs, 'certs');
+      deps.proxyCerts.replace(certs);
+      await deps.proxyCerts.flush();
+      await deps.reloadProxy();
+      res.json(deps.proxyCerts.snapshot());
+    }),
+  );
 
   router.get(
     '/api/devices',

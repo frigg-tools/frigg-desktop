@@ -11,12 +11,13 @@ import { WsHub } from './api/ws.ts';
 import { DbInspector } from './db/index.ts';
 import { disableMacProxyIfEnabledByFrigg } from './devices/macos-proxy.ts';
 import { getLanIp } from './lib/net.ts';
-import { apiClientPath, ensureFriggDirs, mocksPath } from './lib/paths.ts';
+import { apiClientPath, ensureFriggDirs, mocksPath, proxyCertsPath } from './lib/paths.ts';
 import { LogcatManager } from './logcat/index.ts';
 import { MockStore } from './mocks/store.ts';
 import { BreakpointManager } from './proxy/breakpoint-manager.ts';
 import { ensureCa } from './proxy/ca.ts';
 import { ProxyEngine } from './proxy/engine.ts';
+import { ProxyCertStore } from './proxy/proxy-cert-store.ts';
 import { TrafficStore } from './proxy/traffic-store.ts';
 
 export interface StartFriggOptions {
@@ -64,8 +65,9 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const mocks = await MockStore.load(mocksPath);
   const traffic = new TrafficStore();
   const breakpoints = new BreakpointManager();
+  const proxyCerts = await ProxyCertStore.load(proxyCertsPath);
 
-  const engine = new ProxyEngine({ proxyPort, ca, mocks, traffic, breakpoints });
+  const engine = new ProxyEngine({ proxyPort, ca, mocks, traffic, breakpoints, proxyCerts });
   await engine.start();
 
   const logcat = new LogcatManager();
@@ -74,7 +76,21 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
 
   const app = express();
   app.use(express.json({ limit: '5mb' }));
-  app.use(buildRouter({ traffic, mocks, ca, proxyPort, apiPort, logcat, db, apiClient, breakpoints }));
+  app.use(
+    buildRouter({
+      traffic,
+      mocks,
+      ca,
+      proxyPort,
+      apiPort,
+      logcat,
+      db,
+      apiClient,
+      breakpoints,
+      proxyCerts,
+      reloadProxy: () => engine.reload(),
+    }),
+  );
   const webUiAvailable = registerWebUi(app, options.webDir ?? defaultWebDistDir());
 
   const httpServer = http.createServer(app);
@@ -101,6 +117,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
       engine.stop(),
       mocks.flush(),
       apiClient.flush(),
+      proxyCerts.flush(),
       logcat.stop(),
       db.dispose(),
       disableMacProxyIfEnabledByFrigg(),

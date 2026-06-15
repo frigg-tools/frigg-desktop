@@ -261,6 +261,41 @@ server.tool(
 );
 
 server.tool(
+  'frigg_list_proxy_certs',
+  'List the proxy upstream mTLS client certificates — the PKCS#12 certs the intercepting proxy presents to upstream hosts that require mutual TLS',
+  async () => {
+    try {
+      return ok(await get('/api/proxy-certs'));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
+  'frigg_set_proxy_certs',
+  'Set the proxy upstream mTLS client certificates (replaces the whole list). For each entry the intercepting proxy presents the PKCS#12 cert to the matching upstream host during interception, so apps whose API requires mutual TLS can be captured. pfxPath is a path to a .p12/.pfx file on the machine running Frigg. Changing this reloads the proxy.',
+  {
+    certs: z
+      .array(
+        z.object({
+          host: z.string().min(1).describe('Upstream host or host:port, e.g. qa.boss4u.com.br or qa.boss4u.com.br:443'),
+          pfxPath: z.string().min(1).describe('Path to the PKCS#12 (.p12/.pfx) client certificate file'),
+          passphrase: z.string().optional().describe('PKCS#12 passphrase (optional)'),
+        }),
+      )
+      .describe('Full replacement list of upstream proxy client certificates'),
+  },
+  async ({ certs }) => {
+    try {
+      return ok(await put('/api/proxy-certs', { certs }));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
   'frigg_create_collection',
   'Create a collection (folder) inside a workspace',
   {

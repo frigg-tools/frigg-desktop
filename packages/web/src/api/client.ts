@@ -21,6 +21,8 @@ import type {
   MockRule,
   MockRuleInput,
   MocksSnapshot,
+  ProxyCertsSnapshot,
+  ProxyClientCert,
   ProxyStatus,
   TrafficExchange,
 } from '@frigg/shared';
@@ -293,4 +295,12 @@ export function resumeBreakpoint(id: string, resume: BreakpointResume): Promise<
 
 export function installMcpClaudeCode(): Promise<{ ok: boolean; message: string }> {
   return request('/api/mcp/install/claude-code', { method: 'POST' });
+}
+
+export function getProxyCerts(): Promise<ProxyCertsSnapshot> {
+  return request('/api/proxy-certs');
+}
+
+export function setProxyCerts(certs: ProxyClientCert[]): Promise<ProxyCertsSnapshot> {
+  return request('/api/proxy-certs', jsonInit('PUT', { certs }));
 }

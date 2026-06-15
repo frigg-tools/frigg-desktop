@@ -5,7 +5,25 @@ import ProxyStatusStrip from '../components/devices/ProxyStatusStrip';
 import AndroidSection from '../components/devices/AndroidSection';
 import IosSection from '../components/devices/IosSection';
 import ManualSection from '../components/devices/ManualSection';
+import ProxyCertsEditor from '../components/devices/ProxyCertsEditor';
 import Spinner from '../components/devices/Spinner';
+
+function LockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3 w-3"
+    >
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
 
 function RefreshIcon() {
   return (
@@ -27,7 +45,9 @@ export default function DevicesScreen() {
   const t = useT();
   const devices = useAppStore((s) => s.devices);
   const refreshDevices = useAppStore((s) => s.refreshDevices);
+  const proxyCerts = useAppStore((s) => s.proxyCerts);
   const [refreshing, setRefreshing] = useState(false);
+  const [certsOpen, setCertsOpen] = useState(false);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -47,6 +67,19 @@ export default function DevicesScreen() {
           {t('devices.screen.title')}
         </h1>
         <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setCertsOpen(true)}
+          className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition hover:text-zinc-200 active:scale-[0.98]"
+        >
+          <LockIcon />
+          {t('devices.mtls.button')}
+          {proxyCerts.length > 0 ? (
+            <span className="rounded-full bg-emerald-500/15 px-1.5 text-[10px] font-semibold text-emerald-400">
+              {proxyCerts.length}
+            </span>
+          ) : null}
+        </button>
         <button
           type="button"
           onClick={() => void refresh()}
@@ -78,6 +111,7 @@ export default function DevicesScreen() {
           )}
         </div>
       </div>
+      {certsOpen ? <ProxyCertsEditor onClose={() => setCertsOpen(false)} /> : null}
     </div>
   );
 }

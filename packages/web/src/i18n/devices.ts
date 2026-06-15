@@ -63,6 +63,17 @@ export const devices: Bundle = {
       'Download the Frigg CA certificate from the setup page, install it and trust it. iOS: Settings → General → VPN & Device Management, then enable full trust under About → Certificate Trust Settings. Android: Settings → Security → Install CA certificate.',
     'manual.setupHint':
       'The setup page has a QR code, cert downloads and full instructions — open it on the device:',
+    'mtls.button': 'Upstream certs',
+    'mtls.title': 'Upstream client certificates (mTLS)',
+    'mtls.host': 'Upstream host',
+    'mtls.pfx': 'PKCS#12 file (.p12 / .pfx)',
+    'mtls.passphrase': 'Passphrase (optional)',
+    'mtls.add': 'Add certificate',
+    'mtls.empty': 'No upstream certificates yet. Add one to present a client certificate during mutual TLS.',
+    'mtls.hint':
+      'When an upstream server requires mutual TLS, Frigg presents the matching client certificate during interception. Paths point to .p12/.pfx files on the machine running Frigg — you must own the certificate and its key (export them as a single PKCS#12 bundle from the app). The PKCS#12 must use legacy encryption (3DES) that Node accepts — re-export with: openssl pkcs12 -export -inkey key.pem -in cert.pem -out client.p12 -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1',
+    'mtls.hostPlaceholder': 'qa.boss4u.com.br or qa.boss4u.com.br:443',
+    'mtls.pfxPlaceholder': '/Users/me/certs/boss4u.p12',
   },
   pt: {
     'screen.title': 'Dispositivos',
@@ -127,5 +138,17 @@ export const devices: Bundle = {
       'Baixe o certificado da CA do Frigg na página de setup, instale-o e confie nele. iOS: Ajustes → Geral → VPN e Gerenciamento de Dispositivos, depois ative a confiança total em Sobre → Configurações de Confiança de Certificados. Android: Configurações → Segurança → Instalar certificado da CA.',
     'manual.setupHint':
       'A página de setup tem um QR code, downloads do certificado e instruções completas — abra-a no dispositivo:',
+    'mtls.button': 'Certs do upstream',
+    'mtls.title': 'Certificados de cliente do upstream (mTLS)',
+    'mtls.host': 'Host do upstream',
+    'mtls.pfx': 'Arquivo PKCS#12 (.p12 / .pfx)',
+    'mtls.passphrase': 'Senha (opcional)',
+    'mtls.add': 'Adicionar certificado',
+    'mtls.empty':
+      'Nenhum certificado de upstream ainda. Adicione um para apresentar um certificado de cliente durante o TLS mútuo.',
+    'mtls.hint':
+      'Quando um servidor de upstream exige TLS mútuo, o Frigg apresenta o certificado de cliente correspondente durante a interceptação. Os caminhos apontam para arquivos .p12/.pfx na máquina que roda o Frigg — você precisa ter o certificado e sua chave (exporte-os como um único pacote PKCS#12 no app). O PKCS#12 precisa usar encriptação legada (3DES) que o Node aceita — re-exporte com: openssl pkcs12 -export -inkey key.pem -in cert.pem -out client.p12 -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1',
+    'mtls.hostPlaceholder': 'qa.boss4u.com.br ou qa.boss4u.com.br:443',
+    'mtls.pfxPlaceholder': '/Users/eu/certs/boss4u.p12',
   },
 };

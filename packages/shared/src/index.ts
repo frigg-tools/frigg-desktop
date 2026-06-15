@@ -282,6 +282,17 @@ export interface LogSessionStatus {
   error: string | null;
 }
 
+export interface ProxyClientCert {
+  id: string;
+  host: string;
+  pfxPath: string;
+  passphrase?: string;
+}
+
+export interface ProxyCertsSnapshot {
+  certs: ProxyClientCert[];
+}
+
 export type BreakpointDirection = 'request' | 'response' | 'both';
 
 export interface BreakpointMatcher {

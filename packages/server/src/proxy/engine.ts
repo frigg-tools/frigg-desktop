@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { getLocal } from 'mockttp';
 import type {
@@ -21,6 +22,7 @@ import type { MatchInput } from '../mocks/matcher.ts';
 import type { MockStore } from '../mocks/store.ts';
 import type { BreakpointManager } from './breakpoint-manager.ts';
 import type { CaMaterial } from './ca.ts';
+import type { ProxyCertStore } from './proxy-cert-store.ts';
 import type { TrafficStore } from './traffic-store.ts';
 
 export interface EngineDeps {
@@ -29,11 +31,18 @@ export interface EngineDeps {
   mocks: MockStore;
   traffic: TrafficStore;
   breakpoints: BreakpointManager;
+  proxyCerts: ProxyCertStore;
+}
+
+interface ClientCertificateHostEntry {
+  pfx: Buffer;
+  passphrase?: string;
 }
 
 export class ProxyEngine {
   private readonly deps: EngineDeps;
   private server: Mockttp | null = null;
+  private reloading: Promise<void> | null = null;
   private readonly mockedRuleIdByRequestId = new Map<string, string>();
   private readonly pendingRequestCaptures = new Map<string, Promise<void>>();
 
@@ -48,6 +57,7 @@ export class ProxyEngine {
       recordTraffic: false,
     });
     await server.forAnyRequest().thenPassThrough({
+      clientCertificateHostMap: this.buildClientCertificateHostMap(),
       beforeRequest: async (req) => {
         try {
           const breakpointResult = await this.resolveBreakpointRequest(req);
@@ -86,6 +96,36 @@ export class ProxyEngine {
     await server.stop();
     this.mockedRuleIdByRequestId.clear();
     this.pendingRequestCaptures.clear();
+  }
+
+  async reload(): Promise<void> {
+    if (this.reloading) return this.reloading;
+    this.reloading = this.runReload();
+    try {
+      await this.reloading;
+    } finally {
+      this.reloading = null;
+    }
+  }
+
+  private async runReload(): Promise<void> {
+    await this.stop();
+    await this.start();
+  }
+
+  private buildClientCertificateHostMap(): Record<string, ClientCertificateHostEntry> {
+    const map: Record<string, ClientCertificateHostEntry> = {};
+    for (const cert of this.deps.proxyCerts.snapshot().certs) {
+      let pfx: Buffer;
+      try {
+        pfx = readFileSync(cert.pfxPath);
+      } catch {
+        continue;
+      }
+      const hostKey = cert.host.includes(':') ? cert.host : `${cert.host}:443`;
+      map[hostKey] = { pfx, passphrase: cert.passphrase };
+    }
+    return map;
   }
 
   private async resolveMockResponse(req: CompletedRequest) {

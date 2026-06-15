@@ -7,6 +7,7 @@ export const caKeyPath = path.join(friggDir, 'ca', 'ca.key');
 export const caCertPath = path.join(friggDir, 'ca', 'ca.pem');
 export const mocksPath = path.join(friggDir, 'mocks.json');
 export const apiClientPath = path.join(friggDir, 'api-client.json');
+export const proxyCertsPath = path.join(friggDir, 'proxy-certs.json');
 
 export function ensureFriggDirs(): void {
   fs.mkdirSync(path.join(friggDir, 'ca'), { recursive: true });

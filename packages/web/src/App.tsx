@@ -188,6 +188,10 @@ export default function App() {
       .getState()
       .loadBreakpoints()
       .catch(() => undefined);
+    void useAppStore
+      .getState()
+      .loadProxyCerts()
+      .catch(() => undefined);
     let dropped = false;
     return connectWs(
       (ev) => useAppStore.getState().applyEvent(ev),

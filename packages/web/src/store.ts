@@ -20,6 +20,7 @@ import {
   type LogTarget,
   type MockFolder,
   type MockRule,
+  type ProxyClientCert,
   type ProxyStatus,
   type ServerEvent,
   type TrafficExchange,
@@ -131,6 +132,9 @@ export interface AppState {
   setActiveEnvironment: (envId: string | null) => Promise<void>;
   updateClientCerts: (certs: ApiClientCert[]) => Promise<void>;
   runApiRequest: (request: ApiRequest) => Promise<void>;
+  proxyCerts: ProxyClientCert[];
+  loadProxyCerts: () => Promise<void>;
+  saveProxyCerts: (certs: ProxyClientCert[]) => Promise<void>;
   breakpoints: BreakpointsSnapshot;
   loadBreakpoints: () => Promise<void>;
   toggleBreakpoints: (enabled: boolean) => Promise<void>;
@@ -610,6 +614,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     } finally {
       set({ apiRunning: false });
     }
+  },
+  proxyCerts: [],
+  loadProxyCerts: async () => {
+    const snapshot = await api.getProxyCerts();
+    set({ proxyCerts: snapshot.certs });
+  },
+  saveProxyCerts: async (certs) => {
+    const snapshot = await api.setProxyCerts(certs);
+    set({ proxyCerts: snapshot.certs });
   },
   breakpoints: { enabled: false, rules: [], paused: [] },
   loadBreakpoints: async () => {
