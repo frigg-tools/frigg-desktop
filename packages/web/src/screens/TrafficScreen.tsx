@@ -4,6 +4,7 @@ import { useAppStore } from '../store';
 import { ResizeHandle, useResizable } from '../components/ResizeHandle';
 import { useT } from '../i18n';
 import TrafficToolbar from '../components/traffic/TrafficToolbar';
+import BreakpointsControl from '../components/breakpoints/BreakpointsControl';
 import TrafficRow from '../components/traffic/TrafficRow';
 import TrafficDetail from '../components/traffic/TrafficDetail';
 import TrafficEmptyState from '../components/traffic/TrafficEmptyState';
@@ -112,6 +113,7 @@ export default function TrafficScreen() {
         onSourceChange={setSource}
         onTogglePause={togglePause}
         onClear={handleClear}
+        trailing={<BreakpointsControl />}
       />
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto">

@@ -6,6 +6,12 @@ import type {
   ApiKeyValue,
   ApiRequest,
   BodyMatchMode,
+  BreakpointDirection,
+  BreakpointMatcher,
+  BreakpointRequestEdit,
+  BreakpointResponseEdit,
+  BreakpointResume,
+  BreakpointRuleInput,
   DevicesSnapshot,
   LogPlatform,
   LogTarget,
@@ -32,6 +38,7 @@ import { serverLocale, type ServerLocale } from '../i18n.ts';
 import { getLanIp } from '../lib/net.ts';
 import type { LogcatManager } from '../logcat/index.ts';
 import type { MockStore } from '../mocks/store.ts';
+import type { BreakpointManager } from '../proxy/breakpoint-manager.ts';
 import { certToDer, type CaMaterial } from '../proxy/ca.ts';
 import type { TrafficStore } from '../proxy/traffic-store.ts';
 import { setupPageHtml } from './setup-page.ts';
@@ -45,6 +52,7 @@ export interface ApiDeps {
   logcat: LogcatManager;
   db: DbInspector;
   apiClient: ApiClientStore;
+  breakpoints: BreakpointManager;
 }
 
 const MAX_PATTERN_LENGTH = 2048;
@@ -328,6 +336,96 @@ function parseRunRequest(raw: unknown): ApiRequest {
   };
 }
 
+function parseBreakpointDirection(raw: unknown): BreakpointDirection {
+  if (raw === 'request' || raw === 'response' || raw === 'both') return raw;
+  badRequest('direction must be one of request, response, both');
+}
+
+function parseBreakpointMatcher(raw: unknown): BreakpointMatcher {
+  const record = asRecord(raw, 'matcher');
+  if (typeof record.urlPattern !== 'string') {
+    badRequest('matcher.urlPattern must be a string');
+  }
+  if (record.urlPattern.length > MAX_PATTERN_LENGTH) {
+    badRequest(`matcher.urlPattern must be at most ${MAX_PATTERN_LENGTH} characters`);
+  }
+  const matcher: BreakpointMatcher = { urlPattern: record.urlPattern };
+  if (record.method !== undefined) {
+    if (typeof record.method !== 'string') badRequest('matcher.method must be a string');
+    if (record.method !== '') matcher.method = record.method;
+  }
+  return matcher;
+}
+
+function parseBreakpointRuleInput(body: unknown): BreakpointRuleInput {
+  const record = asRecord(body, 'rule');
+  if (typeof record.enabled !== 'boolean') badRequest('enabled must be a boolean');
+  return {
+    enabled: record.enabled,
+    direction: parseBreakpointDirection(record.direction),
+    matcher: parseBreakpointMatcher(record.matcher),
+  };
+}
+
+function parseBreakpointRulePatch(body: unknown): Partial<BreakpointRuleInput> {
+  const record = asRecord(body, 'rule');
+  const patch: Partial<BreakpointRuleInput> = {};
+  if (record.enabled !== undefined) {
+    if (typeof record.enabled !== 'boolean') badRequest('enabled must be a boolean');
+    patch.enabled = record.enabled;
+  }
+  if (record.direction !== undefined) patch.direction = parseBreakpointDirection(record.direction);
+  if (record.matcher !== undefined) patch.matcher = parseBreakpointMatcher(record.matcher);
+  return patch;
+}
+
+function parseBreakpointRequestEdit(raw: unknown): BreakpointRequestEdit {
+  const record = asRecord(raw, 'edit');
+  if (typeof record.method !== 'string' || record.method.trim() === '') {
+    badRequest('edit.method must be a non-empty string');
+  }
+  if (typeof record.url !== 'string') badRequest('edit.url must be a string');
+  return {
+    method: record.method,
+    url: record.url,
+    headers: parseKeyValueArray(record.headers ?? [], 'edit.headers'),
+    body: typeof record.body === 'string' ? record.body : '',
+  };
+}
+
+function parseBreakpointResponseEdit(raw: unknown, label: string): BreakpointResponseEdit {
+  const record = asRecord(raw, label);
+  if (
+    typeof record.statusCode !== 'number' ||
+    !Number.isInteger(record.statusCode) ||
+    record.statusCode < 100 ||
+    record.statusCode > 599
+  ) {
+    badRequest(`${label}.statusCode must be an integer between 100 and 599`);
+  }
+  return {
+    statusCode: record.statusCode,
+    headers: parseKeyValueArray(record.headers ?? [], `${label}.headers`),
+    body: typeof record.body === 'string' ? record.body : '',
+  };
+}
+
+function parseBreakpointResume(body: unknown): BreakpointResume {
+  const record = asRecord(body, 'resume');
+  switch (record.action) {
+    case 'send-request':
+      return { action: 'send-request', edit: parseBreakpointRequestEdit(record.edit) };
+    case 'respond':
+      return { action: 'respond', response: parseBreakpointResponseEdit(record.response, 'response') };
+    case 'send-response':
+      return { action: 'send-response', edit: parseBreakpointResponseEdit(record.edit, 'edit') };
+    case 'abort':
+      return { action: 'abort' };
+    default:
+      badRequest('action must be one of send-request, respond, send-response, abort');
+  }
+}
+
 function localeFromRequest(req: Request): ServerLocale {
   const queryLang = req.query.lang;
   if (queryLang === 'pt' || queryLang === 'en') return queryLang;
@@ -404,6 +502,34 @@ export function buildRouter(deps: ApiDeps): Router {
 
   router.delete('/api/mocks/folders/:id', (req, res) => {
     deps.mocks.deleteFolder(req.params.id);
+    res.json({ ok: true });
+  });
+
+  router.get('/api/breakpoints', (_req, res) => {
+    res.json(deps.breakpoints.snapshot());
+  });
+
+  router.post('/api/breakpoints/enabled', (req, res) => {
+    const record = asRecord(req.body, 'breakpoints');
+    if (typeof record.enabled !== 'boolean') badRequest('enabled must be a boolean');
+    res.json(deps.breakpoints.setEnabled(record.enabled));
+  });
+
+  router.post('/api/breakpoints/rules', (req, res) => {
+    const rule = deps.breakpoints.createRule(parseBreakpointRuleInput(req.body));
+    res.json({ snapshot: deps.breakpoints.snapshot(), id: rule.id });
+  });
+
+  router.put('/api/breakpoints/rules/:id', (req, res) => {
+    res.json(deps.breakpoints.updateRule(req.params.id, parseBreakpointRulePatch(req.body)));
+  });
+
+  router.delete('/api/breakpoints/rules/:id', (req, res) => {
+    res.json(deps.breakpoints.deleteRule(req.params.id));
+  });
+
+  router.post('/api/breakpoints/:id/resume', (req, res) => {
+    deps.breakpoints.resume(req.params.id, parseBreakpointResume(req.body));
     res.json({ ok: true });
   });
 

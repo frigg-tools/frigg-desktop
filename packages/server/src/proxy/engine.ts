@@ -9,9 +9,17 @@ import type {
   Mockttp,
 } from 'mockttp';
 import { BODY_CAPTURE_LIMIT } from '@frigg/shared';
-import type { BodyPayload, CapturedRequest, CapturedResponse } from '@frigg/shared';
+import type {
+  ApiKeyValue,
+  BodyPayload,
+  CapturedRequest,
+  CapturedResponse,
+  PausedRequestData,
+  PausedResponseData,
+} from '@frigg/shared';
 import type { MatchInput } from '../mocks/matcher.ts';
 import type { MockStore } from '../mocks/store.ts';
+import type { BreakpointManager } from './breakpoint-manager.ts';
 import type { CaMaterial } from './ca.ts';
 import type { TrafficStore } from './traffic-store.ts';
 
@@ -20,6 +28,7 @@ export interface EngineDeps {
   ca: CaMaterial;
   mocks: MockStore;
   traffic: TrafficStore;
+  breakpoints: BreakpointManager;
 }
 
 export class ProxyEngine {
@@ -41,9 +50,18 @@ export class ProxyEngine {
     await server.forAnyRequest().thenPassThrough({
       beforeRequest: async (req) => {
         try {
+          const breakpointResult = await this.resolveBreakpointRequest(req);
+          if (breakpointResult) return breakpointResult;
           return (await this.resolveMockResponse(req)) ?? {};
         } catch {
           return {};
+        }
+      },
+      beforeResponse: async (res, req) => {
+        try {
+          return await this.resolveBreakpointResponse(res, req);
+        } catch {
+          return undefined;
         }
       },
     });
@@ -64,6 +82,7 @@ export class ProxyEngine {
     if (!this.server) return;
     const server = this.server;
     this.server = null;
+    this.deps.breakpoints.releaseAll();
     await server.stop();
     this.mockedRuleIdByRequestId.clear();
     this.pendingRequestCaptures.clear();
@@ -83,6 +102,72 @@ export class ProxyEngine {
         body: rule.response.body,
       },
     };
+  }
+
+  private async resolveBreakpointRequest(req: CompletedRequest) {
+    const rule = this.deps.breakpoints.matchRule(req.method, req.url, 'request');
+    if (!rule) return undefined;
+    const data: PausedRequestData = {
+      method: req.method,
+      url: req.url,
+      headers: collapseHeaders(req.headers),
+      body: (await safeGetText(req.body)) ?? '',
+      bodyTruncated: false,
+    };
+    const result = await this.deps.breakpoints.pauseRequest(rule.id, data);
+    switch (result.action) {
+      case 'send-request':
+        return {
+          method: result.edit.method,
+          url: result.edit.url,
+          headers: kvToRecord(result.edit.headers),
+          body: result.edit.body,
+        };
+      case 'respond':
+        return {
+          response: {
+            statusCode: result.response.statusCode,
+            headers: kvToRecord(result.response.headers),
+            body: result.response.body,
+          },
+        };
+      case 'abort':
+        return { response: 'close' as const };
+      default:
+        return {};
+    }
+  }
+
+  private async resolveBreakpointResponse(res: BreakpointResponseInput, req: CompletedRequest) {
+    const rule = this.deps.breakpoints.matchRule(req.method, req.url, 'response');
+    if (!rule) return undefined;
+    const requestData: PausedRequestData = {
+      method: req.method,
+      url: req.url,
+      headers: collapseHeaders(req.headers),
+      body: (await safeGetText(req.body)) ?? '',
+      bodyTruncated: false,
+    };
+    const responseData: PausedResponseData = {
+      statusCode: res.statusCode,
+      statusMessage: res.statusMessage,
+      headers: collapseHeaders(res.headers),
+      body: (await safeGetText(res.body)) ?? '',
+      bodyTruncated: false,
+    };
+    const result = await this.deps.breakpoints.pauseResponse(rule.id, requestData, responseData);
+    switch (result.action) {
+      case 'send-response':
+        return {
+          statusCode: result.edit.statusCode,
+          headers: kvToRecord(result.edit.headers),
+          body: result.edit.body,
+        };
+      case 'abort':
+        return 'close' as const;
+      default:
+        return undefined;
+    }
   }
 
   private trackRequest(req: CompletedRequest): void {
@@ -137,10 +222,36 @@ export class ProxyEngine {
   }
 }
 
+interface BreakpointResponseInput {
+  statusCode: number;
+  statusMessage?: string;
+  headers: Headers;
+  body: CompletedBody;
+}
+
 interface UrlParts {
   host: string;
   path: string;
   query: string;
+}
+
+function collapseHeaders(headers: Headers): Record<string, string> {
+  const record: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (value === undefined) continue;
+    record[name] = Array.isArray(value) ? value.join(', ') : value;
+  }
+  return record;
+}
+
+function kvToRecord(rows: ApiKeyValue[]): Record<string, string> {
+  const record: Record<string, string> = {};
+  for (const row of rows) {
+    if (row.enabled === false) continue;
+    if (row.key.trim() === '') continue;
+    record[row.key] = row.value;
+  }
+  return record;
 }
 
 function explicitHost(headers: Headers): string | undefined {

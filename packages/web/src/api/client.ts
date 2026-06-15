@@ -6,6 +6,9 @@ import type {
   ApiRequest,
   ApiRunResult,
   ApiWorkspace,
+  BreakpointResume,
+  BreakpointRuleInput,
+  BreakpointsSnapshot,
   DbFile,
   DbQueryResult,
   DeviceApp,
@@ -254,6 +257,35 @@ export function runApiRequest(apiRequest: ApiRequest): Promise<ApiRunResult> {
 
 export function getMcpInfo(): Promise<McpServerInfo> {
   return request('/api/mcp/info');
+}
+
+export function getBreakpoints(): Promise<BreakpointsSnapshot> {
+  return request('/api/breakpoints');
+}
+
+export function setBreakpointsEnabled(enabled: boolean): Promise<BreakpointsSnapshot> {
+  return request('/api/breakpoints/enabled', jsonInit('POST', { enabled }));
+}
+
+export function createBreakpointRule(
+  input: BreakpointRuleInput,
+): Promise<{ snapshot: BreakpointsSnapshot; id: string }> {
+  return request('/api/breakpoints/rules', jsonInit('POST', input));
+}
+
+export function updateBreakpointRule(
+  id: string,
+  patch: Partial<BreakpointRuleInput>,
+): Promise<BreakpointsSnapshot> {
+  return request(`/api/breakpoints/rules/${encodeURIComponent(id)}`, jsonInit('PUT', patch));
+}
+
+export function deleteBreakpointRule(id: string): Promise<BreakpointsSnapshot> {
+  return request(`/api/breakpoints/rules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function resumeBreakpoint(id: string, resume: BreakpointResume): Promise<{ ok: true }> {
+  return request(`/api/breakpoints/${encodeURIComponent(id)}/resume`, jsonInit('POST', resume));
 }
 
 export function installMcpClaudeCode(): Promise<{ ok: boolean; message: string }> {

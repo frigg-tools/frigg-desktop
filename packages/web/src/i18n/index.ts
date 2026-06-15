@@ -8,6 +8,7 @@ import { logcat } from './logcat';
 import { database } from './database';
 import { client } from './client';
 import { mcp } from './mcp';
+import { breakpoints } from './breakpoints';
 
 export type { Locale };
 
@@ -26,6 +27,7 @@ const bundles: Record<string, Bundle> = {
   database,
   client,
   mcp,
+  breakpoints,
 };
 
 const flattened: Record<Locale, Record<string, string>> = { en: {}, pt: {} };

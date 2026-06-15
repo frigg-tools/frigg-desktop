@@ -6,6 +6,9 @@ import {
   type ApiRequest,
   type ApiRunResult,
   type ApiWorkspace,
+  type BreakpointResume,
+  type BreakpointRuleInput,
+  type BreakpointsSnapshot,
   type DbFile,
   type DbQueryResult,
   type DeviceApp,
@@ -126,6 +129,13 @@ export interface AppState {
   deleteEnvironment: (id: string) => Promise<void>;
   setActiveEnvironment: (envId: string | null) => Promise<void>;
   runApiRequest: (request: ApiRequest) => Promise<void>;
+  breakpoints: BreakpointsSnapshot;
+  loadBreakpoints: () => Promise<void>;
+  toggleBreakpoints: (enabled: boolean) => Promise<void>;
+  createBreakpointRule: (input: BreakpointRuleInput) => Promise<void>;
+  updateBreakpointRule: (id: string, patch: Partial<BreakpointRuleInput>) => Promise<void>;
+  deleteBreakpointRule: (id: string) => Promise<void>;
+  resumeBreakpoint: (id: string, resume: BreakpointResume) => Promise<void>;
   loadAll: () => Promise<void>;
   refreshMocks: () => Promise<void>;
   refreshDevices: () => Promise<void>;
@@ -593,6 +603,32 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ apiRunning: false });
     }
   },
+  breakpoints: { enabled: false, rules: [], paused: [] },
+  loadBreakpoints: async () => {
+    const snapshot = await api.getBreakpoints();
+    set({ breakpoints: snapshot });
+  },
+  toggleBreakpoints: async (enabled) => {
+    const snapshot = await api.setBreakpointsEnabled(enabled);
+    set({ breakpoints: snapshot });
+  },
+  createBreakpointRule: async (input) => {
+    const { snapshot } = await api.createBreakpointRule(input);
+    set({ breakpoints: snapshot });
+  },
+  updateBreakpointRule: async (id, patch) => {
+    const snapshot = await api.updateBreakpointRule(id, patch);
+    set({ breakpoints: snapshot });
+  },
+  deleteBreakpointRule: async (id) => {
+    const snapshot = await api.deleteBreakpointRule(id);
+    set({ breakpoints: snapshot });
+  },
+  resumeBreakpoint: async (id, resume) => {
+    await api.resumeBreakpoint(id, resume);
+    const bp = get().breakpoints;
+    set({ breakpoints: { ...bp, paused: bp.paused.filter((p) => p.id !== id) } });
+  },
   loadAll: async () => {
     const [status, exchanges, mocks, devices] = await Promise.all([
       api.getStatus(),
@@ -663,6 +699,24 @@ export const useAppStore = create<AppState>((set, get) => ({
         break;
       case 'log-status':
         set({ logStatus: ev.status });
+        break;
+      case 'breakpoint-paused': {
+        const bp = get().breakpoints;
+        set({
+          breakpoints: {
+            ...bp,
+            paused: [...bp.paused.filter((p) => p.id !== ev.paused.id), ev.paused],
+          },
+        });
+        break;
+      }
+      case 'breakpoint-resumed': {
+        const bp = get().breakpoints;
+        set({ breakpoints: { ...bp, paused: bp.paused.filter((p) => p.id !== ev.id) } });
+        break;
+      }
+      case 'breakpoints-updated':
+        set({ breakpoints: ev.snapshot });
         break;
     }
   },

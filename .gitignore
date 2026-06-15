@@ -7,3 +7,4 @@ release/
 
 .playwright-mcp/
 /*.png
+.frigg-workflows/

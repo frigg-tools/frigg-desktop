@@ -272,6 +272,73 @@ export interface LogSessionStatus {
   error: string | null;
 }
 
+export type BreakpointDirection = 'request' | 'response' | 'both';
+
+export interface BreakpointMatcher {
+  method?: string;
+  urlPattern: string;
+}
+
+export interface BreakpointRule {
+  id: string;
+  enabled: boolean;
+  direction: BreakpointDirection;
+  matcher: BreakpointMatcher;
+  createdAt: number;
+}
+
+export type BreakpointRuleInput = Omit<BreakpointRule, 'id' | 'createdAt'>;
+
+export interface PausedRequestData {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+  bodyTruncated: boolean;
+}
+
+export interface PausedResponseData {
+  statusCode: number;
+  statusMessage?: string;
+  headers: Record<string, string>;
+  body: string;
+  bodyTruncated: boolean;
+}
+
+export interface PausedExchange {
+  id: string;
+  ruleId: string;
+  direction: 'request' | 'response';
+  createdAt: number;
+  request: PausedRequestData;
+  response?: PausedResponseData;
+}
+
+export interface BreakpointRequestEdit {
+  method: string;
+  url: string;
+  headers: ApiKeyValue[];
+  body: string;
+}
+
+export interface BreakpointResponseEdit {
+  statusCode: number;
+  headers: ApiKeyValue[];
+  body: string;
+}
+
+export type BreakpointResume =
+  | { action: 'send-request'; edit: BreakpointRequestEdit }
+  | { action: 'respond'; response: BreakpointResponseEdit }
+  | { action: 'send-response'; edit: BreakpointResponseEdit }
+  | { action: 'abort' };
+
+export interface BreakpointsSnapshot {
+  enabled: boolean;
+  rules: BreakpointRule[];
+  paused: PausedExchange[];
+}
+
 export type ServerEvent =
   | { type: 'request'; exchange: TrafficExchange }
   | { type: 'response'; exchange: TrafficExchange }
@@ -281,7 +348,10 @@ export type ServerEvent =
   | { type: 'devices-updated' }
   | { type: 'log-entry'; entry: LogEntry }
   | { type: 'log-cleared' }
-  | { type: 'log-status'; status: LogSessionStatus };
+  | { type: 'log-status'; status: LogSessionStatus }
+  | { type: 'breakpoint-paused'; paused: PausedExchange }
+  | { type: 'breakpoint-resumed'; id: string }
+  | { type: 'breakpoints-updated'; snapshot: BreakpointsSnapshot };
 
 export interface MocksSnapshot {
   folders: MockFolder[];

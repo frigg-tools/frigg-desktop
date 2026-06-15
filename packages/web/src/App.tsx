@@ -10,6 +10,7 @@ import DatabaseScreen from './screens/DatabaseScreen';
 import ClientScreen from './screens/ClientScreen';
 import McpScreen from './screens/McpScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
+import PausedExchangeModal from './components/breakpoints/PausedExchangeModal';
 
 function ActivityIcon() {
   return (
@@ -183,6 +184,10 @@ export default function App() {
       .getState()
       .loadApiClient()
       .catch(() => undefined);
+    void useAppStore
+      .getState()
+      .loadBreakpoints()
+      .catch(() => undefined);
     let dropped = false;
     return connectWs(
       (ev) => useAppStore.getState().applyEvent(ev),
@@ -272,6 +277,7 @@ export default function App() {
         )}
       </main>
       <OnboardingOverlay />
+      <PausedExchangeModal />
     </div>
   );
 }

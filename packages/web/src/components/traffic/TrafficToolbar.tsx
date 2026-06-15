@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useT } from '../../i18n';
 
 const METHOD_OPTIONS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -17,6 +18,7 @@ interface TrafficToolbarProps {
   onSourceChange: (value: string) => void;
   onTogglePause: () => void;
   onClear: () => void;
+  trailing?: ReactNode;
 }
 
 function PauseIcon() {
@@ -49,6 +51,7 @@ export default function TrafficToolbar({
   onSourceChange,
   onTogglePause,
   onClear,
+  trailing,
 }: TrafficToolbarProps) {
   const t = useT();
   const sourceLabel = (address: string) =>
@@ -115,6 +118,7 @@ export default function TrafficToolbar({
       >
         {t('traffic.clear')}
       </button>
+      {trailing}
     </div>
   );
 }
