@@ -52,11 +52,21 @@ export interface ApiEnvironment {
   variables: ApiKeyValue[];
 }
 
+export interface ApiClientCert {
+  id: string;
+  host: string;
+  certPath: string;
+  keyPath: string;
+  caPath?: string;
+  passphrase?: string;
+}
+
 export interface ApiWorkspace {
   id: string;
   name: string;
   variables: ApiKeyValue[];
   activeEnvironmentId: string | null;
+  clientCerts: ApiClientCert[];
   createdAt: number;
 }
 

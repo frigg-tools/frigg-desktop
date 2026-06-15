@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import {
   TRAFFIC_BUFFER_LIMIT,
+  type ApiClientCert,
   type ApiEnvironment,
   type ApiFolder,
   type ApiRequest,
@@ -128,6 +129,7 @@ export interface AppState {
   updateEnvironment: (id: string, patch: Partial<ApiEnvironment>) => Promise<void>;
   deleteEnvironment: (id: string) => Promise<void>;
   setActiveEnvironment: (envId: string | null) => Promise<void>;
+  updateClientCerts: (certs: ApiClientCert[]) => Promise<void>;
   runApiRequest: (request: ApiRequest) => Promise<void>;
   breakpoints: BreakpointsSnapshot;
   loadBreakpoints: () => Promise<void>;
@@ -571,6 +573,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const workspaceId = get().activeWorkspaceId;
     if (!workspaceId) return;
     set(applyApiSnapshot(await api.updateWorkspace(workspaceId, { activeEnvironmentId: envId })));
+  },
+  updateClientCerts: async (certs) => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) return;
+    set(applyApiSnapshot(await api.updateWorkspace(workspaceId, { clientCerts: certs })));
   },
   runApiRequest: async (request) => {
     set({ apiRunning: true });

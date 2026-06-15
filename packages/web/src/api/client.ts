@@ -1,5 +1,6 @@
 import type {
   AndroidSetupResult,
+  ApiClientCert,
   ApiClientSnapshot,
   ApiEnvironment,
   ApiFolder,
@@ -193,7 +194,9 @@ export function createWorkspace(name: string): Promise<CreatedWithSnapshot> {
 
 export function updateWorkspace(
   id: string,
-  patch: Partial<Pick<ApiWorkspace, 'name' | 'activeEnvironmentId' | 'variables'>>,
+  patch: Partial<Pick<ApiWorkspace, 'name' | 'activeEnvironmentId' | 'variables'>> & {
+    clientCerts?: ApiClientCert[];
+  },
 ): Promise<ApiClientSnapshot> {
   return request(`/api/client/workspaces/${encodeURIComponent(id)}`, jsonInit('PUT', patch));
 }

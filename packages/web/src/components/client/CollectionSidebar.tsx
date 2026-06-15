@@ -4,6 +4,7 @@ import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
 import MethodBadge from '../MethodBadge';
 import EnvironmentEditor from './EnvironmentEditor';
+import ClientCertsEditor from './ClientCertsEditor';
 import CreateEnvironmentDialog from './CreateEnvironmentDialog';
 import {
   FolderIcon,
@@ -38,6 +39,23 @@ function saveExpanded(workspaceId: string, expanded: Set<string>): void {
   } catch {
     return;
   }
+}
+
+function LockIcon({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -201,6 +219,7 @@ export default function CollectionSidebar() {
   const [confirmDeleteWorkspace, setConfirmDeleteWorkspace] = useState(false);
   const [creatingEnvironment, setCreatingEnvironment] = useState(false);
   const [editingEnvironment, setEditingEnvironment] = useState(false);
+  const [editingClientCerts, setEditingClientCerts] = useState(false);
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renamingRequestId, setRenamingRequestId] = useState<string | null>(null);
@@ -555,6 +574,19 @@ export default function CollectionSidebar() {
             <div className="flex items-center gap-0.5">
               <button
                 type="button"
+                aria-label={t('client.certs.manage')}
+                onClick={() => setEditingClientCerts(true)}
+                className="relative rounded p-1 text-zinc-500 transition hover:text-emerald-400 active:scale-[0.98]"
+              >
+                <LockIcon className="h-3.5 w-3.5" />
+                {activeWorkspace.clientCerts.length > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-emerald-500/20 px-0.5 text-[8px] font-semibold leading-none text-emerald-400">
+                    {activeWorkspace.clientCerts.length}
+                  </span>
+                ) : null}
+              </button>
+              <button
+                type="button"
                 aria-label={t('action.rename')}
                 onClick={() => setRenamingWorkspace(true)}
                 className="rounded p-1 text-zinc-500 transition hover:text-zinc-200 active:scale-[0.98]"
@@ -771,6 +803,13 @@ export default function CollectionSidebar() {
         <EnvironmentEditor
           environment={activeEnvironment}
           onClose={() => setEditingEnvironment(false)}
+        />
+      ) : null}
+
+      {editingClientCerts ? (
+        <ClientCertsEditor
+          workspace={activeWorkspace}
+          onClose={() => setEditingClientCerts(false)}
         />
       ) : null}
 

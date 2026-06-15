@@ -19,6 +19,7 @@
     "express": "^4.21.2",
     "mockttp": "^4.0.0",
     "qrcode": "^1.5.4",
+    "undici": "^6.27.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

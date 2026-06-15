@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import QRCode from 'qrcode';
 import type {
   ApiBody,
+  ApiClientCert,
   ApiKeyValue,
   ApiRequest,
   BodyMatchMode,
@@ -263,6 +264,35 @@ function parseKeyValueArray(raw: unknown, label: string): ApiKeyValue[] {
     if (typeof record.value !== 'string') badRequest(`${label}[${index}].value must be a string`);
     const enabled = typeof record.enabled === 'boolean' ? record.enabled : true;
     return { key: record.key, value: record.value, enabled };
+  });
+}
+
+function parseClientCerts(raw: unknown, label: string): ApiClientCert[] {
+  if (!Array.isArray(raw)) {
+    badRequest(`${label} must be an array`);
+  }
+  return raw.map((entry, index) => {
+    const record = asRecord(entry, `${label}[${index}]`);
+    const host = parseNonEmpty(record.host, `${label}[${index}].host`);
+    const certPath = parseNonEmpty(record.certPath, `${label}[${index}].certPath`);
+    const keyPath = parseNonEmpty(record.keyPath, `${label}[${index}].keyPath`);
+    const cert: ApiClientCert = {
+      id: typeof record.id === 'string' ? record.id : '',
+      host,
+      certPath,
+      keyPath,
+    };
+    if (record.caPath !== undefined) {
+      if (typeof record.caPath !== 'string') badRequest(`${label}[${index}].caPath must be a string`);
+      cert.caPath = record.caPath;
+    }
+    if (record.passphrase !== undefined) {
+      if (typeof record.passphrase !== 'string') {
+        badRequest(`${label}[${index}].passphrase must be a string`);
+      }
+      cert.passphrase = record.passphrase;
+    }
+    return cert;
   });
 }
 
@@ -669,13 +699,21 @@ export function buildRouter(deps: ApiDeps): Router {
 
   router.put('/api/client/workspaces/:id', (req, res) => {
     const record = asRecord(req.body, 'workspace');
-    const patch: { name?: string; variables?: ApiKeyValue[]; activeEnvironmentId?: string | null } = {};
+    const patch: {
+      name?: string;
+      variables?: ApiKeyValue[];
+      activeEnvironmentId?: string | null;
+      clientCerts?: ApiClientCert[];
+    } = {};
     if (record.name !== undefined) patch.name = parseFolderName(record.name);
     if (record.variables !== undefined) {
       patch.variables = parseKeyValueArray(record.variables, 'variables');
     }
     if ('activeEnvironmentId' in record) {
       patch.activeEnvironmentId = parseParentId(record.activeEnvironmentId);
+    }
+    if (record.clientCerts !== undefined) {
+      patch.clientCerts = parseClientCerts(record.clientCerts, 'clientCerts');
     }
     deps.apiClient.updateWorkspace(req.params.id, patch);
     res.json(deps.apiClient.snapshot());

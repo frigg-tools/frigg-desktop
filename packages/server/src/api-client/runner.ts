@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer';
-import type { ApiKeyValue, ApiRequest, ApiRunResult } from '@frigg/shared';
+import { readFile } from 'node:fs/promises';
+import { Agent } from 'undici';
+import type { ApiClientCert, ApiKeyValue, ApiRequest, ApiRunResult } from '@frigg/shared';
 import { API_RESPONSE_LIMIT } from '@frigg/shared';
 import type { ApiClientStore } from './store.ts';
 import {
@@ -103,6 +105,33 @@ function emptyResult(effectiveUrl: string): ApiRunResult {
   };
 }
 
+function findClientCert(clientCerts: ApiClientCert[], url: URL): ApiClientCert | undefined {
+  if (url.protocol !== 'https:') return undefined;
+  const host = url.host.toLowerCase();
+  const hostname = url.hostname.toLowerCase();
+  return clientCerts.find((cert) => {
+    const candidate = cert.host.trim().toLowerCase();
+    return candidate === host || candidate === hostname;
+  });
+}
+
+async function buildClientCertAgent(cert: ApiClientCert): Promise<Agent> {
+  const [certPem, keyPem, caPem] = await Promise.all([
+    readFile(cert.certPath),
+    readFile(cert.keyPath),
+    cert.caPath !== undefined ? readFile(cert.caPath) : Promise.resolve(undefined),
+  ]);
+  const connect: {
+    cert: Buffer;
+    key: Buffer;
+    ca?: Buffer;
+    passphrase?: string;
+  } = { cert: certPem, key: keyPem };
+  if (caPem !== undefined) connect.ca = caPem;
+  if (cert.passphrase !== undefined) connect.passphrase = cert.passphrase;
+  return new Agent({ connect });
+}
+
 export async function runRequest(store: ApiClientStore, request: ApiRequest): Promise<ApiRunResult> {
   const snapshot = store.snapshot();
   const workspace = snapshot.workspaces.find((candidate) => candidate.id === request.workspaceId);
@@ -142,20 +171,53 @@ export async function runRequest(store: ApiClientStore, request: ApiRequest): Pr
   const hasBody = body !== undefined && method !== 'GET' && method !== 'HEAD';
 
   const start = Date.now();
+
+  let clientCert: ApiClientCert | undefined;
+  try {
+    clientCert = findClientCert(workspace?.clientCerts ?? [], new URL(effectiveUrl));
+  } catch {
+    clientCert = undefined;
+  }
+
+  let agent: Agent | undefined;
+  if (clientCert) {
+    try {
+      agent = await buildClientCertAgent(clientCert);
+    } catch (error) {
+      const fsMessage = error instanceof Error ? error.message : String(error);
+      const result = emptyResult(effectiveUrl);
+      result.durationMs = Date.now() - start;
+      result.scriptLogs = scriptLogs;
+      result.error = `client certificate for ${clientCert.host}: ${fsMessage}`;
+      await persistEnvChanges(store, request.workspaceId, envChanges);
+      return result;
+    }
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+  const fetchInit: RequestInit = {
+    method,
+    headers,
+    body: hasBody ? body : undefined,
+    redirect: 'follow',
+    signal: controller.signal,
+  };
+
   let response: Response;
   try {
-    response = await fetch(effectiveUrl, {
-      method,
-      headers,
-      body: hasBody ? body : undefined,
-      redirect: 'follow',
-      signal: controller.signal,
-    });
+    response = await fetch(
+      effectiveUrl,
+      agent
+        ? ({ ...fetchInit, dispatcher: agent } as RequestInit & {
+            dispatcher: import('undici').Dispatcher;
+          })
+        : fetchInit,
+    );
   } catch (error) {
     clearTimeout(timer);
+    void agent?.close();
     const result = emptyResult(effectiveUrl);
     result.durationMs = Date.now() - start;
     result.scriptLogs = scriptLogs;
@@ -169,6 +231,7 @@ export async function runRequest(store: ApiClientStore, request: ApiRequest): Pr
   try {
     rawBuffer = Buffer.from(await response.arrayBuffer());
   } catch (error) {
+    void agent?.close();
     const result = emptyResult(response.url || effectiveUrl);
     result.status = response.status;
     result.statusText = response.statusText;
@@ -179,6 +242,7 @@ export async function runRequest(store: ApiClientStore, request: ApiRequest): Pr
     await persistEnvChanges(store, request.workspaceId, envChanges);
     return result;
   }
+  void agent?.close();
 
   const durationMs = Date.now() - start;
   const sizeBytes = rawBuffer.length;

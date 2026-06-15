@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type {
   ApiBody,
+  ApiClientCert,
   ApiClientSnapshot,
   ApiEnvironment,
   ApiFolder,
@@ -32,7 +33,7 @@ function isKeyValueArray(value: unknown): value is ApiKeyValue[] {
   );
 }
 
-function isValidWorkspace(value: unknown): value is ApiWorkspace {
+function isValidWorkspaceShape(value: unknown): value is Record<string, unknown> {
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&
@@ -41,6 +42,42 @@ function isValidWorkspace(value: unknown): value is ApiWorkspace {
     (value.activeEnvironmentId === null || typeof value.activeEnvironmentId === 'string') &&
     typeof value.createdAt === 'number'
   );
+}
+
+function isClientCert(value: unknown): value is ApiClientCert {
+  return (
+    isRecord(value) &&
+    typeof value.host === 'string' &&
+    typeof value.certPath === 'string' &&
+    typeof value.keyPath === 'string' &&
+    (value.caPath === undefined || typeof value.caPath === 'string') &&
+    (value.passphrase === undefined || typeof value.passphrase === 'string')
+  );
+}
+
+function normalizeClientCert(cert: ApiClientCert): ApiClientCert {
+  const normalized: ApiClientCert = {
+    id: typeof cert.id === 'string' && cert.id !== '' ? cert.id : randomUUID(),
+    host: cert.host,
+    certPath: cert.certPath,
+    keyPath: cert.keyPath,
+  };
+  if (cert.caPath !== undefined) normalized.caPath = cert.caPath;
+  if (cert.passphrase !== undefined) normalized.passphrase = cert.passphrase;
+  return normalized;
+}
+
+function normalizeWorkspace(value: Record<string, unknown>): ApiWorkspace {
+  const rawCerts = Array.isArray(value.clientCerts) ? value.clientCerts : [];
+  const clientCerts = rawCerts.filter(isClientCert).map(normalizeClientCert);
+  return {
+    id: value.id as string,
+    name: value.name as string,
+    variables: value.variables as ApiKeyValue[],
+    activeEnvironmentId: value.activeEnvironmentId as string | null,
+    clientCerts,
+    createdAt: value.createdAt as number,
+  };
 }
 
 function isValidFolder(value: unknown): value is ApiFolder {
@@ -127,7 +164,9 @@ export class ApiClientStore extends EventEmitter {
         Array.isArray(parsed.requests) &&
         Array.isArray(parsed.environments)
       ) {
-        store.workspaces = parsed.workspaces.filter(isValidWorkspace);
+        store.workspaces = (parsed.workspaces as unknown[])
+          .filter(isValidWorkspaceShape)
+          .map(normalizeWorkspace);
         store.folders = parsed.folders.filter(isValidFolder);
         store.requests = parsed.requests.filter(isValidRequest);
         store.environments = parsed.environments.filter(isValidEnvironment);
@@ -159,6 +198,7 @@ export class ApiClientStore extends EventEmitter {
       name,
       variables: [],
       activeEnvironmentId: null,
+      clientCerts: [],
       createdAt: Date.now(),
     };
     this.workspaces.push(workspace);
@@ -168,7 +208,12 @@ export class ApiClientStore extends EventEmitter {
 
   updateWorkspace(
     id: string,
-    patch: { name?: string; variables?: ApiKeyValue[]; activeEnvironmentId?: string | null },
+    patch: {
+      name?: string;
+      variables?: ApiKeyValue[];
+      activeEnvironmentId?: string | null;
+      clientCerts?: ApiClientCert[];
+    },
   ): ApiWorkspace {
     const workspace = this.requireWorkspace(id);
     if (patch.name !== undefined) workspace.name = patch.name;
@@ -178,6 +223,9 @@ export class ApiClientStore extends EventEmitter {
         this.requireEnvironmentInWorkspace(patch.activeEnvironmentId, id);
       }
       workspace.activeEnvironmentId = patch.activeEnvironmentId;
+    }
+    if (patch.clientCerts !== undefined) {
+      workspace.clientCerts = patch.clientCerts.map(normalizeClientCert);
     }
     this.commit();
     return structuredClone(workspace);
@@ -383,6 +431,7 @@ export class ApiClientStore extends EventEmitter {
       name: 'My Workspace',
       variables: [],
       activeEnvironmentId: null,
+      clientCerts: [],
       createdAt: Date.now(),
     };
     const environment: ApiEnvironment = {
