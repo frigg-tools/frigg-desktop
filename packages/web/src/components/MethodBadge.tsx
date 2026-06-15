@@ -8,6 +8,18 @@ const METHOD_STYLES: Record<string, string> = {
 
 const FALLBACK_STYLE = 'border-zinc-700 bg-zinc-800/60 text-zinc-400';
 
+const METHOD_TEXT: Record<string, string> = {
+  GET: 'text-emerald-400',
+  POST: 'text-sky-400',
+  PUT: 'text-amber-400',
+  PATCH: 'text-violet-400',
+  DELETE: 'text-rose-400',
+};
+
+export function methodTextColor(method: string): string {
+  return METHOD_TEXT[method.toUpperCase()] ?? 'text-zinc-400';
+}
+
 export default function MethodBadge({ method }: { method: string }) {
   const upper = method.toUpperCase();
   return (

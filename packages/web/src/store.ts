@@ -104,7 +104,9 @@ export interface AppState {
   apiEnvironments: ApiEnvironment[];
   activeWorkspaceId: string | null;
   selectedApiRequestId: string | null;
+  openTabIds: string[];
   apiRunResult: ApiRunResult | null;
+  apiRunResultByRequest: Record<string, ApiRunResult>;
   apiRunning: boolean;
   loadApiClient: () => Promise<void>;
   setActiveWorkspace: (id: string) => void;
@@ -118,6 +120,7 @@ export interface AppState {
   updateApiRequest: (id: string, patch: Partial<ApiRequest>) => Promise<void>;
   deleteApiRequest: (id: string) => Promise<void>;
   selectApiRequest: (id: string | null) => void;
+  closeTab: (id: string) => void;
   createEnvironment: (name: string) => Promise<void>;
   updateEnvironment: (id: string, patch: Partial<ApiEnvironment>) => Promise<void>;
   deleteEnvironment: (id: string) => Promise<void>;
@@ -143,6 +146,39 @@ function applyApiSnapshot(snapshot: {
     apiRequests: snapshot.requests,
     apiEnvironments: snapshot.environments,
   };
+}
+
+const TABS_STORAGE_KEY = 'frigg-client-tabs';
+
+type TabState = { openTabIds: string[]; selectedId: string | null };
+
+function readTabStore(): Record<string, TabState> {
+  try {
+    return JSON.parse(localStorage.getItem(TABS_STORAGE_KEY) ?? '{}') as Record<string, TabState>;
+  } catch {
+    return {};
+  }
+}
+
+function persistTabs(workspaceId: string | null, openTabIds: string[], selectedId: string | null) {
+  if (!workspaceId) return;
+  try {
+    const all = readTabStore();
+    all[workspaceId] = { openTabIds, selectedId };
+    localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    void 0;
+  }
+}
+
+function restoreTabs(workspaceId: string | null, requests: ApiRequest[]): TabState {
+  if (!workspaceId) return { openTabIds: [], selectedId: null };
+  const live = new Set(requests.map((r) => r.id));
+  const saved = readTabStore()[workspaceId];
+  if (!saved) return { openTabIds: [], selectedId: null };
+  const openTabIds = saved.openTabIds.filter((id) => live.has(id));
+  const selectedId = saved.selectedId && openTabIds.includes(saved.selectedId) ? saved.selectedId : openTabIds[0] ?? null;
+  return { openTabIds, selectedId };
 }
 
 function appendLogs(entries: LogEntry[], incoming: LogEntry[]): LogEntry[] {
@@ -374,20 +410,36 @@ export const useAppStore = create<AppState>((set, get) => ({
   apiEnvironments: [],
   activeWorkspaceId: null,
   selectedApiRequestId: null,
+  openTabIds: [],
   apiRunResult: null,
+  apiRunResultByRequest: {},
   apiRunning: false,
   loadApiClient: async () => {
     const snapshot = await api.getApiClient();
     set(applyApiSnapshot(snapshot));
-    if (!get().activeWorkspaceId && snapshot.workspaces.length > 0) {
-      set({ activeWorkspaceId: snapshot.workspaces[0].id });
-    }
+    const workspaceId = get().activeWorkspaceId ?? snapshot.workspaces[0]?.id ?? null;
+    const { openTabIds, selectedId } = restoreTabs(workspaceId, snapshot.requests);
+    set({
+      activeWorkspaceId: workspaceId,
+      openTabIds,
+      selectedApiRequestId: selectedId,
+      apiRunResult: null,
+      apiRunResultByRequest: {},
+    });
   },
-  setActiveWorkspace: (id) =>
-    set({ activeWorkspaceId: id, selectedApiRequestId: null, apiRunResult: null }),
+  setActiveWorkspace: (id) => {
+    const { openTabIds, selectedId } = restoreTabs(id, get().apiRequests);
+    set({
+      activeWorkspaceId: id,
+      openTabIds,
+      selectedApiRequestId: selectedId,
+      apiRunResult: null,
+      apiRunResultByRequest: {},
+    });
+  },
   createWorkspace: async (name) => {
     const { snapshot, id } = await api.createWorkspace(name);
-    set({ ...applyApiSnapshot(snapshot), activeWorkspaceId: id, selectedApiRequestId: null });
+    set({ ...applyApiSnapshot(snapshot), activeWorkspaceId: id, selectedApiRequestId: null, openTabIds: [], apiRunResultByRequest: {} });
   },
   renameWorkspace: async (id, name) => {
     set(applyApiSnapshot(await api.updateWorkspace(id, { name })));
@@ -396,7 +448,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const snapshot = await api.deleteWorkspace(id);
     const patch = applyApiSnapshot(snapshot);
     if (get().activeWorkspaceId === id) {
-      set({ ...patch, activeWorkspaceId: snapshot.workspaces[0]?.id ?? null, selectedApiRequestId: null });
+      const nextWorkspaceId = snapshot.workspaces[0]?.id ?? null;
+      const { openTabIds, selectedId } = restoreTabs(nextWorkspaceId, snapshot.requests);
+      set({
+        ...patch,
+        activeWorkspaceId: nextWorkspaceId,
+        openTabIds,
+        selectedApiRequestId: selectedId,
+        apiRunResult: null,
+        apiRunResultByRequest: {},
+      });
     } else {
       set(patch);
     }
@@ -417,7 +478,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const workspaceId = get().activeWorkspaceId;
     if (!workspaceId) return;
     const { snapshot, id } = await api.createApiRequest(workspaceId, folderId);
-    set({ ...applyApiSnapshot(snapshot), selectedApiRequestId: id, apiRunResult: null });
+    const openTabIds = [...get().openTabIds, id];
+    set({ ...applyApiSnapshot(snapshot), openTabIds, selectedApiRequestId: id, apiRunResult: null });
+    persistTabs(workspaceId, openTabIds, id);
   },
   updateApiRequest: async (id, patch) => {
     set(applyApiSnapshot(await api.updateApiRequest(id, patch)));
@@ -425,13 +488,62 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteApiRequest: async (id) => {
     const snapshot = await api.deleteApiRequest(id);
     const patch = applyApiSnapshot(snapshot);
-    if (get().selectedApiRequestId === id) {
-      set({ ...patch, selectedApiRequestId: null, apiRunResult: null });
+    const { openTabIds, selectedApiRequestId, apiRunResultByRequest, activeWorkspaceId } = get();
+    const idx = openTabIds.indexOf(id);
+    const nextTabs = openTabIds.filter((t) => t !== id);
+    const nextResults = { ...apiRunResultByRequest };
+    delete nextResults[id];
+    if (selectedApiRequestId === id) {
+      const neighbor = idx === -1 ? null : nextTabs[idx] ?? nextTabs[idx - 1] ?? null;
+      set({
+        ...patch,
+        openTabIds: nextTabs,
+        selectedApiRequestId: neighbor,
+        apiRunResult: neighbor ? nextResults[neighbor] ?? null : null,
+        apiRunResultByRequest: nextResults,
+      });
+      persistTabs(activeWorkspaceId, nextTabs, neighbor);
     } else {
-      set(patch);
+      set({ ...patch, openTabIds: nextTabs, apiRunResultByRequest: nextResults });
+      persistTabs(activeWorkspaceId, nextTabs, selectedApiRequestId);
     }
   },
-  selectApiRequest: (id) => set({ selectedApiRequestId: id, apiRunResult: null }),
+  selectApiRequest: (id) => {
+    if (id === null) {
+      set({ selectedApiRequestId: null, apiRunResult: null });
+      persistTabs(get().activeWorkspaceId, get().openTabIds, null);
+      return;
+    }
+    const open = get().openTabIds;
+    const openTabIds = open.includes(id) ? open : [...open, id];
+    set({
+      openTabIds,
+      selectedApiRequestId: id,
+      apiRunResult: get().apiRunResultByRequest[id] ?? null,
+    });
+    persistTabs(get().activeWorkspaceId, openTabIds, id);
+  },
+  closeTab: (id) => {
+    const { openTabIds, selectedApiRequestId, apiRunResultByRequest, activeWorkspaceId } = get();
+    const idx = openTabIds.indexOf(id);
+    if (idx === -1) return;
+    const nextTabs = openTabIds.filter((t) => t !== id);
+    const nextResults = { ...apiRunResultByRequest };
+    delete nextResults[id];
+    if (selectedApiRequestId === id) {
+      const neighbor = nextTabs[idx] ?? nextTabs[idx - 1] ?? null;
+      set({
+        openTabIds: nextTabs,
+        selectedApiRequestId: neighbor,
+        apiRunResult: neighbor ? nextResults[neighbor] ?? null : null,
+        apiRunResultByRequest: nextResults,
+      });
+      persistTabs(activeWorkspaceId, nextTabs, neighbor);
+    } else {
+      set({ openTabIds: nextTabs, apiRunResultByRequest: nextResults });
+      persistTabs(activeWorkspaceId, nextTabs, selectedApiRequestId);
+    }
+  },
   createEnvironment: async (name) => {
     const workspaceId = get().activeWorkspaceId;
     if (!workspaceId) return;
@@ -453,23 +565,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ apiRunning: true });
     try {
       const result = await api.runApiRequest(request);
-      set({ apiRunResult: result, ...applyApiSnapshot(await api.getApiClient()) });
-    } catch (error) {
       set({
-        apiRunResult: {
-          ok: false,
-          status: 0,
-          statusText: '',
-          headers: {},
-          bodyText: '',
-          bodyTruncated: false,
-          durationMs: 0,
-          sizeBytes: 0,
-          scriptLogs: [],
-          tests: [],
-          error: error instanceof Error ? error.message : 'Run failed',
-          effectiveUrl: request.url,
-        },
+        apiRunResult: result,
+        apiRunResultByRequest: { ...get().apiRunResultByRequest, [request.id]: result },
+        ...applyApiSnapshot(await api.getApiClient()),
+      });
+    } catch (error) {
+      const result: ApiRunResult = {
+        ok: false,
+        status: 0,
+        statusText: '',
+        headers: {},
+        bodyText: '',
+        bodyTruncated: false,
+        durationMs: 0,
+        sizeBytes: 0,
+        scriptLogs: [],
+        tests: [],
+        error: error instanceof Error ? error.message : 'Run failed',
+        effectiveUrl: request.url,
+      };
+      set({
+        apiRunResult: result,
+        apiRunResultByRequest: { ...get().apiRunResultByRequest, [request.id]: result },
       });
     } finally {
       set({ apiRunning: false });
