@@ -14,7 +14,7 @@ import {
   type ApiKeyValueRow,
 } from './shared';
 import VariableField, { type VariableSuggestion } from './VariableField';
-import { highlightJson, jsonError } from './highlightJson';
+import { highlightJson, highlightVars, jsonError } from './highlightJson';
 
 type EditorTab = 'params' | 'headers' | 'body' | 'pre' | 'tests';
 
@@ -207,6 +207,7 @@ export default function RequestEditor({ request }: { request: ApiRequest }) {
           onChange={(url) => patchDraft({ url })}
           onBlur={flushSave}
           variables={variables}
+          highlight={highlightVars}
           placeholder={t('client.editor.urlPlaceholder')}
           ariaLabel="URL"
           className={`${monoInputClass}`}

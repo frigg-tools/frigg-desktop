@@ -70,9 +70,16 @@ export default function VariableField({
   highlight,
 }: VariableFieldProps) {
   const fieldRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const [token, setToken] = useState<OpenToken | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const pendingCaret = useRef<number | null>(null);
+
+  const syncScroll = () => {
+    if (overlayRef.current && fieldRef.current) {
+      overlayRef.current.scrollLeft = fieldRef.current.scrollLeft;
+    }
+  };
 
   const matches = token
     ? variables.filter((v) => v.name.toLowerCase().includes(token.partial.toLowerCase())).slice(0, 8)
@@ -188,6 +195,7 @@ export default function VariableField({
     onKeyUp: syncToken,
     onClick: syncToken,
     onKeyDown: handleKeyDown,
+    onScroll: syncScroll,
     onBlur: () => {
       window.setTimeout(() => setToken(null), 120);
       onBlur?.();
@@ -196,6 +204,7 @@ export default function VariableField({
   };
 
   const highlightMode = highlight !== undefined && multiline;
+  const highlightInputMode = highlight !== undefined && !multiline;
 
   return (
     <div className={`relative ${wrapperClassName ?? ''}`}>
@@ -212,6 +221,20 @@ export default function VariableField({
           <textarea
             {...shared}
             className={`${LAYER_CLASS} absolute inset-0 resize-none overflow-hidden bg-transparent text-transparent caret-emerald-400 outline-none`}
+          />
+        </div>
+      ) : highlightInputMode ? (
+        <div className="relative overflow-hidden rounded-md border border-zinc-800 bg-zinc-900/60 focus-within:border-emerald-500/40 focus-within:ring-2 focus-within:ring-emerald-500/40">
+          <div
+            ref={overlayRef}
+            aria-hidden
+            className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre px-2.5 py-1.5 font-mono text-xs text-zinc-200"
+          >
+            {highlight(value)}
+          </div>
+          <input
+            {...shared}
+            className="relative block w-full bg-transparent px-2.5 py-1.5 font-mono text-xs text-transparent caret-emerald-400 outline-none placeholder:text-zinc-600"
           />
         </div>
       ) : multiline ? (

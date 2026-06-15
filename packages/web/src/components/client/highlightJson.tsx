@@ -34,6 +34,26 @@ export function highlightJson(source: string): ReactNode {
   return nodes;
 }
 
+const VAR_TOKEN = /\{\{[\w.-]+\}\}/g;
+
+export function highlightVars(source: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let key = 0;
+  for (const match of source.matchAll(VAR_TOKEN)) {
+    const index = match.index ?? 0;
+    if (index > lastIndex) nodes.push(<span key={key++}>{source.slice(lastIndex, index)}</span>);
+    nodes.push(
+      <span key={key++} className="text-amber-300">
+        {match[0]}
+      </span>,
+    );
+    lastIndex = index + match[0].length;
+  }
+  if (lastIndex < source.length) nodes.push(<span key={key++}>{source.slice(lastIndex)}</span>);
+  return nodes;
+}
+
 export interface JsonError {
   message: string;
 }

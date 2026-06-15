@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { ApiKeyValue } from '@frigg/shared';
 import { useT } from '../../i18n';
 import VariableField, { type VariableSuggestion } from './VariableField';
+import { highlightVars } from './highlightJson';
 
 export const inputClass =
   'w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[13px] text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40';
@@ -172,10 +173,11 @@ export function KeyValueEditor({ rows, onChange, mono = true, variables = [] }: 
             value={row.value}
             onChange={(value) => updateRow(row.id, { value })}
             variables={variables}
+            highlight={highlightVars}
             placeholder={t('client.kv.valuePlaceholder')}
             ariaLabel={t('client.kv.valuePlaceholder')}
             className={`${cellClass} ${row.enabled ? '' : 'opacity-50'}`}
-            wrapperClassName="min-w-0"
+            wrapperClassName={`min-w-0 ${row.enabled ? '' : 'opacity-50'}`}
           />
           <button
             type="button"
