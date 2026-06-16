@@ -2,26 +2,19 @@ import { useMemo, useState } from 'react';
 import type { BodyPayload } from '@frigg/shared';
 import { useT } from '../../i18n';
 import { formatBytes } from './format';
+import { bodyToText, highlightMatches } from './find';
 
 interface BodyViewerProps {
   body: BodyPayload;
   contentType?: string;
+  query?: string;
 }
 
-export default function BodyViewer({ body, contentType }: BodyViewerProps) {
+export default function BodyViewer({ body, contentType, query }: BodyViewerProps) {
   const t = useT();
   const [copied, setCopied] = useState(false);
 
-  const text = useMemo(() => {
-    if (body.encoding === 'base64' || body.data.length === 0) {
-      return body.data;
-    }
-    try {
-      return JSON.stringify(JSON.parse(body.data), null, 2);
-    } catch {
-      return body.data;
-    }
-  }, [body]);
+  const text = useMemo(() => bodyToText(body), [body]);
 
   const copy = () => {
     if (!navigator.clipboard) return;
@@ -67,7 +60,7 @@ export default function BodyViewer({ body, contentType }: BodyViewerProps) {
           </button>
         </div>
         <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all px-2.5 py-2 font-mono text-xs leading-relaxed text-zinc-300">
-          {text}
+          {query ? highlightMatches(text, query) : text}
         </pre>
       </div>
     </div>

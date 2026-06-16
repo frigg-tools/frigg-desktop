@@ -44,6 +44,17 @@ body {
   background-size: 20px 20px;
 }
 
+mark.find-match {
+  background-color: rgb(252 211 77 / 0.35);
+  color: inherit;
+  border-radius: 2px;
+}
+mark.find-active {
+  background-color: rgb(251 146 60 / 0.85);
+  color: rgb(24 24 27);
+  outline: 1px solid rgb(251 146 60);
+}
+
 @keyframes row-arrive {
   0% {
     background-color: rgb(16 185 129 / 0.14);

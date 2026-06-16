@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { TrafficExchange } from '@frigg/shared';
 import MethodBadge from '../MethodBadge';
 import StatusCode from '../StatusCode';
 import MockChip from '../MockChip';
 import HeadersTable from './HeadersTable';
 import BodyViewer from './BodyViewer';
+import TrafficFindBar from './TrafficFindBar';
+import { highlightMatches } from './find';
 import { useT } from '../../i18n';
 import { findHeader, formatDuration } from './format';
 
@@ -31,7 +33,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-function RequestPane({ exchange }: { exchange: TrafficExchange }) {
+function RequestPane({ exchange, query }: { exchange: TrafficExchange; query: string }) {
   const t = useT();
   const { request } = exchange;
   return (
@@ -39,18 +41,20 @@ function RequestPane({ exchange }: { exchange: TrafficExchange }) {
       {request.query ? (
         <>
           <SectionLabel>{t('traffic.section.query')}</SectionLabel>
-          <p className="break-all px-4 font-mono text-xs text-zinc-300">{request.query}</p>
+          <p className="break-all px-4 font-mono text-xs text-zinc-300">
+            {query ? highlightMatches(request.query, query) : request.query}
+          </p>
         </>
       ) : null}
       <SectionLabel>{t('traffic.section.headers')}</SectionLabel>
-      <HeadersTable headers={request.headers} />
+      <HeadersTable headers={request.headers} query={query} />
       <SectionLabel>{t('traffic.section.body')}</SectionLabel>
-      <BodyViewer body={request.body} contentType={findHeader(request.headers, 'content-type')} />
+      <BodyViewer body={request.body} contentType={findHeader(request.headers, 'content-type')} query={query} />
     </div>
   );
 }
 
-function ResponsePane({ exchange }: { exchange: TrafficExchange }) {
+function ResponsePane({ exchange, query }: { exchange: TrafficExchange; query: string }) {
   const t = useT();
   const { response } = exchange;
   if (exchange.state === 'aborted') {
@@ -84,9 +88,9 @@ function ResponsePane({ exchange }: { exchange: TrafficExchange }) {
         {response.mockRuleId ? <MockChip /> : null}
       </div>
       <SectionLabel>{t('traffic.section.headers')}</SectionLabel>
-      <HeadersTable headers={response.headers} />
+      <HeadersTable headers={response.headers} query={query} />
       <SectionLabel>{t('traffic.section.body')}</SectionLabel>
-      <BodyViewer body={response.body} contentType={findHeader(response.headers, 'content-type')} />
+      <BodyViewer body={response.body} contentType={findHeader(response.headers, 'content-type')} query={query} />
     </div>
   );
 }
@@ -94,10 +98,64 @@ function ResponsePane({ exchange }: { exchange: TrafficExchange }) {
 export default function TrafficDetail({ exchange, onClose, onCreateMock }: TrafficDetailProps) {
   const t = useT();
   const [tab, setTab] = useState<DetailTab>('request');
+  const [findOpen, setFindOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [activeMatch, setActiveMatch] = useState(0);
+  const [totalMatches, setTotalMatches] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
   const { request, response } = exchange;
 
+  const effectiveQuery = findOpen ? query : '';
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setFindOpen(true);
+        requestAnimationFrame(() => {
+          findInputRef.current?.focus();
+          findInputRef.current?.select();
+        });
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (findOpen) {
+      requestAnimationFrame(() => findInputRef.current?.focus());
+    }
+  }, [findOpen]);
+
+  useEffect(() => {
+    const count = scrollRef.current?.querySelectorAll('mark.find-match').length ?? 0;
+    setTotalMatches(count);
+    setActiveMatch(0);
+  }, [effectiveQuery, tab, exchange]);
+
+  useEffect(() => {
+    const marks = scrollRef.current?.querySelectorAll('mark.find-match');
+    if (!marks) return;
+    marks.forEach((m) => m.classList.remove('find-active'));
+    const target = marks[activeMatch];
+    if (target) {
+      target.classList.add('find-active');
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [activeMatch, totalMatches, effectiveQuery]);
+
+  const closeFind = () => setFindOpen(false);
+  const nextMatch = () => {
+    if (totalMatches > 0) setActiveMatch((i) => (i + 1) % totalMatches);
+  };
+  const prevMatch = () => {
+    if (totalMatches > 0) setActiveMatch((i) => (i - 1 + totalMatches) % totalMatches);
+  };
+
   return (
-    <aside className="flex h-full min-w-0 flex-col bg-zinc-900/40">
+    <aside className="relative flex h-full min-w-0 flex-col bg-zinc-900/40">
       <div className="flex items-start gap-2 border-b border-zinc-800/80 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -163,11 +221,25 @@ export default function TrafficDetail({ exchange, onClose, onCreateMock }: Traff
           {t('traffic.createMock')}
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {findOpen ? (
+        <div className="flex justify-end border-b border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5">
+          <TrafficFindBar
+            query={query}
+            onQuery={setQuery}
+            total={totalMatches}
+            active={totalMatches === 0 ? 0 : activeMatch + 1}
+            onNext={nextMatch}
+            onPrev={prevMatch}
+            onClose={closeFind}
+            inputRef={findInputRef}
+          />
+        </div>
+      ) : null}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'request' ? (
-          <RequestPane exchange={exchange} />
+          <RequestPane exchange={exchange} query={effectiveQuery} />
         ) : (
-          <ResponsePane exchange={exchange} />
+          <ResponsePane exchange={exchange} query={effectiveQuery} />
         )}
       </div>
     </aside>

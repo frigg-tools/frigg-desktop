@@ -1,10 +1,13 @@
 import { useT } from '../../i18n';
 import { flattenHeaders } from './format';
+import { highlightMatches } from './find';
 
 export default function HeadersTable({
   headers,
+  query,
 }: {
   headers: Record<string, string | string[]>;
+  query?: string;
 }) {
   const t = useT();
   const entries = flattenHeaders(headers);
@@ -21,8 +24,12 @@ export default function HeadersTable({
               index % 2 === 1 ? 'bg-zinc-900/50' : ''
             }`}
           >
-            <span className="w-44 shrink-0 break-all text-zinc-500">{name}</span>
-            <span className="min-w-0 break-all text-zinc-300">{value}</span>
+            <span className="w-44 shrink-0 break-all text-zinc-500">
+              {query ? highlightMatches(name, query) : name}
+            </span>
+            <span className="min-w-0 break-all text-zinc-300">
+              {query ? highlightMatches(value, query) : value}
+            </span>
           </div>
         ))}
       </div>
