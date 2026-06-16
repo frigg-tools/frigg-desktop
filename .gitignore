@@ -22,3 +22,5 @@ release/
 **/credentials*.json
 **/*secret*.json
 .frigg/
+
+.claude/agent-memory/
