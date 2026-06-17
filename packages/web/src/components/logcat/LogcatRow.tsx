@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { LogEntry } from '@frigg/shared';
 import { LEVEL_BADGE_CLASS, LEVEL_TEXT_CLASS } from './levels';
+import { highlightMatches } from '../traffic/find';
 
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
@@ -13,9 +14,10 @@ function formatTime(timestamp: number): string {
 
 interface LogcatRowProps {
   entry: LogEntry;
+  query?: string;
 }
 
-function LogcatRow({ entry }: LogcatRowProps) {
+function LogcatRow({ entry, query }: LogcatRowProps) {
   return (
     <div className="flex gap-2 border-b border-zinc-900/70 px-3 py-0.5 font-mono text-[12px] leading-relaxed hover:bg-zinc-900/40">
       <span className="shrink-0 text-zinc-600 tabular-nums">{formatTime(entry.timestamp)}</span>
@@ -25,13 +27,13 @@ function LogcatRow({ entry }: LogcatRowProps) {
         {entry.level}
       </span>
       <span className="w-32 shrink-0 truncate text-zinc-500" title={entry.tag}>
-        {entry.tag}
+        {query ? highlightMatches(entry.tag, query) : entry.tag}
       </span>
       {entry.pid !== undefined ? (
         <span className="shrink-0 text-zinc-700 tabular-nums">{entry.pid}</span>
       ) : null}
       <span className={`min-w-0 flex-1 whitespace-pre-wrap break-all ${LEVEL_TEXT_CLASS[entry.level]}`}>
-        {entry.message}
+        {query ? highlightMatches(entry.message, query) : entry.message}
       </span>
     </div>
   );

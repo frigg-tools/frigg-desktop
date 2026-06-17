@@ -35,6 +35,10 @@ export const logcat: Bundle = {
     'empty.idle.hint': 'Press Start to begin capturing logs.',
     'empty.waiting': 'Waiting for logs…',
     'empty.filtered': 'No lines match the current filters',
+    'find.placeholder': 'Find in logs',
+    'find.none': 'No matches',
+    'find.prev': 'Previous match',
+    'find.next': 'Next match',
   },
   pt: {
     'title': 'Logcat',
@@ -70,5 +74,9 @@ export const logcat: Bundle = {
     'empty.idle.hint': 'Pressione Iniciar para capturar os logs.',
     'empty.waiting': 'Aguardando logs…',
     'empty.filtered': 'Nenhuma linha corresponde aos filtros atuais',
+    'find.placeholder': 'Buscar nos logs',
+    'find.none': 'Nenhum resultado',
+    'find.prev': 'Resultado anterior',
+    'find.next': 'Próximo resultado',
   },
 };

@@ -1,7 +1,7 @@
 import { type RefObject } from 'react';
-import { useT } from '../../i18n';
+import { useT } from '../i18n';
 
-interface TrafficFindBarProps {
+interface FindBarProps {
   query: string;
   onQuery: (value: string) => void;
   total: number;
@@ -10,6 +10,10 @@ interface TrafficFindBarProps {
   onPrev: () => void;
   onClose: () => void;
   inputRef: RefObject<HTMLInputElement | null>;
+  placeholder: string;
+  noneLabel: string;
+  prevLabel: string;
+  nextLabel: string;
 }
 
 function ChevronButton({
@@ -35,7 +39,7 @@ function ChevronButton({
   );
 }
 
-export default function TrafficFindBar({
+export default function FindBar({
   query,
   onQuery,
   total,
@@ -44,7 +48,11 @@ export default function TrafficFindBar({
   onPrev,
   onClose,
   inputRef,
-}: TrafficFindBarProps) {
+  placeholder,
+  noneLabel,
+  prevLabel,
+  nextLabel,
+}: FindBarProps) {
   const t = useT();
   return (
     <div className="flex items-center gap-1 rounded-md border border-zinc-700/80 bg-zinc-900 px-1.5 py-1">
@@ -62,15 +70,15 @@ export default function TrafficFindBar({
             onClose();
           }
         }}
-        placeholder={t('traffic.find.placeholder')}
+        placeholder={placeholder}
         spellCheck={false}
-        className="w-40 bg-transparent px-1.5 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+        className="w-44 bg-transparent px-1.5 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
       />
       <span className="min-w-[3rem] shrink-0 text-center font-mono text-[10px] tabular-nums text-zinc-500">
-        {query.trim() === '' ? '' : total === 0 ? t('traffic.find.none') : `${active}/${total}`}
+        {query.trim() === '' ? '' : total === 0 ? noneLabel : `${active}/${total}`}
       </span>
-      <ChevronButton up onClick={onPrev} ariaLabel={t('traffic.find.prev')} />
-      <ChevronButton onClick={onNext} ariaLabel={t('traffic.find.next')} />
+      <ChevronButton up onClick={onPrev} ariaLabel={prevLabel} />
+      <ChevronButton onClick={onNext} ariaLabel={nextLabel} />
       <button
         type="button"
         onClick={onClose}

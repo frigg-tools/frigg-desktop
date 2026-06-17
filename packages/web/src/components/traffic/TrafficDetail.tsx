@@ -5,7 +5,7 @@ import StatusCode from '../StatusCode';
 import MockChip from '../MockChip';
 import HeadersTable from './HeadersTable';
 import BodyViewer from './BodyViewer';
-import TrafficFindBar from './TrafficFindBar';
+import FindBar from '../FindBar';
 import CopyButton from './CopyButton';
 import { highlightMatches } from './find';
 import { dumpRequest, dumpResponse, requestToCurl } from './copy';
@@ -234,7 +234,7 @@ export default function TrafficDetail({ exchange, onClose, onCreateMock }: Traff
       </div>
       {findOpen ? (
         <div className="flex justify-end border-b border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5">
-          <TrafficFindBar
+          <FindBar
             query={query}
             onQuery={setQuery}
             total={totalMatches}
@@ -243,6 +243,10 @@ export default function TrafficDetail({ exchange, onClose, onCreateMock }: Traff
             onPrev={prevMatch}
             onClose={closeFind}
             inputRef={findInputRef}
+            placeholder={t('traffic.find.placeholder')}
+            noneLabel={t('traffic.find.none')}
+            prevLabel={t('traffic.find.prev')}
+            nextLabel={t('traffic.find.next')}
           />
         </div>
       ) : null}

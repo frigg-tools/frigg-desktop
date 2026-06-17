@@ -7,9 +7,10 @@ const NEAR_BOTTOM_THRESHOLD = 120;
 interface LogcatListProps {
   entries: LogEntry[];
   autoscroll: boolean;
+  query?: string;
 }
 
-export default function LogcatList({ entries, autoscroll }: LogcatListProps) {
+export default function LogcatList({ entries, autoscroll, query }: LogcatListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -25,7 +26,7 @@ export default function LogcatList({ entries, autoscroll }: LogcatListProps) {
   return (
     <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto">
       {entries.map((entry) => (
-        <LogcatRow key={entry.id} entry={entry} />
+        <LogcatRow key={entry.id} entry={entry} query={query} />
       ))}
     </div>
   );
