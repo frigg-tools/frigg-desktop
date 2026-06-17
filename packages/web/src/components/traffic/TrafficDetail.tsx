@@ -6,7 +6,9 @@ import MockChip from '../MockChip';
 import HeadersTable from './HeadersTable';
 import BodyViewer from './BodyViewer';
 import TrafficFindBar from './TrafficFindBar';
+import CopyButton from './CopyButton';
 import { highlightMatches } from './find';
+import { dumpRequest, dumpResponse, requestToCurl } from './copy';
 import { useT } from '../../i18n';
 import { findHeader, formatDuration } from './format';
 
@@ -38,6 +40,9 @@ function RequestPane({ exchange, query }: { exchange: TrafficExchange; query: st
   const { request } = exchange;
   return (
     <div className="pb-6">
+      <div className="flex justify-end px-4 pt-3">
+        <CopyButton text={dumpRequest(request)} label={t('traffic.copyAll')} icon />
+      </div>
       {request.query ? (
         <>
           <SectionLabel>{t('traffic.section.query')}</SectionLabel>
@@ -86,6 +91,9 @@ function ResponsePane({ exchange, query }: { exchange: TrafficExchange; query: s
           {formatDuration(response.durationMs)}
         </span>
         {response.mockRuleId ? <MockChip /> : null}
+        <div className="ml-auto">
+          <CopyButton text={dumpResponse(response)} label={t('traffic.copyAll')} icon />
+        </div>
       </div>
       <SectionLabel>{t('traffic.section.headers')}</SectionLabel>
       <HeadersTable headers={response.headers} query={query} />
@@ -210,16 +218,19 @@ export default function TrafficDetail({ exchange, onClose, onCreateMock }: Traff
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => onCreateMock(exchange)}
-          className="flex shrink-0 items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/15 active:scale-[0.98]"
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
-            <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
-          </svg>
-          {t('traffic.createMock')}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <CopyButton text={requestToCurl(request)} label={t('traffic.copyCurl')} />
+          <button
+            type="button"
+            onClick={() => onCreateMock(exchange)}
+            className="flex shrink-0 items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/15 active:scale-[0.98]"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+              <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
+            </svg>
+            {t('traffic.createMock')}
+          </button>
+        </div>
       </div>
       {findOpen ? (
         <div className="flex justify-end border-b border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5">
