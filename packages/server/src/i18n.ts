@@ -77,7 +77,7 @@ const en: Dictionary = {
   'setup.step3.androidStep2': 'Pick the downloaded <code>frigg-ca.crt</code>.',
   'setup.step4.title': "Intercepting your own app's HTTPS",
   'setup.step4.intro':
-    "If you only use the system browser, you're done. To decrypt HTTPS from <strong>your own Android app</strong>, there's one catch: apps targeting <strong>Android 7+ (API 24)</strong> ignore user-installed CAs by default. You have two options.",
+    "If you only use the system browser, you're done. To decrypt HTTPS from <strong>your own Android app</strong>, there's one catch: apps targeting <strong>Android 7+ (API 24)</strong> ignore user-installed CAs by default. You have three options.",
   'setup.step4.optionA.title': 'Option A — system certificate (no app changes)',
   'setup.step4.optionA.body':
     'On a rooted device or most emulators (without Google Play), Frigg installs its CA as a <em>system</em> certificate automatically during "Set up interception". Every app trusts it, no code change needed.',
@@ -87,6 +87,14 @@ const en: Dictionary = {
     'Reference it from the <code>&lt;application&gt;</code> tag in <code>AndroidManifest.xml</code>:',
   'setup.step4.optionB.warn':
     'Ship this in <strong>debug builds only</strong> — never trust user CAs in a release build.',
+  'setup.step4.optionC.title': 'Option C — app passes a custom TrustManager (pinning / mTLS)',
+  'setup.step4.optionC.body':
+    'If your app hands a custom trust manager to OkHttp/Ktor (common with <code>sslSocketFactory</code> for certificate pinning or mTLS), Option B above still works — but <strong>only</strong> if that trust manager comes from <code>TrustManagerFactory.init(null)</code>, the NSC-aware default. A trust manager built from a fixed keystore (the system store, or <code>AndroidCAStore</code>) ignores network_security_config. In your debug build, make it <code>init(null)</code> so the config above is honored:',
+  'setup.step4.optionC.warn':
+    'Nothing extra in release — only the debug build ships the network_security_config above.',
+  'setup.step5.title': 'Bonus — does your API require mutual TLS (mTLS)?',
+  'setup.step5.body':
+    "If the upstream server demands a <strong>client</strong> certificate, Frigg must present it during interception — it terminates the app's TLS, so the app's own client cert stops at Frigg. Export the client cert + key as a PKCS#12 and add it under <strong>Devices → Upstream certs</strong> (upstream host + .p12 path). Without it, an mTLS API answers <code>401 Client certificate required</code>.",
   'setup.fingerprint': 'CA SHA-256 fingerprint',
 };
 
@@ -163,7 +171,7 @@ const pt: Dictionary = {
   'setup.step3.androidStep2': 'Escolha o <code>frigg-ca.crt</code> baixado.',
   'setup.step4.title': 'Interceptando o HTTPS do seu próprio app',
   'setup.step4.intro':
-    'Se você usa apenas o navegador do sistema, está pronto. Para descriptografar o HTTPS do <strong>seu próprio app Android</strong>, há um detalhe: apps que têm como alvo o <strong>Android 7+ (API 24)</strong> ignoram CAs instalados pelo usuário por padrão. Você tem duas opções.',
+    'Se você usa apenas o navegador do sistema, está pronto. Para descriptografar o HTTPS do <strong>seu próprio app Android</strong>, há um detalhe: apps que têm como alvo o <strong>Android 7+ (API 24)</strong> ignoram CAs instalados pelo usuário por padrão. Você tem três opções.',
   'setup.step4.optionA.title': 'Opção A — certificado de sistema (sem mudanças no app)',
   'setup.step4.optionA.body':
     'Em um dispositivo com root ou na maioria dos emuladores (sem Google Play), o Frigg instala seu CA como certificado de <em>sistema</em> automaticamente durante "Configurar interceptação". Todos os apps confiam nele, sem mudança de código.',
@@ -173,6 +181,14 @@ const pt: Dictionary = {
     'Referencie-o na tag <code>&lt;application&gt;</code> do <code>AndroidManifest.xml</code>:',
   'setup.step4.optionB.warn':
     'Use isto <strong>apenas em builds de debug</strong> — nunca confie em CAs de usuário em um build de release.',
+  'setup.step4.optionC.title': 'Opção C — o app passa um TrustManager custom (pinning / mTLS)',
+  'setup.step4.optionC.body':
+    'Se o app entrega um trust manager customizado pro OkHttp/Ktor (comum com <code>sslSocketFactory</code> pra certificate pinning ou mTLS), a Opção B acima ainda funciona — mas <strong>só</strong> se esse trust manager vier de <code>TrustManagerFactory.init(null)</code>, o padrão que respeita o NSC. Um trust manager montado de um keystore fixo (a store do sistema, ou <code>AndroidCAStore</code>) ignora o network_security_config. No seu build de debug, deixe-o <code>init(null)</code> pra honrar a config acima:',
+  'setup.step4.optionC.warn':
+    'Nada a mais em release — só o build de debug embarca o network_security_config acima.',
+  'setup.step5.title': 'Bônus — sua API exige mutual TLS (mTLS)?',
+  'setup.step5.body':
+    'Se o servidor upstream exige um certificado <strong>cliente</strong>, o Frigg precisa apresentá-lo durante a interceptação — ele termina o TLS do app, então o cert cliente do próprio app morre no Frigg. Exporte o cert cliente + chave como um PKCS#12 e adicione em <strong>Devices → Upstream certs</strong> (host upstream + caminho do .p12). Sem isso, uma API mTLS responde <code>401 Client certificate required</code>.',
   'setup.fingerprint': 'Impressão digital CA SHA-256',
 };
 

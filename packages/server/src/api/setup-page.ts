@@ -229,6 +229,22 @@ export function setupPageHtml(opts: {
   android:networkSecurityConfig=<span class="t">"@xml/network_security_config"</span> ... <span class="t">&gt;</span></pre>
       <p class="warn">${st(locale, 'setup.step4.optionB.warn')}</p>
     </div>
+    <div class="platform">
+      <h3>${st(locale, 'setup.step4.optionC.title')}</h3>
+      <p class="dim">${st(locale, 'setup.step4.optionC.body')}</p>
+      <pre class="codeblock"><span class="t">val</span> tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+tmf.init(<span class="t">null</span> <span class="t">as</span> KeyStore?)
+okHttp.sslSocketFactory(sslContext.socketFactory, tmf.trustManagers[<span class="t">0</span>] <span class="t">as</span> X509TrustManager)</pre>
+      <p class="warn">${st(locale, 'setup.step4.optionC.warn')}</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="step-num">5</div>
+      <h2>${st(locale, 'setup.step5.title')}</h2>
+    </div>
+    <p>${st(locale, 'setup.step5.body')}</p>
   </section>
 
   <p class="fingerprint">${st(locale, 'setup.fingerprint')}<br><span class="mono">${opts.fingerprint}</span></p>
