@@ -16,7 +16,6 @@ export default function EmulatorPanel() {
   const deviceId = useAppStore((s) => s.fridaDeviceId);
   const avdBusy = useAppStore((s) => s.avdBusy);
   const loadAvds = useAppStore((s) => s.loadAvds);
-  const refreshDevices = useAppStore((s) => s.refreshDevices);
   const bootAvd = useAppStore((s) => s.bootAvd);
   const createAvd = useAppStore((s) => s.createAvd);
   const setDeviceId = useAppStore((s) => s.setFridaDeviceId);
@@ -27,12 +26,7 @@ export default function EmulatorPanel() {
 
   useEffect(() => {
     void loadAvds().catch(() => undefined);
-    const id = setInterval(() => {
-      void loadAvds().catch(() => undefined);
-      void refreshDevices().catch(() => undefined);
-    }, 5000);
-    return () => clearInterval(id);
-  }, [loadAvds, refreshDevices]);
+  }, [loadAvds]);
 
   const chips: Chip[] = [
     ...avds.map((avd) => ({ key: `avd:${avd.name}`, name: avd.name, serial: avd.serial, booted: avd.booted })),

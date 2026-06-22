@@ -918,6 +918,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         void get()
           .refreshDevices()
           .catch(() => undefined);
+        void get()
+          .loadAvds()
+          .catch(() => undefined);
         break;
       case 'log-entry':
         pendingLogEntries.push(ev.entry);
