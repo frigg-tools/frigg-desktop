@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 const STORAGE_KEY = 'frigg-panel-sizes';
 
@@ -33,24 +33,29 @@ export function useResizable(key: string, defaultSize: number, options: Resizabl
   const sizeRef = useRef(size);
   sizeRef.current = size;
 
-  useEffect(() => {
-    saveSize(key, size);
-  }, [key, size]);
-
   const onPointerDown = (event: ReactPointerEvent) => {
     event.preventDefault();
     const startPos = options.axis === 'x' ? event.clientX : event.clientY;
     const startSize = sizeRef.current;
+    let frame = 0;
+    let latest = startSize;
 
+    const flush = () => {
+      frame = 0;
+      setSize(latest);
+    };
     const move = (moveEvent: globalThis.PointerEvent) => {
       const pos = options.axis === 'x' ? moveEvent.clientX : moveEvent.clientY;
       const delta = (pos - startPos) * (options.invert ? -1 : 1);
-      const next = Math.min(options.max, Math.max(options.min, startSize + delta));
-      setSize(next);
+      latest = Math.min(options.max, Math.max(options.min, startSize + delta));
+      if (frame === 0) frame = requestAnimationFrame(flush);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      if (frame !== 0) cancelAnimationFrame(frame);
+      setSize(latest);
+      saveSize(key, latest);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
     };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { SqlCell, SqlColumn, SqlQueryResult, SqlRowEdit, SqlTable } from '@frigg/shared';
 import { SQL_ROW_LIMIT } from '@frigg/shared';
 import { useAppStore } from '../../store';
@@ -115,7 +115,7 @@ function InsertRowDialog({ columns, onCancel, onConfirm }: InsertDialogProps) {
   );
 }
 
-export default function SqlResultsGrid({ result }: SqlResultsGridProps) {
+function SqlResultsGrid({ result }: SqlResultsGridProps) {
   const t = useT();
   const schema = useAppStore((s) => s.sqlSchema);
   const currentTable = useAppStore((s) => s.sqlCurrentTable);
@@ -340,3 +340,5 @@ export default function SqlResultsGrid({ result }: SqlResultsGridProps) {
     </div>
   );
 }
+
+export default memo(SqlResultsGrid);
