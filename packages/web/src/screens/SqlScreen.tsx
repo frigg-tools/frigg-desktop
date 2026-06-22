@@ -127,7 +127,7 @@ export default function SqlScreen() {
               <ResizeHandle axis="y" onPointerDown={editor.onPointerDown} />
               <div className="flex min-h-0 flex-1 flex-col">
                 {result ? (
-                  <SqlResultsGrid result={result} />
+                  <SqlResultsGrid />
                 ) : (
                   <EmptyState kind={currentTable ? 'noTable' : 'notConnected'} />
                 )}
