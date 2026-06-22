@@ -437,6 +437,9 @@ export interface SqlQueryResult {
   truncated: boolean;
   durationMs: number;
   command: SqlCommandKind;
+  offset?: number;
+  hasMore?: boolean;
+  totalRows?: number | null;
 }
 
 export interface SqlConnectionTestResult {
@@ -454,6 +457,8 @@ export interface SqlRowEdit {
 }
 
 export const SQL_ROW_LIMIT = 1000;
+export const SQL_PAGE_SIZE = 500;
+export const SQL_MAX_ROWS = 10000;
 
 export const DEFAULT_PROXY_PORT = 8888;
 export const DEFAULT_API_PORT = 4848;

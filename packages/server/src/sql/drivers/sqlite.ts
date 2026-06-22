@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import {
-  SQL_ROW_LIMIT,
+  SQL_MAX_ROWS,
   type SqlCell,
   type SqlColumn,
   type SqlConnection,
@@ -81,7 +81,7 @@ export function createSqliteDriver(conn: SqlConnection): SqlDriver {
         const rawRows = statement.all(...bind) as unknown[][];
         const durationMs = Date.now() - started;
         const columns = statement.columns().map((column) => column.name);
-        return shapeResult(columns, rawRows, command, SQL_ROW_LIMIT, { durationMs });
+        return shapeResult(columns, rawRows, command, SQL_MAX_ROWS, { durationMs });
       }
       const info = statement.run(...bind);
       const durationMs = Date.now() - started;

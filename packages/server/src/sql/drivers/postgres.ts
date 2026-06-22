@@ -1,6 +1,6 @@
 import pg from 'pg';
 import {
-  SQL_ROW_LIMIT,
+  SQL_MAX_ROWS,
   type SqlCell,
   type SqlColumn,
   type SqlConnection,
@@ -115,12 +115,12 @@ export function createPostgresDriver(conn: SqlConnection, password: string | nul
       const durationMs = Date.now() - started;
       if (command === 'read') {
         const columns = result.fields.map((field) => field.name);
-        return shapeResult(columns, result.rows as unknown[][], command, SQL_ROW_LIMIT, { durationMs });
+        return shapeResult(columns, result.rows as unknown[][], command, SQL_MAX_ROWS, { durationMs });
       }
       const hasColumns = result.fields.length > 0 && result.rows.length > 0;
       if (hasColumns) {
         const columns = result.fields.map((field) => field.name);
-        return shapeResult(columns, result.rows as unknown[][], command, SQL_ROW_LIMIT, {
+        return shapeResult(columns, result.rows as unknown[][], command, SQL_MAX_ROWS, {
           durationMs,
           affectedRows: typeof result.rowCount === 'number' ? result.rowCount : null,
         });

@@ -1,6 +1,6 @@
 import mysql from 'mysql2/promise';
 import {
-  SQL_ROW_LIMIT,
+  SQL_MAX_ROWS,
   type SqlCell,
   type SqlColumn,
   type SqlConnection,
@@ -107,7 +107,7 @@ export function createMysqlDriver(conn: SqlConnection, password: string | null):
       const durationMs = Date.now() - started;
       if (Array.isArray(result) && Array.isArray(fields)) {
         const columns = fields.map((field) => field.name);
-        return shapeResult(columns, result as unknown[][], command, SQL_ROW_LIMIT, { durationMs });
+        return shapeResult(columns, result as unknown[][], command, SQL_MAX_ROWS, { durationMs });
       }
       const header = result as mysql.ResultSetHeader;
       return {

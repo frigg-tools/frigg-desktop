@@ -908,9 +908,23 @@ export function buildRouter(deps: ApiDeps): Router {
     asyncHandler(async (req, res) => {
       const record = asRecord(req.body, 'query');
       const sql = parseNonEmpty(record.sql, 'sql');
-      const confirmDestructive = record.confirmDestructive === true;
+      const opts: {
+        confirmDestructive: boolean;
+        withCount: boolean;
+        offset?: number;
+        pageSize?: number;
+      } = {
+        confirmDestructive: record.confirmDestructive === true,
+        withCount: record.withCount === true,
+      };
+      if (typeof record.offset === 'number' && Number.isFinite(record.offset)) {
+        opts.offset = record.offset;
+      }
+      if (typeof record.pageSize === 'number' && Number.isFinite(record.pageSize)) {
+        opts.pageSize = record.pageSize;
+      }
       try {
-        res.json(await deps.sql.query(req.params.id, sql, confirmDestructive));
+        res.json(await deps.sql.query(req.params.id, sql, opts));
       } catch (error) {
         if (error instanceof Error && error.message === 'destructive') {
           res.status(400).json({ error: 'destructive', confirmRequired: true });

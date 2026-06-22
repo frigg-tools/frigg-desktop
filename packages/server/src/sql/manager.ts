@@ -1,4 +1,6 @@
 import {
+  SQL_MAX_ROWS,
+  SQL_PAGE_SIZE,
   SQL_ROW_LIMIT,
   type SqlConnection,
   type SqlConnectionInput,
@@ -50,6 +52,18 @@ function inputToConnection(input: SqlConnectionInput): SqlConnection {
   };
 }
 
+export interface SqlQueryOptions {
+  confirmDestructive?: boolean;
+  offset?: number;
+  pageSize?: number;
+  withCount?: boolean;
+}
+
+function clampPageSize(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return SQL_PAGE_SIZE;
+  return Math.min(SQL_MAX_ROWS, Math.max(1, Math.floor(value)));
+}
+
 export class SqlManager {
   private live = new Map<string, LiveConnection>();
 
@@ -95,19 +109,46 @@ export class SqlManager {
     return schema;
   }
 
-  async query(id: string, sql: string, confirmDestructive: boolean): Promise<SqlQueryResult> {
+  async query(id: string, sql: string, opts: SqlQueryOptions = {}): Promise<SqlQueryResult> {
     const conn = this.requireConn(id);
     if (hasMultipleStatements(sql)) {
       throw new Error('run one statement at a time');
     }
     const analysis = analyzeSql(sql, { engine: conn.engine, rowLimit: SQL_ROW_LIMIT });
-    if (analysis.destructive && !confirmDestructive) {
+    if (analysis.destructive && !opts.confirmDestructive) {
       throw new Error('destructive');
     }
     const entry = this.ensure(id);
-    const result = await entry.driver.query(analysis.effectiveSql);
-    if (analysis.kind === 'ddl') entry.schema = undefined;
-    return result;
+
+    if (!analysis.limited) {
+      const result = await entry.driver.query(analysis.effectiveSql);
+      if (analysis.kind === 'ddl') entry.schema = undefined;
+      return result;
+    }
+
+    const pageSize = clampPageSize(opts.pageSize);
+    const offset = Math.max(0, Math.floor(opts.offset ?? 0));
+    const base = sql.trim().replace(/;\s*$/, '');
+    const paged = `SELECT * FROM (${base}) AS _frigg_page LIMIT ${pageSize + 1} OFFSET ${offset}`;
+    const result = await entry.driver.query(paged);
+    const hasMore = result.rows.length > pageSize;
+    const rows = hasMore ? result.rows.slice(0, pageSize) : result.rows;
+
+    let totalRows: number | null = null;
+    if (opts.withCount) {
+      try {
+        const countResult = await entry.driver.query(
+          `SELECT COUNT(*) AS c FROM (${base}) AS _frigg_count`,
+        );
+        const value = countResult.rows[0]?.[0];
+        const parsed = typeof value === 'number' ? value : Number(value);
+        totalRows = Number.isFinite(parsed) ? parsed : null;
+      } catch {
+        totalRows = null;
+      }
+    }
+
+    return { ...result, rows, rowCount: rows.length, truncated: false, offset, hasMore, totalRows };
   }
 
   async editRow(id: string, edit: SqlRowEdit): Promise<SqlQueryResult> {

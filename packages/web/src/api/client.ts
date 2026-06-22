@@ -342,17 +342,24 @@ export function sqlSchema(id: string): Promise<SqlSchema> {
   return request(`/api/sql/connections/${encodeURIComponent(id)}/schema`, { method: 'POST' });
 }
 
+export interface RunSqlOptions {
+  confirmDestructive?: boolean;
+  offset?: number;
+  pageSize?: number;
+  withCount?: boolean;
+}
+
 export async function runSql(
   id: string,
   sql: string,
-  confirmDestructive?: boolean,
+  opts: RunSqlOptions = {},
 ): Promise<SqlQueryResult> {
   const headers = new Headers({ 'content-type': 'application/json' });
   headers.set('X-Frigg-Locale', currentLocale());
   const res = await fetch(`/api/sql/connections/${encodeURIComponent(id)}/query`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ sql, confirmDestructive }),
+    body: JSON.stringify({ sql, ...opts }),
   });
   if (res.status === 400) {
     const data = (await res.json().catch(() => ({}))) as {

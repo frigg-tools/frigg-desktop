@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import {
+  SQL_PAGE_SIZE,
   TRAFFIC_BUFFER_LIMIT,
+  type SqlCell,
   type ApiClientCert,
   type ApiEnvironment,
   type ApiFolder,
@@ -162,6 +164,12 @@ export interface AppState {
   pendingDestructiveSql: string | null;
   sqlDialog: { mode: 'create' } | { mode: 'edit'; id: string } | null;
   sqlCurrentTable: string | null;
+  sqlRows: SqlCell[][];
+  sqlHasMore: boolean;
+  sqlTotalRows: number | null;
+  sqlOffset: number;
+  sqlLoadingMore: boolean;
+  sqlPagedSql: string | null;
   loadSqlConnections: () => Promise<void>;
   openSqlDialog: (dialog: { mode: 'create' } | { mode: 'edit'; id: string }) => void;
   closeSqlDialog: () => void;
@@ -177,6 +185,7 @@ export interface AppState {
   confirmRunSql: () => Promise<void>;
   cancelDestructive: () => void;
   editSqlRow: (edit: SqlRowEdit) => Promise<void>;
+  loadMoreSql: () => Promise<void>;
   loadAll: () => Promise<void>;
   refreshMocks: () => Promise<void>;
   refreshDevices: () => Promise<void>;
@@ -237,6 +246,21 @@ function quoteSqlIdent(name: string, engine: SqlEngine): string {
     return `\`${name.replace(/`/g, '``')}\``;
   }
   return `"${name.replace(/"/g, '""')}"`;
+}
+
+function applyFirstPage(
+  set: (partial: Partial<AppState>) => void,
+  result: SqlQueryResult,
+  sql: string,
+): void {
+  set({
+    sqlResult: result,
+    sqlRows: result.rows,
+    sqlHasMore: result.hasMore ?? false,
+    sqlTotalRows: result.totalRows ?? null,
+    sqlOffset: result.rows.length,
+    sqlPagedSql: result.offset !== undefined ? sql : null,
+  });
 }
 
 function appendLogs(entries: LogEntry[], incoming: LogEntry[]): LogEntry[] {
@@ -704,6 +728,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingDestructiveSql: null,
   sqlDialog: null,
   sqlCurrentTable: null,
+  sqlRows: [],
+  sqlHasMore: false,
+  sqlTotalRows: null,
+  sqlOffset: 0,
+  sqlLoadingMore: false,
+  sqlPagedSql: null,
   loadSqlConnections: async () => {
     const connections = await api.getSqlConnections();
     set({ sqlConnections: connections });
@@ -730,6 +760,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       patch.sqlEditorSql = '';
       patch.sqlError = null;
       patch.pendingDestructiveSql = null;
+      patch.sqlRows = [];
+      patch.sqlHasMore = false;
+      patch.sqlTotalRows = null;
+      patch.sqlOffset = 0;
+      patch.sqlPagedSql = null;
     }
     set(patch);
   },
@@ -756,6 +791,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         sqlTables: schema.tables.map((t) => t.name),
         sqlResult: null,
         sqlCurrentTable: null,
+        sqlRows: [],
+        sqlHasMore: false,
+        sqlTotalRows: null,
+        sqlOffset: 0,
+        sqlPagedSql: null,
       });
     } catch (error) {
       set({ sqlError: error instanceof Error ? error.message : 'Failed to connect' });
@@ -784,7 +824,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const quoted = meta?.schema
       ? `${quoteSqlIdent(meta.schema, engine)}.${quoteSqlIdent(table, engine)}`
       : quoteSqlIdent(table, engine);
-    const sql = `SELECT * FROM ${quoted} LIMIT 200`;
+    const sql = `SELECT * FROM ${quoted}`;
     set({ sqlCurrentTable: table, sqlEditorSql: sql });
     await get().runSql(sql);
   },
@@ -794,8 +834,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!id) return;
     set({ sqlBusy: true, sqlError: null });
     try {
-      const result = await api.runSql(id, sql);
-      set({ sqlResult: result });
+      const result = await api.runSql(id, sql, { offset: 0, pageSize: SQL_PAGE_SIZE, withCount: true });
+      applyFirstPage(set, result, sql);
       recordSqlHistory(sql);
       if (result.command === 'ddl') void get().refreshSqlSchema().catch(() => undefined);
     } catch (error) {
@@ -813,8 +853,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!sqlActiveId || !pendingDestructiveSql) return;
     set({ sqlBusy: true, sqlError: null });
     try {
-      const result = await api.runSql(sqlActiveId, pendingDestructiveSql, true);
-      set({ sqlResult: result, pendingDestructiveSql: null });
+      const result = await api.runSql(sqlActiveId, pendingDestructiveSql, {
+        confirmDestructive: true,
+        offset: 0,
+        pageSize: SQL_PAGE_SIZE,
+        withCount: true,
+      });
+      applyFirstPage(set, result, pendingDestructiveSql);
+      set({ pendingDestructiveSql: null });
       recordSqlHistory(pendingDestructiveSql);
       if (result.command === 'ddl') void get().refreshSqlSchema().catch(() => undefined);
     } catch (error) {
@@ -840,6 +886,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     const table = get().sqlCurrentTable;
     if (table) await get().browseSqlTable(table);
+  },
+  loadMoreSql: async () => {
+    const { sqlActiveId, sqlPagedSql, sqlHasMore, sqlLoadingMore, sqlOffset, sqlRows } = get();
+    if (!sqlActiveId || !sqlPagedSql || !sqlHasMore || sqlLoadingMore) return;
+    set({ sqlLoadingMore: true });
+    try {
+      const result = await api.runSql(sqlActiveId, sqlPagedSql, {
+        offset: sqlOffset,
+        pageSize: SQL_PAGE_SIZE,
+      });
+      const merged = sqlRows.concat(result.rows);
+      set({ sqlRows: merged, sqlHasMore: result.hasMore ?? false, sqlOffset: merged.length });
+    } catch (error) {
+      set({ sqlError: error instanceof Error ? error.message : 'Load more failed' });
+    } finally {
+      set({ sqlLoadingMore: false });
+    }
   },
   loadAll: async () => {
     const [status, exchanges, mocks, devices] = await Promise.all([
