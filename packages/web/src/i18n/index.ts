@@ -9,6 +9,7 @@ import { database } from './database';
 import { client } from './client';
 import { mcp } from './mcp';
 import { breakpoints } from './breakpoints';
+import { frida } from './frida';
 
 export type { Locale };
 
@@ -28,6 +29,7 @@ const bundles: Record<string, Bundle> = {
   client,
   mcp,
   breakpoints,
+  frida,
 };
 
 const flattened: Record<Locale, Record<string, string>> = { en: {}, pt: {} };
