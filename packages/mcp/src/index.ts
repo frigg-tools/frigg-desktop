@@ -557,5 +557,145 @@ server.tool(
   },
 );
 
+server.tool(
+  'frigg_frida_snapshot',
+  'Get the Frida toolkit snapshot: on-device frida-server status, the running script session, the built-in example scripts, and the host frida-tools version (null if not installed).',
+  async () => {
+    try {
+      return ok(await get('/api/frida/snapshot'));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
+  'frigg_frida_status',
+  'Get the frida-server status for a specific device (installed, running, version).',
+  { deviceId: z.string().describe('adb serial of the Android device/emulator') },
+  async ({ deviceId }) => {
+    try {
+      return ok(await get(`/api/frida/status?deviceId=${encodeURIComponent(deviceId)}`));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
+  'frigg_frida_install',
+  'Download a matching frida-server and install it onto the device (requires frida-tools on the host).',
+  { deviceId: z.string().describe('adb serial of the Android device/emulator') },
+  async ({ deviceId }) => {
+    try {
+      return ok(await post('/api/frida/install', { deviceId }));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
+  'frigg_frida_start',
+  'Start frida-server on the device (adb root + setenforce 0 + launch). Needs a rooted device/emulator (google_apis image).',
+  { deviceId: z.string().describe('adb serial of the Android device/emulator') },
+  async ({ deviceId }) => {
+    try {
+      return ok(await post('/api/frida/server/start', { deviceId }));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
+  'frigg_frida_stop',
+  'Stop frida-server on the device.',
+  { deviceId: z.string().optional().describe('adb serial (defaults to the last device frida-server was started on)') },
+  async ({ deviceId }) => {
+    try {
+      return ok(await post('/api/frida/server/stop', deviceId ? { deviceId } : {}));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
+  'frigg_frida_run',
+  'Inject and run a Frida script against an app on the device. Streams console.log/send() output over the Frigg WebSocket; this returns the initial session status.',
+  {
+    deviceId: z.string().describe('adb serial of the Android device/emulator'),
+    target: z.string().min(1).describe('Target package or process name, e.g. com.example.app'),
+    source: z.string().min(1).describe('The Frida JavaScript to inject'),
+    spawnMode: z.boolean().optional().describe('Spawn the app (-f) instead of attaching to a running one (default false)'),
+    scriptId: z.string().optional().describe('Optional label for the script'),
+  },
+  async ({ deviceId, target, source, spawnMode, scriptId }) => {
+    try {
+      return ok(
+        await post('/api/frida/run', {
+          deviceId,
+          target,
+          source,
+          spawnMode: spawnMode ?? false,
+          scriptId: scriptId ?? 'custom',
+        }),
+      );
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool('frigg_frida_stop_script', 'Stop the running Frida script session.', async () => {
+  try {
+    return ok(await post('/api/frida/stop', {}));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+server.tool('frigg_list_avds', 'List Android Virtual Devices (AVDs) and whether each is currently booted.', async () => {
+  try {
+    return ok(await get('/api/avd'));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+server.tool(
+  'frigg_boot_avd',
+  'Boot an Android emulator (AVD) by name.',
+  { name: z.string().min(1).describe('AVD name') },
+  async ({ name }) => {
+    try {
+      return ok(await post('/api/avd/boot', { name }));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+server.tool(
+  'frigg_create_avd',
+  'Create a rooted (google_apis) AVD from an already-installed system image.',
+  {
+    name: z.string().min(1).describe('New AVD name'),
+    apiLevel: z
+      .number()
+      .int()
+      .optional()
+      .describe('Android API level (default 34); the google_apis image for this level must already be installed'),
+  },
+  async ({ name, apiLevel }) => {
+    try {
+      return ok(await post('/api/avd/create', { name, apiLevel: apiLevel ?? 34 }));
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -81,3 +81,23 @@ Add to your Claude MCP config (`~/.claude/mcp.json` or equivalent):
 | `frigg_run_request` | Execute a request — either by `requestId` or inline `request` object |
 | `frigg_create_environment` | Create an environment in a workspace |
 | `frigg_set_env_var` | Upsert a variable (`key`/`value`) in an environment |
+
+### Frida
+
+| Tool | Description |
+|------|-------------|
+| `frigg_frida_snapshot` | frida-server status, script session, example scripts, host frida-tools version |
+| `frigg_frida_status` | frida-server status for a `deviceId` (installed/running/version) |
+| `frigg_frida_install` | Download + install a matching frida-server onto the device |
+| `frigg_frida_start` | Start frida-server (adb root + setenforce 0 + launch) |
+| `frigg_frida_stop` | Stop frida-server (optional `deviceId`) |
+| `frigg_frida_run` | Inject and run a script (`deviceId`, `target`, `source`, optional `spawnMode`) |
+| `frigg_frida_stop_script` | Stop the running script session |
+
+### Emulators (AVD)
+
+| Tool | Description |
+|------|-------------|
+| `frigg_list_avds` | List AVDs and whether each is booted |
+| `frigg_boot_avd` | Boot an emulator by `name` |
+| `frigg_create_avd` | Create a rooted `google_apis` AVD from an installed image (`name`, `apiLevel`) |
