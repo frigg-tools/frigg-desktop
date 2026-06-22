@@ -283,3 +283,36 @@ Store slice already implemented (read store.ts): apiWorkspaces, apiFolders, apiR
 - Response panel (below or right of editor): status pill (colored), time, size; tabs Body (pretty JSON when parseable) | Headers (kv) | Tests (pass/fail list) | Console (scriptLogs). Empty state before first send.
 - Environment manager: edit the active environment's variables (kv editor) so scripts' set values are visible and editable; show {{accessToken}} etc.
 - i18n: all strings under the 'client' namespace (en+pt); reuse common.action.*.
+
+## v0.4 — Frida toolkit + AVD management (2026-06-21)
+
+A "Frida" tab to instrument Android apps from the UI: install/run frida-server on a rooted emulator, inject scripts (attach or spawn) with live output, and manage AVDs. CLI-wrap approach (spawns the host `frida` CLI); `frida-node` deferred. Degrades to a banner when frida-tools isn't on the host.
+
+### Shared types (in @frigg/shared)
+FridaServerStatus {installed,running,version,deviceId,error}; FridaSessionStatus {running,deviceId,target,scriptId,error}; FridaMessage {id,timestamp,kind:'log'|'send'|'error'|'system',text}; FridaScript {id,name,source,builtin}; FridaSnapshot {serverStatus,sessionStatus,scripts,hostFridaVersion}; Avd {name,booted,serial}; AvdCreateResult {ok,message}. ServerEvent += `{type:'frida-server-status',status}` | `{type:'frida-session-status',status}` | `{type:'frida-message',message}`. FRIDA_MESSAGE_BUFFER_LIMIT = 2000.
+
+### Server (packages/server/src/frida/)
+- `frida-server-manager.ts` — `FridaServerManager extends EventEmitter`. `install(deviceId)`: read host `frida --version`, read device ABI (`getprop ro.product.cpu.abi` → `mapAbi`, pure+tested), download the matching `frida-server-<ver>-android-<abi>.xz` from GitHub releases (undici fetch with a 120s AbortSignal, rejects text/html), `xz -d`, `adb push` to `/data/local/tmp/frida-server`, `chmod 755`. `start(deviceId)`: idempotent (returns if already running), `adb root` (dual-check for "cannot run as root"), `setenforce 0`, detached `setsid frida-server &`, then poll `pidof` (`waitForRunning`, ~3s) to confirm. `stop`/`dispose`: `pkill -f frida-server`. Plain-English status strings (like LogcatManager). Emits `frida-server-status`.
+- `frida-session.ts` — `FridaSession extends EventEmitter`. `run({deviceId,target,source,scriptId,spawnMode})`: stages the script to a temp file, spawns `frida -D <id> -n|-f <target> -l <script>` (PYTHONUNBUFFERED=1, stdin left open so the resident REPL keeps hooks alive — no `-q`, which would unload after load). Line-buffers stdout through `cleanFridaLine` (pure+tested): drops the REPL banner/prompt, parses `send()` payloads → kind 'send', else 'log'; stderr → 'error'. Stale-child guard + temp cleanup. Emits `frida-message` / `frida-session-status`.
+- `examples.ts` — built-in `FridaScript[]` (toast on launch, replace text in UI, list loaded classes, root-check probe).
+- `manager.ts` — `FridaManager extends EventEmitter` facade composing the two + re-emitting `'event'`; `snapshot()`, install/start/stop server, runScript/stopScript, `stop()` teardown.
+
+### Server (packages/server/src/devices/)
+- `avd.ts` — `listAvds()` (`emulator -list-avds` → `parseAvdList` pure+tested, cross-referenced with running emulators via `adb -s <serial> emu avd name`); `bootAvd(name)` (detached `emulator -avd`); `createRootedAvd(name,apiLevel)` (`avdmanager create` from an installed `google_apis;android-<api>;<hostAbi>` image; clear message guiding to Android Studio/sdkmanager when missing — no in-app image download). Resolves `emulator`/`avdmanager` via `ANDROID_HOME`/`ANDROID_SDK_ROOT`/`~/Library/Android/sdk`, falling back to PATH.
+- `device-watcher.ts` — `DeviceWatcher extends EventEmitter` polls `adb devices` (2s) and emits `devices-updated` when the device list changes. One server poll broadcasts to every client.
+
+### Routes (router.ts, ApiDeps gets `frida: FridaManager`)
+GET /api/frida/snapshot; GET /api/frida/status?deviceId; POST /api/frida/install {deviceId}; POST /api/frida/server/start {deviceId}; POST /api/frida/server/stop {deviceId?}; POST /api/frida/run {deviceId,target,source,scriptId?,spawnMode?}; POST /api/frida/stop; GET /api/avd; POST /api/avd/boot {name}; POST /api/avd/create {name,apiLevel}.
+
+### Wiring (start.ts)
+`const frida = new FridaManager()`, `const deviceWatcher = new DeviceWatcher()`; both `.on('event', hub.broadcast)`; `deviceWatcher.start()`; teardown `frida.stop()` + `deviceWatcher.dispose()`.
+
+### Web
+- `screens/FridaScreen.tsx` + `components/frida/EmulatorPanel.tsx`. An Emulator section (unified chips by AVD name: running = selectable, stopped = boot, + create) and a separate labeled frida-server section (status pills + install/start/stop), then a script editor (recent-targets datalist + example dropdown) and a live console (`send`=emerald, errors=rose).
+- Store slice: fridaDeviceId, fridaServerStatus, fridaSessionStatus, fridaMessages (batched flush like logcat), fridaScripts, fridaTarget/Source/ScriptId/SpawnMode, hostFridaVersion, fridaBusy, fridaRecentTargets (localStorage), avds, avdBusy + actions; applyEvent handles the 3 frida events; `devices-updated` refreshes devices + avds. i18n under the 'frida' namespace (en+pt).
+
+### Host dependency
+Requires `frida`/`frida-tools` on the host (`pipx install frida-tools`) and `xz` for install; a rooted `google_apis` emulator for frida-server. The UI shows a banner when frida-tools is absent.
+
+### Tests
+`cleanFridaLine` (REPL output parser), `mapAbi` (device→frida ABI), `parseAvdList` (emulator -list-avds output).
