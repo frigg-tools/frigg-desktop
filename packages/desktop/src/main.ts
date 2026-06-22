@@ -1,7 +1,28 @@
-import { app, BrowserWindow, Menu, dialog, shell, type MenuItemConstructorOptions } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  dialog,
+  safeStorage,
+  shell,
+  type MenuItemConstructorOptions,
+} from 'electron';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
+
+interface DesktopSecretBox {
+  encrypt(plain: string): string;
+  decrypt(blob: string): string;
+}
+
+function buildSecretBox(): DesktopSecretBox | undefined {
+  if (!safeStorage.isEncryptionAvailable()) return undefined;
+  return {
+    encrypt: (plain) => safeStorage.encryptString(plain).toString('base64'),
+    decrypt: (blob) => safeStorage.decryptString(Buffer.from(blob, 'base64')),
+  };
+}
 
 const isDev = process.env.FRIGG_DESKTOP_DEV === '1';
 const DEV_URL = 'http://localhost:5173';
@@ -54,7 +75,11 @@ async function resolveAppUrl(): Promise<string> {
     return DEV_URL;
   }
   const { startFrigg } = await import('@frigg/server');
-  const frigg = await startFrigg({ webDir: path.join(process.resourcesPath, 'web') });
+  const secretBox = buildSecretBox();
+  const frigg = await startFrigg({
+    webDir: path.join(process.resourcesPath, 'web'),
+    ...(secretBox ? { secretBox } : {}),
+  });
   stopServer = frigg.stop;
   return frigg.uiUrl;
 }

@@ -23,13 +23,17 @@
     "productName": "Frigg",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "electronVersion": "33.4.11",
-    "npmRebuild": false,
+    "npmRebuild": true,
     "beforePack": "scripts/before-pack.cjs",
     "directories": {
       "output": "release"
     },
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
     "files": [
-      "dist/**"
+      "dist/**",
+      "../../node_modules/better-sqlite3/**"
     ],
     "extraResources": [
       {
