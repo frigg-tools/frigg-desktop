@@ -5,21 +5,30 @@ import { join } from 'node:path';
 import type { Avd, AvdCreateResult } from '@frigg/shared';
 import { run } from '../lib/exec.ts';
 
+const isWindows = process.platform === 'win32';
+
+export function defaultAndroidSdkRoot(platform: NodeJS.Platform, home: string): string {
+  if (platform === 'win32') return join(home, 'AppData', 'Local', 'Android', 'Sdk');
+  if (platform === 'darwin') return join(home, 'Library', 'Android', 'sdk');
+  return join(home, 'Android', 'Sdk');
+}
+
 function androidSdkRoot(): string {
-  return (
-    process.env.ANDROID_HOME ??
-    process.env.ANDROID_SDK_ROOT ??
-    join(homedir(), 'Library/Android/sdk')
-  );
+  if (process.env.ANDROID_HOME) return process.env.ANDROID_HOME;
+  if (process.env.ANDROID_SDK_ROOT) return process.env.ANDROID_SDK_ROOT;
+  return defaultAndroidSdkRoot(process.platform, homedir());
 }
 
-function sdkTool(relativePath: string, bareName: string): string {
-  const absolute = join(androidSdkRoot(), relativePath);
-  return existsSync(absolute) ? absolute : bareName;
+function sdkTool(relativePath: string, bareName: string, windowsExtension: string): string {
+  const fileName = isWindows ? `${relativePath}${windowsExtension}` : relativePath;
+  const absolute = join(androidSdkRoot(), fileName);
+  if (existsSync(absolute)) return absolute;
+  return isWindows ? `${bareName}${windowsExtension}` : bareName;
 }
 
-const emulatorBin = (): string => sdkTool('emulator/emulator', 'emulator');
-const avdmanagerBin = (): string => sdkTool('cmdline-tools/latest/bin/avdmanager', 'avdmanager');
+const emulatorBin = (): string => sdkTool('emulator/emulator', 'emulator', '.exe');
+const avdmanagerBin = (): string =>
+  sdkTool('cmdline-tools/latest/bin/avdmanager', 'avdmanager', '.bat');
 
 function hostAbi(): string {
   return process.arch === 'arm64' ? 'arm64-v8a' : 'x86_64';
@@ -100,12 +109,22 @@ async function runningEmulators(): Promise<Map<string, string>> {
   return map;
 }
 
+function quoteForCmd(value: string): string {
+  if (value === '') return '""';
+  return /[\s"&|<>()^;,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
 function avdmanagerCreate(args: string[]): Promise<{ ok: boolean; output: string }> {
   return new Promise((resolve) => {
     let child: ChildProcessWithoutNullStreams;
     let output = '';
     try {
-      child = spawn(avdmanagerBin(), args, { windowsHide: true });
+      child = isWindows
+        ? spawn([avdmanagerBin(), ...args].map(quoteForCmd).join(' '), {
+            windowsHide: true,
+            shell: true,
+          })
+        : spawn(avdmanagerBin(), args, { windowsHide: true });
     } catch (error) {
       resolve({ ok: false, output: describeError(error) });
       return;

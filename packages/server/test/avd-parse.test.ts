@@ -1,5 +1,6 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseAvdList } from '../src/devices/avd.ts';
+import { defaultAndroidSdkRoot, parseAvdList } from '../src/devices/avd.ts';
 import { mapAbi } from '../src/frida/frida-server-manager.ts';
 
 describe('mapAbi', () => {
@@ -13,6 +14,20 @@ describe('mapAbi', () => {
   it('returns null for unknown ABIs', () => {
     expect(mapAbi('mips')).toBeNull();
     expect(mapAbi('')).toBeNull();
+  });
+});
+
+describe('defaultAndroidSdkRoot', () => {
+  it('resolves the per-platform default SDK location', () => {
+    expect(defaultAndroidSdkRoot('win32', 'C:\\Users\\dev')).toBe(
+      join('C:\\Users\\dev', 'AppData', 'Local', 'Android', 'Sdk'),
+    );
+    expect(defaultAndroidSdkRoot('darwin', '/Users/dev')).toBe(
+      join('/Users/dev', 'Library', 'Android', 'sdk'),
+    );
+    expect(defaultAndroidSdkRoot('linux', '/home/dev')).toBe(
+      join('/home/dev', 'Android', 'Sdk'),
+    );
   });
 });
 

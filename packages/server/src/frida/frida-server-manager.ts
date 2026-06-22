@@ -67,7 +67,7 @@ export class FridaServerManager extends EventEmitter {
       if (!unxz.ok) {
         return this.setStatus({
           deviceId,
-          error: `Could not decompress frida-server (xz is required — install it with: brew install xz). ${detail(unxz)}`,
+          error: `Could not decompress frida-server (xz is required — ${xzInstallHint()}). ${detail(unxz)}`,
         });
       }
 
@@ -204,6 +204,14 @@ function detail(result: { stdout: string; stderr: string; code: number | null })
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function xzInstallHint(): string {
+  if (process.platform === 'win32') {
+    return 'install xz, e.g. "winget install xz", "scoop install xz" or "choco install xz"';
+  }
+  if (process.platform === 'darwin') return 'install it with: brew install xz';
+  return 'install it with your package manager, e.g. "apt install xz-utils"';
 }
 
 function delay(ms: number): Promise<void> {
