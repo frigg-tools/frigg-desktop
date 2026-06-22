@@ -360,6 +360,43 @@ export interface BreakpointsSnapshot {
   paused: PausedExchange[];
 }
 
+export interface FridaServerStatus {
+  installed: boolean;
+  running: boolean;
+  version: string | null;
+  deviceId: string | null;
+  error: string | null;
+}
+
+export interface FridaSessionStatus {
+  running: boolean;
+  deviceId: string | null;
+  target: string | null;
+  scriptId: string | null;
+  error: string | null;
+}
+
+export interface FridaMessage {
+  id: number;
+  timestamp: number;
+  kind: 'log' | 'send' | 'error' | 'system';
+  text: string;
+}
+
+export interface FridaScript {
+  id: string;
+  name: string;
+  source: string;
+  builtin: boolean;
+}
+
+export interface FridaSnapshot {
+  serverStatus: FridaServerStatus;
+  sessionStatus: FridaSessionStatus;
+  scripts: FridaScript[];
+  hostFridaVersion: string | null;
+}
+
 export type ServerEvent =
   | { type: 'request'; exchange: TrafficExchange }
   | { type: 'response'; exchange: TrafficExchange }
@@ -372,7 +409,10 @@ export type ServerEvent =
   | { type: 'log-status'; status: LogSessionStatus }
   | { type: 'breakpoint-paused'; paused: PausedExchange }
   | { type: 'breakpoint-resumed'; id: string }
-  | { type: 'breakpoints-updated'; snapshot: BreakpointsSnapshot };
+  | { type: 'breakpoints-updated'; snapshot: BreakpointsSnapshot }
+  | { type: 'frida-server-status'; status: FridaServerStatus }
+  | { type: 'frida-session-status'; status: FridaSessionStatus }
+  | { type: 'frida-message'; message: FridaMessage };
 
 export interface MocksSnapshot {
   folders: MockFolder[];
@@ -383,3 +423,4 @@ export const DEFAULT_PROXY_PORT = 8888;
 export const DEFAULT_API_PORT = 4848;
 export const TRAFFIC_BUFFER_LIMIT = 1000;
 export const BODY_CAPTURE_LIMIT = 262144;
+export const FRIDA_MESSAGE_BUFFER_LIMIT = 2000;

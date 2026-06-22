@@ -12,6 +12,7 @@ import { DbInspector } from './db/index.ts';
 import { disableMacProxyIfEnabledByFrigg } from './devices/macos-proxy.ts';
 import { getLanIp } from './lib/net.ts';
 import { apiClientPath, ensureFriggDirs, mocksPath, proxyCertsPath } from './lib/paths.ts';
+import { FridaManager } from './frida/index.ts';
 import { LogcatManager } from './logcat/index.ts';
 import { MockStore } from './mocks/store.ts';
 import { BreakpointManager } from './proxy/breakpoint-manager.ts';
@@ -73,6 +74,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const logcat = new LogcatManager();
   const db = new DbInspector();
   const apiClient = await ApiClientStore.load(apiClientPath);
+  const frida = new FridaManager();
 
   const app = express();
   app.use(express.json({ limit: '5mb' }));
@@ -88,6 +90,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
       apiClient,
       breakpoints,
       proxyCerts,
+      frida,
       reloadProxy: () => engine.reload(),
     }),
   );
@@ -99,6 +102,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   mocks.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   logcat.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   breakpoints.on('event', (ev: ServerEvent) => hub.broadcast(ev));
+  frida.on('event', (ev: ServerEvent) => hub.broadcast(ev));
 
   await new Promise<void>((resolve, reject) => {
     httpServer.once('error', reject);
@@ -120,6 +124,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
       proxyCerts.flush(),
       logcat.stop(),
       db.dispose(),
+      frida.stop(),
       disableMacProxyIfEnabledByFrigg(),
     ]);
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
