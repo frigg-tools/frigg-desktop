@@ -16,6 +16,13 @@ export async function adbStatus(): Promise<{ available: boolean; version?: strin
   return firstLine ? { available: true, version: firstLine } : { available: true };
 }
 
+async function readAvdName(serial: string): Promise<string | undefined> {
+  const result = await run('adb', ['-s', serial, 'emu', 'avd', 'name']);
+  if (!result.ok) return undefined;
+  const name = result.stdout.split('\n')[0]?.trim();
+  return name !== undefined && name !== '' && name !== 'OK' ? name : undefined;
+}
+
 export async function listAndroidDevices(): Promise<AndroidDevice[]> {
   const result = await run('adb', ['devices', '-l']);
   if (!result.ok) return [];
@@ -28,6 +35,7 @@ export async function listAndroidDevices(): Promise<AndroidDevice[]> {
     parsed.map(async (device) => ({
       ...device,
       proxyConfigured: await readProxyConfigured(device.serial),
+      avdName: device.isEmulator ? await readAvdName(device.serial) : undefined,
     })),
   );
 }

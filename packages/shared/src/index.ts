@@ -187,6 +187,7 @@ export type AndroidCertMode = 'system' | 'user-manual' | 'none';
 export interface AndroidDevice {
   serial: string;
   model: string;
+  avdName?: string;
   state: 'device' | 'offline' | 'unauthorized' | 'unknown';
   isEmulator: boolean;
   proxyConfigured: boolean;
