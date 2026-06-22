@@ -372,12 +372,87 @@ export type ServerEvent =
   | { type: 'log-status'; status: LogSessionStatus }
   | { type: 'breakpoint-paused'; paused: PausedExchange }
   | { type: 'breakpoint-resumed'; id: string }
-  | { type: 'breakpoints-updated'; snapshot: BreakpointsSnapshot };
+  | { type: 'breakpoints-updated'; snapshot: BreakpointsSnapshot }
+  | { type: 'sql-connections-updated'; connections: SqlConnection[] };
 
 export interface MocksSnapshot {
   folders: MockFolder[];
   rules: MockRule[];
 }
+
+export type SqlEngine = 'mysql' | 'mariadb' | 'postgres' | 'sqlite';
+export type SqlSslMode = 'disable' | 'require' | 'verify';
+export type SqlCommandKind = 'read' | 'write' | 'ddl' | 'other';
+export type SqlCell = string | number | boolean | null;
+
+export interface SqlConnection {
+  id: string;
+  name: string;
+  engine: SqlEngine;
+  host: string;
+  port: number;
+  user: string;
+  database: string;
+  ssl: SqlSslMode;
+  hasPassword: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SqlConnectionInput {
+  name: string;
+  engine: SqlEngine;
+  host: string;
+  port: number;
+  user: string;
+  database: string;
+  ssl: SqlSslMode;
+  password?: string;
+  caCert?: string;
+}
+
+export interface SqlColumn {
+  name: string;
+  dataType: string;
+  nullable: boolean;
+  isPrimaryKey: boolean;
+}
+
+export interface SqlTable {
+  name: string;
+  schema?: string;
+  columns: SqlColumn[];
+}
+
+export interface SqlSchema {
+  tables: SqlTable[];
+}
+
+export interface SqlQueryResult {
+  columns: string[];
+  rows: SqlCell[][];
+  rowCount: number;
+  affectedRows: number | null;
+  truncated: boolean;
+  durationMs: number;
+  command: SqlCommandKind;
+}
+
+export interface SqlConnectionTestResult {
+  ok: boolean;
+  serverVersion?: string;
+  error?: string;
+}
+
+export interface SqlRowEdit {
+  op: 'update' | 'insert' | 'delete';
+  table: string;
+  schema?: string;
+  pk: Array<{ column: string; value: SqlCell }>;
+  changes?: Array<{ column: string; value: SqlCell }>;
+}
+
+export const SQL_ROW_LIMIT = 1000;
 
 export const DEFAULT_PROXY_PORT = 8888;
 export const DEFAULT_API_PORT = 4848;
