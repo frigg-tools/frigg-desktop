@@ -10,6 +10,7 @@ import { buildRouter, type ApiDeps } from './api/router.ts';
 import { WsHub } from './api/ws.ts';
 import { DbInspector } from './db/index.ts';
 import { disableMacProxyIfEnabledByFrigg } from './devices/macos-proxy.ts';
+import { DeviceWatcher } from './devices/device-watcher.ts';
 import { getLanIp } from './lib/net.ts';
 import {
   apiClientPath,
@@ -20,6 +21,7 @@ import {
   sqlSecretKeyPath,
   sqlSecretsPath,
 } from './lib/paths.ts';
+import { FridaManager } from './frida/index.ts';
 import { LogcatManager } from './logcat/index.ts';
 import { MockStore } from './mocks/store.ts';
 import { BreakpointManager } from './proxy/breakpoint-manager.ts';
@@ -110,6 +112,8 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const logcat = new LogcatManager();
   const db = new DbInspector();
   const apiClient = await ApiClientStore.load(apiClientPath);
+  const frida = new FridaManager();
+  const deviceWatcher = new DeviceWatcher();
 
   const secretBox = options.secretBox ?? createFileSecretBox(sqlSecretKeyPath);
   const sqlSecrets = await SqlSecretStore.load(sqlSecretsPath, secretBox);
@@ -130,6 +134,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     proxyCerts,
     sql,
     sqlConnections,
+    frida,
     reloadProxy: () => engine.reload(),
   };
 
@@ -145,6 +150,9 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   logcat.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   breakpoints.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   sqlConnections.on('event', (ev: ServerEvent) => hub.broadcast(ev));
+  frida.on('event', (ev: ServerEvent) => hub.broadcast(ev));
+  deviceWatcher.on('event', (ev: ServerEvent) => hub.broadcast(ev));
+  deviceWatcher.start();
 
   const actualApiPort = await listenWithFallback(httpServer, apiPort);
   deps.apiPort = actualApiPort;
@@ -154,6 +162,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const host = lanIp ?? 'localhost';
 
   const stop = async (): Promise<void> => {
+    deviceWatcher.dispose();
     await Promise.allSettled([
       engine.stop(),
       mocks.flush(),
@@ -163,6 +172,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
       db.dispose(),
       sqlConnections.flush(),
       sql.disposeAll(),
+      frida.stop(),
       disableMacProxyIfEnabledByFrigg(),
     ]);
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));

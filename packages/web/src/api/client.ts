@@ -1,5 +1,7 @@
 import type {
   AndroidSetupResult,
+  Avd,
+  AvdCreateResult,
   ApiClientCert,
   ApiClientSnapshot,
   ApiEnvironment,
@@ -14,6 +16,9 @@ import type {
   DbQueryResult,
   DeviceApp,
   DevicesSnapshot,
+  FridaServerStatus,
+  FridaSessionStatus,
+  FridaSnapshot,
   LogPlatform,
   LogSessionStatus,
   McpServerInfo,
@@ -165,6 +170,54 @@ export function clearLogs(): Promise<{ ok: boolean }> {
 
 export function getDeviceApps(platform: LogPlatform, id: string): Promise<DeviceApp[]> {
   return request(`/api/apps?platform=${platform}&id=${encodeURIComponent(id)}`);
+}
+
+export function getFridaSnapshot(): Promise<FridaSnapshot> {
+  return request('/api/frida/snapshot');
+}
+
+export function getFridaStatus(deviceId: string): Promise<FridaServerStatus> {
+  return request(`/api/frida/status?deviceId=${encodeURIComponent(deviceId)}`);
+}
+
+export function installFrida(deviceId: string): Promise<FridaServerStatus> {
+  return request('/api/frida/install', jsonInit('POST', { deviceId }));
+}
+
+export function startFridaServer(deviceId: string): Promise<FridaServerStatus> {
+  return request('/api/frida/server/start', jsonInit('POST', { deviceId }));
+}
+
+export function stopFridaServer(deviceId?: string): Promise<FridaServerStatus> {
+  return request('/api/frida/server/stop', jsonInit('POST', deviceId ? { deviceId } : {}));
+}
+
+export interface RunFridaInput {
+  deviceId: string;
+  target: string;
+  source: string;
+  scriptId: string;
+  spawnMode: boolean;
+}
+
+export function runFridaScript(input: RunFridaInput): Promise<FridaSessionStatus> {
+  return request('/api/frida/run', jsonInit('POST', input));
+}
+
+export function stopFridaScript(): Promise<FridaSessionStatus> {
+  return request('/api/frida/stop', { method: 'POST' });
+}
+
+export function getAvds(): Promise<Avd[]> {
+  return request('/api/avd');
+}
+
+export function bootAvd(name: string): Promise<{ ok: boolean; message: string }> {
+  return request('/api/avd/boot', jsonInit('POST', { name }));
+}
+
+export function createAvd(name: string, apiLevel: number): Promise<AvdCreateResult> {
+  return request('/api/avd/create', jsonInit('POST', { name, apiLevel }));
 }
 
 export function getDbFiles(platform: LogPlatform, id: string, app: string): Promise<DbFile[]> {

@@ -10,6 +10,7 @@ import DatabaseScreen from './screens/DatabaseScreen';
 import SqlScreen from './screens/SqlScreen';
 import ClientScreen from './screens/ClientScreen';
 import McpScreen from './screens/McpScreen';
+import FridaScreen from './screens/FridaScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
 import PausedExchangeModal from './components/breakpoints/PausedExchangeModal';
 
@@ -150,6 +151,24 @@ function McpIcon() {
   );
 }
 
+function FridaIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="m18 2 4 4-3 3-4-4Z" />
+      <path d="m15 5-9 9-2 6 6-2 9-9" />
+      <path d="m9 11 2 2" />
+    </svg>
+  );
+}
+
 interface NavItem {
   screen: Screen;
   labelKey: string;
@@ -161,6 +180,7 @@ const NAV_ITEMS: NavItem[] = [
   { screen: 'client', labelKey: 'nav.client', icon: <SendIcon /> },
   { screen: 'mocks', labelKey: 'nav.mocks', icon: <BoltIcon /> },
   { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
+  { screen: 'frida', labelKey: 'nav.frida', icon: <FridaIcon /> },
   { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
   { screen: 'sql', labelKey: 'nav.sql', icon: <DatabaseServerIcon /> },
   { screen: 'devices', labelKey: 'nav.devices', icon: <SmartphoneIcon /> },
@@ -216,6 +236,10 @@ export default function App() {
     void useAppStore
       .getState()
       .loadSqlConnections()
+      .catch(() => undefined);
+    void useAppStore
+      .getState()
+      .loadFrida()
       .catch(() => undefined);
     let dropped = false;
     return connectWs(
@@ -303,6 +327,8 @@ export default function App() {
           <ClientScreen />
         ) : screen === 'mcp' ? (
           <McpScreen />
+        ) : screen === 'frida' ? (
+          <FridaScreen />
         ) : (
           <DevicesScreen />
         )}

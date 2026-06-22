@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import {
+  FRIDA_MESSAGE_BUFFER_LIMIT,
   SQL_PAGE_SIZE,
   TRAFFIC_BUFFER_LIMIT,
   type SqlCell,
@@ -9,6 +10,8 @@ import {
   type ApiRequest,
   type ApiRunResult,
   type ApiWorkspace,
+  type Avd,
+  type AvdCreateResult,
   type BreakpointResume,
   type BreakpointRuleInput,
   type BreakpointsSnapshot,
@@ -16,6 +19,10 @@ import {
   type DbQueryResult,
   type DeviceApp,
   type DevicesSnapshot,
+  type FridaMessage,
+  type FridaScript,
+  type FridaServerStatus,
+  type FridaSessionStatus,
   type LogEntry,
   type LogLevel,
   type LogSessionStatus,
@@ -37,7 +44,7 @@ import {
 import * as api from './api/client';
 import { recordSqlHistory } from './components/sql/history';
 
-export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql';
+export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida';
 export type LogLevelFilter = LogLevel | 'ALL';
 
 const LOG_BUFFER_LIMIT = 5000;
@@ -186,6 +193,36 @@ export interface AppState {
   cancelDestructive: () => void;
   editSqlRow: (edit: SqlRowEdit) => Promise<void>;
   loadMoreSql: () => Promise<void>;
+  fridaDeviceId: string | null;
+  fridaServerStatus: FridaServerStatus;
+  fridaSessionStatus: FridaSessionStatus;
+  fridaMessages: FridaMessage[];
+  fridaScripts: FridaScript[];
+  fridaTarget: string;
+  fridaSource: string;
+  fridaScriptId: string;
+  fridaSpawnMode: boolean;
+  hostFridaVersion: string | null;
+  fridaBusy: boolean;
+  fridaRecentTargets: string[];
+  setFridaDeviceId: (id: string | null) => void;
+  setFridaTarget: (value: string) => void;
+  setFridaSource: (value: string) => void;
+  selectFridaExample: (id: string) => void;
+  setFridaSpawnMode: (value: boolean) => void;
+  loadFrida: () => Promise<void>;
+  refreshFridaStatus: () => Promise<void>;
+  installFrida: () => Promise<void>;
+  startFridaServer: () => Promise<void>;
+  stopFridaServer: () => Promise<void>;
+  runFridaScript: () => Promise<void>;
+  stopFridaScript: () => Promise<void>;
+  clearFridaMessages: () => void;
+  avds: Avd[];
+  avdBusy: boolean;
+  loadAvds: () => Promise<void>;
+  bootAvd: (name: string) => Promise<void>;
+  createAvd: (name: string, apiLevel: number) => Promise<AvdCreateResult>;
   loadAll: () => Promise<void>;
   refreshMocks: () => Promise<void>;
   refreshDevices: () => Promise<void>;
@@ -300,6 +337,64 @@ function reconcileLogTarget(
   return devices?.iosSimulators.some((sim) => sim.udid === target.id) ? target : null;
 }
 
+function appendFridaMessages(list: FridaMessage[], incoming: FridaMessage[]): FridaMessage[] {
+  const next = list.concat(incoming);
+  return next.length > FRIDA_MESSAGE_BUFFER_LIMIT
+    ? next.slice(next.length - FRIDA_MESSAGE_BUFFER_LIMIT)
+    : next;
+}
+
+let pendingFridaMessages: FridaMessage[] = [];
+let fridaFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleFridaFlush(flush: () => void): void {
+  if (fridaFlushTimer) return;
+  fridaFlushTimer = setTimeout(() => {
+    fridaFlushTimer = null;
+    flush();
+  }, LOG_FLUSH_INTERVAL_MS);
+}
+
+function resetPendingFrida(): void {
+  pendingFridaMessages = [];
+  if (fridaFlushTimer) {
+    clearTimeout(fridaFlushTimer);
+    fridaFlushTimer = null;
+  }
+}
+
+function reconcileFridaDevice(
+  deviceId: string | null,
+  devices: DevicesSnapshot | null,
+  running: boolean,
+): string | null {
+  if (!deviceId || running) return deviceId;
+  return devices?.android.some((device) => device.serial === deviceId) ? deviceId : null;
+}
+
+const FRIDA_TARGETS_KEY = 'frigg-frida-targets';
+
+function readFridaTargets(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FRIDA_TARGETS_KEY) ?? '[]') as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberFridaTarget(target: string, current: string[]): string[] {
+  const trimmed = target.trim();
+  if (trimmed === '') return current;
+  const next = [trimmed, ...current.filter((item) => item !== trimmed)].slice(0, 10);
+  try {
+    localStorage.setItem(FRIDA_TARGETS_KEY, JSON.stringify(next));
+  } catch {
+    void 0;
+  }
+  return next;
+}
+
 function upsertExchange(
   exchanges: TrafficExchange[],
   exchange: TrafficExchange,
@@ -388,6 +483,119 @@ export const useAppStore = create<AppState>((set, get) => ({
     resetPendingLogs();
     await api.clearLogs();
     set({ logEntries: [] });
+  },
+  fridaDeviceId: null,
+  fridaServerStatus: { installed: false, running: false, version: null, deviceId: null, error: null },
+  fridaSessionStatus: { running: false, deviceId: null, target: null, scriptId: null, error: null },
+  fridaMessages: [],
+  fridaScripts: [],
+  fridaTarget: '',
+  fridaSource: '',
+  fridaScriptId: 'custom',
+  fridaSpawnMode: false,
+  hostFridaVersion: null,
+  fridaBusy: false,
+  fridaRecentTargets: readFridaTargets(),
+  setFridaDeviceId: (id) => {
+    set({ fridaDeviceId: id });
+    if (id) void get().refreshFridaStatus();
+  },
+  setFridaTarget: (value) => set({ fridaTarget: value }),
+  setFridaSource: (value) => set({ fridaSource: value, fridaScriptId: 'custom' }),
+  selectFridaExample: (exampleId) => {
+    const script = get().fridaScripts.find((item) => item.id === exampleId);
+    if (script) set({ fridaSource: script.source, fridaScriptId: script.id });
+  },
+  setFridaSpawnMode: (value) => set({ fridaSpawnMode: value }),
+  loadFrida: async () => {
+    const snapshot = await api.getFridaSnapshot();
+    set({
+      fridaScripts: snapshot.scripts,
+      hostFridaVersion: snapshot.hostFridaVersion,
+      fridaServerStatus: snapshot.serverStatus,
+      fridaSessionStatus: snapshot.sessionStatus,
+    });
+    if (get().fridaSource.trim() === '' && snapshot.scripts.length > 0) {
+      set({ fridaSource: snapshot.scripts[0].source, fridaScriptId: snapshot.scripts[0].id });
+    }
+  },
+  refreshFridaStatus: async () => {
+    const id = get().fridaDeviceId;
+    if (!id) return;
+    try {
+      const status = await api.getFridaStatus(id);
+      if (get().fridaDeviceId === id) set({ fridaServerStatus: status });
+    } catch {
+      void 0;
+    }
+  },
+  installFrida: async () => {
+    const id = get().fridaDeviceId;
+    if (!id) return;
+    set({ fridaBusy: true });
+    try {
+      set({ fridaServerStatus: await api.installFrida(id) });
+    } finally {
+      set({ fridaBusy: false });
+    }
+  },
+  startFridaServer: async () => {
+    const id = get().fridaDeviceId;
+    if (!id) return;
+    set({ fridaBusy: true });
+    try {
+      set({ fridaServerStatus: await api.startFridaServer(id) });
+    } finally {
+      set({ fridaBusy: false });
+    }
+  },
+  stopFridaServer: async () => {
+    set({ fridaServerStatus: await api.stopFridaServer(get().fridaDeviceId ?? undefined) });
+  },
+  runFridaScript: async () => {
+    const { fridaDeviceId, fridaTarget, fridaSource, fridaScriptId, fridaSpawnMode } = get();
+    if (!fridaDeviceId) return;
+    set({ fridaRecentTargets: rememberFridaTarget(fridaTarget, get().fridaRecentTargets) });
+    resetPendingFrida();
+    set({ fridaMessages: [] });
+    const status = await api.runFridaScript({
+      deviceId: fridaDeviceId,
+      target: fridaTarget,
+      source: fridaSource,
+      scriptId: fridaScriptId,
+      spawnMode: fridaSpawnMode,
+    });
+    set({ fridaSessionStatus: status });
+  },
+  stopFridaScript: async () => {
+    set({ fridaSessionStatus: await api.stopFridaScript() });
+  },
+  clearFridaMessages: () => {
+    resetPendingFrida();
+    set({ fridaMessages: [] });
+  },
+  avds: [],
+  avdBusy: false,
+  loadAvds: async () => {
+    try {
+      set({ avds: await api.getAvds() });
+    } catch {
+      set({ avds: [] });
+    }
+  },
+  bootAvd: async (name) => {
+    await api.bootAvd(name);
+    void get().loadAvds();
+  },
+  createAvd: async (name, apiLevel) => {
+    set({ avdBusy: true });
+    try {
+      const result = await api.createAvd(name, apiLevel);
+      await get().loadAvds();
+      return result;
+    } finally {
+      set({ avdBusy: false });
+    }
   },
   dbTarget: null,
   dbApps: [],
@@ -918,6 +1126,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       rules: mocks.rules,
       devices,
       logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming),
+      fridaDeviceId: reconcileFridaDevice(get().fridaDeviceId, devices, get().fridaSessionStatus.running),
     });
   },
   refreshMocks: async () => {
@@ -926,7 +1135,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   refreshDevices: async () => {
     const devices = await api.getDevices();
-    set({ devices, logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming) });
+    set({
+      devices,
+      logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming),
+      fridaDeviceId: reconcileFridaDevice(get().fridaDeviceId, devices, get().fridaSessionStatus.running),
+    });
   },
   refreshStatus: async () => {
     const status = await api.getStatus();
@@ -958,6 +1171,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       case 'devices-updated':
         void get()
           .refreshDevices()
+          .catch(() => undefined);
+        void get()
+          .loadAvds()
           .catch(() => undefined);
         break;
       case 'log-entry':
@@ -995,6 +1211,20 @@ export const useAppStore = create<AppState>((set, get) => ({
         break;
       case 'sql-connections-updated':
         set({ sqlConnections: ev.connections });
+        break;
+      case 'frida-server-status':
+        set({ fridaServerStatus: ev.status });
+        break;
+      case 'frida-session-status':
+        set({ fridaSessionStatus: ev.status });
+        break;
+      case 'frida-message':
+        pendingFridaMessages.push(ev.message);
+        scheduleFridaFlush(() => {
+          const batch = pendingFridaMessages;
+          pendingFridaMessages = [];
+          if (batch.length > 0) set({ fridaMessages: appendFridaMessages(get().fridaMessages, batch) });
+        });
         break;
     }
   },

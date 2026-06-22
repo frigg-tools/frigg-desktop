@@ -24,7 +24,7 @@ function buildTarget(
     const serial = value.slice('android:'.length);
     const device = android.find((d) => d.serial === serial);
     if (!device) return null;
-    return { platform: 'android', id: device.serial, label: device.model };
+    return { platform: 'android', id: device.serial, label: device.avdName ?? device.model };
   }
   if (value.startsWith('ios:')) {
     const udid = value.slice('ios:'.length);
@@ -60,8 +60,9 @@ export default function LogcatDevicePicker({ disabled }: LogcatDevicePickerProps
         <optgroup label={t('logcat.device.android')}>
           {android.map((device) => (
             <option key={device.serial} value={androidValue(device.serial)}>
-              {device.model}
+              {device.avdName ?? device.model}
               {device.isEmulator ? ` (${t('logcat.device.emulator')})` : ''} · {device.serial}
+              {device.state !== 'device' ? ` · ${device.state}` : ''}
             </option>
           ))}
         </optgroup>

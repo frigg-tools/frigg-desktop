@@ -16,7 +16,7 @@ function buildTarget(
     const serial = value.slice('android:'.length);
     const device = android.find((d) => d.serial === serial);
     if (!device) return null;
-    return { platform: 'android', id: device.serial, label: device.model };
+    return { platform: 'android', id: device.serial, label: device.avdName ?? device.model };
   }
   if (value.startsWith('ios:')) {
     const udid = value.slice('ios:'.length);
@@ -47,8 +47,9 @@ export default function DatabaseDevicePicker() {
         <optgroup label={t('database.device.android')}>
           {android.map((device) => (
             <option key={device.serial} value={`android:${device.serial}`}>
-              {device.model}
+              {device.avdName ?? device.model}
               {device.isEmulator ? ` (${t('database.device.emulator')})` : ''} · {device.serial}
+              {device.state !== 'device' ? ` · ${device.state}` : ''}
             </option>
           ))}
         </optgroup>

@@ -33,6 +33,7 @@ import type { SqlConnectionPatch, SqlConnectionStore } from '../sql/connection-s
 import { runRequest } from '../api-client/runner.ts';
 import { listApps } from '../devices/apps.ts';
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
+import { bootAvd, createRootedAvd, listAvds } from '../devices/avd.ts';
 import {
   installSimCert,
   listBootedSimulators,
@@ -43,6 +44,7 @@ import { getMacProxyState, setMacProxy } from '../devices/macos-proxy.ts';
 import { run } from '../lib/exec.ts';
 import { mcpServerInfo } from './mcp-info.ts';
 import type { DbInspector } from '../db/index.ts';
+import type { FridaManager } from '../frida/index.ts';
 import { serverLocale, type ServerLocale } from '../i18n.ts';
 import { getLanIp } from '../lib/net.ts';
 import type { LogcatManager } from '../logcat/index.ts';
@@ -66,6 +68,7 @@ export interface ApiDeps {
   proxyCerts: ProxyCertStore;
   sql: SqlManager;
   sqlConnections: SqlConnectionStore;
+  frida: FridaManager;
   reloadProxy: () => Promise<void>;
 }
 
@@ -241,6 +244,28 @@ function parseLogTarget(body: unknown): { target: LogTarget; packageFilter?: str
 function parsePlatform(raw: unknown): LogPlatform {
   if (raw === 'android' || raw === 'ios') return raw;
   badRequest("platform must be one of 'android', 'ios'");
+}
+
+function parseFridaDeviceId(body: unknown): string {
+  const record = asRecord(body, 'frida request');
+  return parseNonEmpty(record.deviceId, 'deviceId');
+}
+
+function parseRunScript(body: unknown): {
+  deviceId: string;
+  target: string;
+  scriptId: string;
+  source: string;
+  spawnMode?: boolean;
+} {
+  const record = asRecord(body, 'frida script');
+  const deviceId = parseNonEmpty(record.deviceId, 'deviceId');
+  const target = parseNonEmpty(record.target, 'target');
+  const source = parseNonEmpty(record.source, 'source');
+  const scriptId =
+    typeof record.scriptId === 'string' && record.scriptId.trim() !== '' ? record.scriptId : 'custom';
+  const spawnMode = record.spawnMode === true;
+  return { deviceId, target, scriptId, source, spawnMode };
 }
 
 function parseNonEmpty(raw: unknown, label: string): string {
@@ -800,6 +825,83 @@ export function buildRouter(deps: ApiDeps): Router {
   router.get('/api/logs/status', (_req, res) => {
     res.json(deps.logcat.status);
   });
+
+  router.get(
+    '/api/frida/snapshot',
+    asyncHandler(async (_req, res) => {
+      res.json(await deps.frida.snapshot());
+    }),
+  );
+
+  router.get(
+    '/api/frida/status',
+    asyncHandler(async (req, res) => {
+      res.json(await deps.frida.refreshServer(parseNonEmpty(req.query.deviceId, 'deviceId')));
+    }),
+  );
+
+  router.post(
+    '/api/frida/install',
+    asyncHandler(async (req, res) => {
+      res.json(await deps.frida.installServer(parseFridaDeviceId(req.body)));
+    }),
+  );
+
+  router.post(
+    '/api/frida/server/start',
+    asyncHandler(async (req, res) => {
+      res.json(await deps.frida.startServer(parseFridaDeviceId(req.body)));
+    }),
+  );
+
+  router.post(
+    '/api/frida/server/stop',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'frida server stop');
+      const deviceId =
+        typeof record.deviceId === 'string' && record.deviceId.trim() !== '' ? record.deviceId : undefined;
+      res.json(await deps.frida.stopServer(deviceId));
+    }),
+  );
+
+  router.post(
+    '/api/frida/run',
+    asyncHandler(async (req, res) => {
+      res.json(await deps.frida.runScript(parseRunScript(req.body)));
+    }),
+  );
+
+  router.post(
+    '/api/frida/stop',
+    asyncHandler(async (_req, res) => {
+      res.json(await deps.frida.stopScript());
+    }),
+  );
+
+  router.get(
+    '/api/avd',
+    asyncHandler(async (_req, res) => {
+      res.json(await listAvds());
+    }),
+  );
+
+  router.post(
+    '/api/avd/boot',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'avd boot');
+      res.json(bootAvd(parseNonEmpty(record.name, 'name')));
+    }),
+  );
+
+  router.post(
+    '/api/avd/create',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'avd create');
+      const name = parseNonEmpty(record.name, 'name');
+      const apiLevel = typeof record.apiLevel === 'number' ? record.apiLevel : 34;
+      res.json(await createRootedAvd(name, apiLevel));
+    }),
+  );
 
   router.get(
     '/api/apps',

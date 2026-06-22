@@ -145,7 +145,9 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
         />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="truncate text-[13px] font-medium text-zinc-200">{device.model}</p>
+            <p className="truncate text-[13px] font-medium text-zinc-200">
+              {device.avdName ?? device.model}
+            </p>
             {device.isEmulator ? (
               <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-1.5 py-px text-[9px] font-medium uppercase tracking-widest text-sky-400">
                 {t('devices.android.emulator')}
@@ -157,7 +159,9 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
               </span>
             ) : null}
           </div>
-          <p className="font-mono text-[11px] text-zinc-500">{device.serial}</p>
+          <p className="font-mono text-[11px] text-zinc-500">
+            {device.avdName ? `${device.serial} · ${device.model}` : device.serial}
+          </p>
         </div>
         <div className="flex-1" />
         <span className="text-[10px] uppercase tracking-widest text-zinc-600">
