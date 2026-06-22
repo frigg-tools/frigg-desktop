@@ -397,6 +397,17 @@ export interface FridaSnapshot {
   hostFridaVersion: string | null;
 }
 
+export interface Avd {
+  name: string;
+  booted: boolean;
+  serial: string | null;
+}
+
+export interface AvdCreateResult {
+  ok: boolean;
+  message: string;
+}
+
 export type ServerEvent =
   | { type: 'request'; exchange: TrafficExchange }
   | { type: 'response'; exchange: TrafficExchange }

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../store';
 import { useT } from '../i18n';
+import EmulatorPanel from '../components/frida/EmulatorPanel';
 
 const btn =
   'rounded-md border border-zinc-700 px-3 py-1.5 text-[12px] font-medium text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40';
@@ -23,6 +24,7 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
 
 export default function FridaScreen() {
   const t = useT();
+  const avds = useAppStore((s) => s.avds);
   const devices = useAppStore((s) => s.devices);
   const deviceId = useAppStore((s) => s.fridaDeviceId);
   const serverStatus = useAppStore((s) => s.fridaServerStatus);
@@ -37,7 +39,6 @@ export default function FridaScreen() {
   const hostVersion = useAppStore((s) => s.hostFridaVersion);
   const busy = useAppStore((s) => s.fridaBusy);
 
-  const setDeviceId = useAppStore((s) => s.setFridaDeviceId);
   const setTarget = useAppStore((s) => s.setFridaTarget);
   const setSource = useAppStore((s) => s.setFridaSource);
   const selectExample = useAppStore((s) => s.selectFridaExample);
@@ -49,13 +50,20 @@ export default function FridaScreen() {
   const stopScript = useAppStore((s) => s.stopFridaScript);
   const clearMessages = useAppStore((s) => s.clearFridaMessages);
 
-  const androidDevices = devices?.android ?? [];
   const consoleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = consoleRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  const selectedName = (() => {
+    if (!deviceId) return null;
+    const avd = avds.find((item) => item.serial === deviceId);
+    if (avd) return avd.name;
+    const device = devices?.android.find((item) => item.serial === deviceId);
+    return device ? device.model || device.serial : deviceId;
+  })();
 
   return (
     <div className="flex h-full flex-col">
@@ -73,67 +81,46 @@ export default function FridaScreen() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-4 border-b border-zinc-800/80 px-4 py-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-            {t('frida.device.label')}
-          </span>
-          <select
-            value={deviceId ?? ''}
-            onChange={(e) => setDeviceId(e.target.value || null)}
-            disabled={sessionStatus.running}
-            className="min-w-56 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-[13px] text-zinc-200 disabled:opacity-50"
-          >
-            <option value="">{t('frida.device.none')}</option>
-            {androidDevices.map((device) => (
-              <option key={device.serial} value={device.serial}>
-                {device.model || device.serial}
-                {device.isEmulator ? ' (emulator)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+      <EmulatorPanel />
 
-        <div className="flex items-center gap-2 pb-1.5">
-          <StatusPill
-            ok={serverStatus.installed}
-            label={serverStatus.installed ? t('frida.server.installed') : t('frida.server.notInstalled')}
-          />
-          <StatusPill
-            ok={serverStatus.running}
-            label={serverStatus.running ? t('frida.server.running') : t('frida.server.stopped')}
-          />
-        </div>
-
-        <div className="flex items-center gap-2 pb-1.5">
-          <button
-            type="button"
-            disabled={!deviceId || busy}
-            onClick={() => void install().catch(() => undefined)}
-            className={btn}
-          >
-            {t('frida.server.install')}
-          </button>
-          {serverStatus.running ? (
-            <button
-              type="button"
-              disabled={!deviceId}
-              onClick={() => void stopServer().catch(() => undefined)}
-              className={btnStop}
-            >
-              {t('frida.server.stop')}
+      <div className="flex flex-wrap items-center gap-3 border-b border-zinc-800/80 px-4 py-3">
+        <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+          frida-server
+          {selectedName ? (
+            <>
+              {' '}
+              <span className="text-zinc-600">{t('frida.server.on')}</span>{' '}
+              <span className="font-mono text-zinc-300">{selectedName}</span>
+            </>
+          ) : null}
+        </span>
+        {deviceId ? (
+          <>
+            <StatusPill
+              ok={serverStatus.installed}
+              label={serverStatus.installed ? t('frida.server.installed') : t('frida.server.notInstalled')}
+            />
+            <StatusPill
+              ok={serverStatus.running}
+              label={serverStatus.running ? t('frida.server.running') : t('frida.server.stopped')}
+            />
+            <span className="flex-1" />
+            <button type="button" disabled={busy} onClick={() => void install().catch(() => undefined)} className={btn}>
+              {t('frida.server.install')}
             </button>
-          ) : (
-            <button
-              type="button"
-              disabled={!deviceId || busy}
-              onClick={() => void startServer().catch(() => undefined)}
-              className={btnGo}
-            >
-              {t('frida.server.start')}
-            </button>
-          )}
-        </div>
+            {serverStatus.running ? (
+              <button type="button" onClick={() => void stopServer().catch(() => undefined)} className={btnStop}>
+                {t('frida.server.stop')}
+              </button>
+            ) : (
+              <button type="button" disabled={busy} onClick={() => void startServer().catch(() => undefined)} className={btnGo}>
+                {t('frida.server.start')}
+              </button>
+            )}
+          </>
+        ) : (
+          <span className="text-[11px] text-zinc-600">{t('frida.server.pickDevice')}</span>
+        )}
       </div>
 
       {serverStatus.error ? (
@@ -179,11 +166,7 @@ export default function FridaScreen() {
           />
           <div className="flex items-center gap-3 border-t border-zinc-800/80 px-3 py-2">
             {sessionStatus.running ? (
-              <button
-                type="button"
-                onClick={() => void stopScript().catch(() => undefined)}
-                className={btnStop}
-              >
+              <button type="button" onClick={() => void stopScript().catch(() => undefined)} className={btnStop}>
                 {t('frida.script.stop')}
               </button>
             ) : (

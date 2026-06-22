@@ -26,6 +26,7 @@ import { ApiClientStore } from '../api-client/store.ts';
 import { runRequest } from '../api-client/runner.ts';
 import { listApps } from '../devices/apps.ts';
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
+import { bootAvd, createRootedAvd, listAvds } from '../devices/avd.ts';
 import {
   installSimCert,
   listBootedSimulators,
@@ -762,6 +763,31 @@ export function buildRouter(deps: ApiDeps): Router {
     '/api/frida/stop',
     asyncHandler(async (_req, res) => {
       res.json(await deps.frida.stopScript());
+    }),
+  );
+
+  router.get(
+    '/api/avd',
+    asyncHandler(async (_req, res) => {
+      res.json(await listAvds());
+    }),
+  );
+
+  router.post(
+    '/api/avd/boot',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'avd boot');
+      res.json(bootAvd(parseNonEmpty(record.name, 'name')));
+    }),
+  );
+
+  router.post(
+    '/api/avd/create',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'avd create');
+      const name = parseNonEmpty(record.name, 'name');
+      const apiLevel = typeof record.apiLevel === 'number' ? record.apiLevel : 34;
+      res.json(await createRootedAvd(name, apiLevel));
     }),
   );
 

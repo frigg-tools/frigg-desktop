@@ -8,6 +8,8 @@ import {
   type ApiRequest,
   type ApiRunResult,
   type ApiWorkspace,
+  type Avd,
+  type AvdCreateResult,
   type BreakpointResume,
   type BreakpointRuleInput,
   type BreakpointsSnapshot,
@@ -172,6 +174,11 @@ export interface AppState {
   runFridaScript: () => Promise<void>;
   stopFridaScript: () => Promise<void>;
   clearFridaMessages: () => void;
+  avds: Avd[];
+  avdBusy: boolean;
+  loadAvds: () => Promise<void>;
+  bootAvd: (name: string) => Promise<void>;
+  createAvd: (name: string, apiLevel: number) => Promise<AvdCreateResult>;
   loadAll: () => Promise<void>;
   refreshMocks: () => Promise<void>;
   refreshDevices: () => Promise<void>;
@@ -500,6 +507,29 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearFridaMessages: () => {
     resetPendingFrida();
     set({ fridaMessages: [] });
+  },
+  avds: [],
+  avdBusy: false,
+  loadAvds: async () => {
+    try {
+      set({ avds: await api.getAvds() });
+    } catch {
+      set({ avds: [] });
+    }
+  },
+  bootAvd: async (name) => {
+    await api.bootAvd(name);
+    void get().loadAvds();
+  },
+  createAvd: async (name, apiLevel) => {
+    set({ avdBusy: true });
+    try {
+      const result = await api.createAvd(name, apiLevel);
+      await get().loadAvds();
+      return result;
+    } finally {
+      set({ avdBusy: false });
+    }
   },
   dbTarget: null,
   dbApps: [],

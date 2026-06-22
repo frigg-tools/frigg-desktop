@@ -1,5 +1,7 @@
 import type {
   AndroidSetupResult,
+  Avd,
+  AvdCreateResult,
   ApiClientCert,
   ApiClientSnapshot,
   ApiEnvironment,
@@ -198,6 +200,18 @@ export function runFridaScript(input: RunFridaInput): Promise<FridaSessionStatus
 
 export function stopFridaScript(): Promise<FridaSessionStatus> {
   return request('/api/frida/stop', { method: 'POST' });
+}
+
+export function getAvds(): Promise<Avd[]> {
+  return request('/api/avd');
+}
+
+export function bootAvd(name: string): Promise<{ ok: boolean; message: string }> {
+  return request('/api/avd/boot', jsonInit('POST', { name }));
+}
+
+export function createAvd(name: string, apiLevel: number): Promise<AvdCreateResult> {
+  return request('/api/avd/create', jsonInit('POST', { name, apiLevel }));
 }
 
 export function getDbFiles(platform: LogPlatform, id: string, app: string): Promise<DbFile[]> {

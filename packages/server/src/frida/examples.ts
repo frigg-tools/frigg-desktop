@@ -20,6 +20,28 @@ export const FRIDA_EXAMPLES: FridaScript[] = [
 });`,
   },
   {
+    id: 'replace-text',
+    name: 'Replace text in UI',
+    builtin: true,
+    source: `// Replace one text with another in any TextView. Edit FROM / TO.
+const FROM = 'Entrar';
+const TO = 'Frigg';
+Java.perform(() => {
+  const JString = Java.use('java.lang.String');
+  const TextView = Java.use('android.widget.TextView');
+  TextView.setText.overload('java.lang.CharSequence').implementation = function (text) {
+    const value = text ? text.toString() : '';
+    if (value.indexOf(FROM) !== -1) {
+      send('replaced "' + FROM + '" with "' + TO + '"');
+      this.setText(JString.$new(value.split(FROM).join(TO)));
+      return;
+    }
+    this.setText(text);
+  };
+  send('hooked TextView.setText');
+});`,
+  },
+  {
     id: 'list-classes',
     name: 'List loaded classes',
     builtin: true,
