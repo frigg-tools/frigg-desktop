@@ -151,13 +151,17 @@ function SqlResultsGrid({ result }: SqlResultsGridProps) {
       setEditing(null);
       return;
     }
-    const column = result.columns[editing.col];
     const original = result.rows[editing.row][editing.col] ?? null;
-    const next = parseCellInput(draft);
-    if (next === original) {
+    if (draft === cellText(original)) {
       setEditing(null);
       return;
     }
+    const column = result.columns[editing.col];
+    const lowered = draft.trim().toLowerCase();
+    const next: SqlCell =
+      typeof original === 'boolean' && (lowered === 'true' || lowered === 'false')
+        ? lowered === 'true'
+        : parseCellInput(draft);
     const edit: SqlRowEdit = {
       op: 'update',
       table: currentTable,

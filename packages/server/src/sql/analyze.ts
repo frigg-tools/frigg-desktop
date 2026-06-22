@@ -67,28 +67,70 @@ function stripLeading(sql: string): string {
   }
 }
 
-const READ = /^(select|with|show|explain|pragma|describe|desc)\b/i;
-const WRITE = /^(insert|update|delete|replace|merge|upsert)\b/i;
-const DDL = /^(create|alter|drop|truncate|rename)\b/i;
+const READ_HEAD = /^(select|with|show|explain|pragma|describe|desc)\b/i;
+const WRITE_WORDS = new Set(['insert', 'update', 'delete', 'replace', 'merge', 'upsert']);
+const DDL_WORDS = new Set(['create', 'alter', 'drop', 'truncate', 'rename']);
 
-function classify(head: string): SqlCommandKind {
-  if (READ.test(head)) return 'read';
-  if (WRITE.test(head)) return 'write';
-  if (DDL.test(head)) return 'ddl';
+function topLevelTokens(cleaned: string): string[] {
+  const tokens: string[] = [];
+  let depth = 0;
+  let word = '';
+  const push = () => {
+    if (word !== '') {
+      tokens.push(word.toLowerCase());
+      word = '';
+    }
+  };
+  for (let i = 0; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (ch === '(') {
+      push();
+      depth++;
+      continue;
+    }
+    if (ch === ')') {
+      push();
+      if (depth > 0) depth--;
+      continue;
+    }
+    if (depth === 0 && /[A-Za-z0-9_]/.test(ch)) {
+      word += ch;
+      continue;
+    }
+    push();
+  }
+  push();
+  return tokens;
+}
+
+function classify(head: string, tokens: string[]): SqlCommandKind {
+  if (/^with\b/i.test(head)) {
+    if (tokens.some((token) => WRITE_WORDS.has(token))) return 'write';
+    if (tokens.some((token) => DDL_WORDS.has(token))) return 'ddl';
+    return 'read';
+  }
+  if (READ_HEAD.test(head)) return 'read';
+  const first = tokens[0] ?? '';
+  if (WRITE_WORDS.has(first)) return 'write';
+  if (DDL_WORDS.has(first)) return 'ddl';
   return 'other';
 }
 
-function isDestructive(head: string): boolean {
-  if (/^(drop|truncate)\b/i.test(head)) return true;
-  if (/^(update|delete)\b/i.test(head) && !/\bwhere\b/i.test(head)) return true;
+function isDestructive(kind: SqlCommandKind, tokens: string[]): boolean {
+  if (tokens.includes('drop') || tokens.includes('truncate')) return true;
+  if (kind === 'write' && (tokens.includes('delete') || tokens.includes('update')) && !tokens.includes('where')) {
+    return true;
+  }
   return false;
 }
 
 export function analyzeSql(sql: string, opts: { engine: SqlEngine; rowLimit: number }): SqlAnalysis {
-  const head = stripLeading(stripNoise(sql));
-  const kind = classify(head);
-  const destructive = isDestructive(head);
-  const isPlainSelect = /^(select|with)\b/i.test(head) && !/\blimit\b/i.test(head);
+  const cleaned = stripNoise(sql);
+  const head = stripLeading(cleaned);
+  const tokens = topLevelTokens(cleaned);
+  const kind = classify(head, tokens);
+  const destructive = isDestructive(kind, tokens);
+  const isPlainSelect = kind === 'read' && /^(select|with)\b/i.test(head) && !tokens.includes('limit');
   const trimmedNoSemi = sql.trim().replace(/;\s*$/, '');
   const effectiveSql = isPlainSelect ? `${trimmedNoSemi} LIMIT ${opts.rowLimit + 1}` : sql.trim();
   return { kind, destructive, effectiveSql, limited: isPlainSelect };

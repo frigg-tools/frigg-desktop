@@ -153,7 +153,15 @@ function SqlQueryEditor() {
     });
     viewRef.current = view;
 
+    const unsubscribe = useAppStore.subscribe((state, prev) => {
+      if (state.sqlEditorSql === prev.sqlEditorSql) return;
+      const current = view.state.doc.toString();
+      if (current === state.sqlEditorSql) return;
+      view.dispatch({ changes: { from: 0, to: current.length, insert: state.sqlEditorSql } });
+    });
+
     return () => {
+      unsubscribe();
       view.destroy();
       viewRef.current = null;
     };

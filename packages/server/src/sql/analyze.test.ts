@@ -37,6 +37,18 @@ describe('analyzeSql', () => {
   it('does not misread a leading comment containing where as a WHERE clause', () => {
     expect(analyzeSql('DELETE FROM users -- where someday\n', opts).destructive).toBe(true);
   });
+  it('treats a data-modifying CTE as a destructive write, not a read', () => {
+    const a = analyzeSql('WITH doomed AS (SELECT id FROM users) DELETE FROM users', opts);
+    expect(a.kind).toBe('write');
+    expect(a.destructive).toBe(true);
+    expect(a.limited).toBe(false);
+    expect(a.effectiveSql).not.toMatch(/limit/i);
+  });
+  it('still classifies and limits a read-only CTE', () => {
+    const a = analyzeSql('WITH recent AS (SELECT * FROM logs) SELECT * FROM recent', opts);
+    expect(a.kind).toBe('read');
+    expect(a.limited).toBe(true);
+  });
 });
 
 describe('hasMultipleStatements', () => {

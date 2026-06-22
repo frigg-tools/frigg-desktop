@@ -114,7 +114,9 @@ export default function ConnectionDialog() {
   }, [form, isSqlite]);
 
   const test = () => {
-    void testSqlConnection(buildInput()).catch(() => undefined);
+    const body =
+      editing && form.password.length === 0 ? { id: editing.id } : buildInput();
+    void testSqlConnection(body).catch(() => undefined);
   };
 
   const save = () => {

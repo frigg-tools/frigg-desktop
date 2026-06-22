@@ -797,6 +797,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const result = await api.runSql(id, sql);
       set({ sqlResult: result });
       recordSqlHistory(sql);
+      if (result.command === 'ddl') void get().refreshSqlSchema().catch(() => undefined);
     } catch (error) {
       if (error instanceof Error && error.message === 'destructive') {
         set({ pendingDestructiveSql: sql });
@@ -815,6 +816,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const result = await api.runSql(sqlActiveId, pendingDestructiveSql, true);
       set({ sqlResult: result, pendingDestructiveSql: null });
       recordSqlHistory(pendingDestructiveSql);
+      if (result.command === 'ddl') void get().refreshSqlSchema().catch(() => undefined);
     } catch (error) {
       set({
         sqlError: error instanceof Error ? error.message : 'Query failed',
