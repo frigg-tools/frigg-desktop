@@ -37,10 +37,10 @@ FRIGG_PROXY_PORT=9999 FRIGG_API_PORT=4040 npm start   # custom ports
 npm workspaces monorepo:
 - **`packages/shared`** — domain types only. ALWAYS import domain types from `@frigg/shared`; never redefine them.
 - **`packages/server`** — Node + TypeScript (run via `tsx`, `tsc` is type-check only). mockttp TLS-intercepting proxy, Express REST + WebSocket API, device connectors (adb / simctl / networksetup), Logcat process streaming. `src/start.ts` exports `startFrigg()` — the shared boot path for the CLI (`src/index.ts`) and the Electron main.
-- **`packages/web`** — React 19 + Vite + Tailwind v4 + zustand. Screens: Traffic, Mocks, Logcat, Devices.
+- **`packages/web`** — React 19 + Vite + Tailwind v4 + zustand. Screens: Traffic, Client, Mocks, Logcat, Database, SQL, Devices, MCP.
 - **`packages/desktop`** — Electron shell; `src/main.ts` bundled to CJS with esbuild.
 
-Ports: proxy `8888`, API/UI `4848` (env `FRIGG_PROXY_PORT` / `FRIGG_API_PORT`). Persistence in `~/.frigg/` (CA keypair + `mocks.json`).
+Ports: proxy `8888`, API/UI `4848` (env `FRIGG_PROXY_PORT` / `FRIGG_API_PORT`). Persistence in `~/.frigg/` (CA keypair + `mocks.json` + `sql-connections.json`; SQL passwords are encrypted in `sql-secrets.json`).
 
 Full module contracts and the v0.2 feature designs (i18n, Logcat, desktop) live in [`DESIGN.md`](./DESIGN.md) — read it before changing a module.
 
@@ -57,3 +57,12 @@ Full module contracts and the v0.2 feature designs (i18n, Logcat, desktop) live 
 - **Android** (`adb`): Devices → Set up interception sets the proxy and installs the CA (system cert via `adb root`, else a guided user-cert install). Logcat: Logcat tab → pick the device → Start. Filter by package (resolved to `--pid` via `pidof`), level and text.
 - **iOS Simulator** (`xcrun simctl`): install the CA cert per simulator; simulators inherit the **Mac's** proxy (toggle on the Devices screen). Logcat via `log stream`. Physical iOS logs need `idevicesyslog` (not bundled).
 - **Any physical device**: open the `/setup` page (QR on the Devices screen) — manual Wi-Fi proxy + CA trust.
+
+## SQL (database client)
+
+The **SQL** screen is a credential-based DB client (distinct from the **Database** screen, which inspects SQLite files pulled off a device). Engines: **MySQL, MariaDB, PostgreSQL** (`mysql2` / `pg`, pure-JS) and **SQLite** (`better-sqlite3`, native). Server module: `packages/server/src/sql/` (connection store + encrypted secret store + per-engine drivers behind one `SqlDriver` + a `SqlManager` holding live pools); REST under `/api/sql/*`; the `sql-connections-updated` WS event syncs the connection list across windows.
+
+- **Credentials**: connection metadata persists to `~/.frigg/sql-connections.json`; the **password is encrypted at rest** in `~/.frigg/sql-secrets.json` — via Electron `safeStorage` on the desktop app (injected through `startFrigg({ secretBox })`), else AES-256-GCM with a `0600` key file (`~/.frigg/sql-secret.key`). Passwords are **never** returned by any endpoint — snapshots carry only `hasPassword`.
+- **Safety**: statements are classified (`sql/analyze.ts`); bare `SELECT` gets an auto-`LIMIT` (`SQL_ROW_LIMIT`); destructive statements (`UPDATE`/`DELETE` without `WHERE`, `DROP`, `TRUNCATE`) require `confirmDestructive`; inline cell/row edits build **parameterized** SQL (`sql/row-sql.ts`) — values are never interpolated.
+- **The client reaches any DB host you configure** — that reach is the point; treat saved connections as sensitive.
+- **Packaging note**: `better-sqlite3` is the only native dep. `npm run dev` / `npm start` use the Node ABI directly. For `npm run desktop:dist`, electron-builder rebuilds it (`npmRebuild: true` + `asarUnpack` for `better-sqlite3`); it is bundled `external` in the esbuild step. This dist path is configured but was not built/verified in the initial feature work.

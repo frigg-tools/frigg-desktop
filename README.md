@@ -54,6 +54,7 @@ The packaged app boots the server in-process and serves the bundled UI — no te
 - **Mocks** — rules in nested folders, matched on method, host/path globs (`*`, `?`), query substring and body; answer with your status/headers/body and optional delay. Higher priority wins; matched requests never reach upstream and show a ⚡ MOCK chip.
 - **Logcat** — stream Android `logcat` / iOS `log`, filtered by app package, level and text.
 - **Database** — open and query the local databases (Android Room / iOS) of installed apps.
+- **SQL** — connect to your own **MySQL, MariaDB, PostgreSQL or SQLite** servers with saved credentials (passwords encrypted at rest), browse and edit tables, and run queries with schema-aware autocomplete. Destructive statements ask for confirmation.
 - **Devices** — one-click interception setup (see below).
 - **MCP** — exposes Frigg over a Model Context Protocol server so agents can drive traffic, mocks and the API client.
 
