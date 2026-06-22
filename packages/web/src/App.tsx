@@ -7,6 +7,7 @@ import MocksScreen from './screens/MocksScreen';
 import DevicesScreen from './screens/DevicesScreen';
 import LogcatScreen from './screens/LogcatScreen';
 import DatabaseScreen from './screens/DatabaseScreen';
+import SqlScreen from './screens/SqlScreen';
 import ClientScreen from './screens/ClientScreen';
 import McpScreen from './screens/McpScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
@@ -96,6 +97,25 @@ function DatabaseIcon() {
   );
 }
 
+function DatabaseServerIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <rect x="3" y="3.5" width="18" height="7" rx="1.5" />
+      <rect x="3" y="13.5" width="18" height="7" rx="1.5" />
+      <path d="M7 7h.01" />
+      <path d="M7 17h.01" />
+    </svg>
+  );
+}
+
 function SendIcon() {
   return (
     <svg
@@ -142,6 +162,7 @@ const NAV_ITEMS: NavItem[] = [
   { screen: 'mocks', labelKey: 'nav.mocks', icon: <BoltIcon /> },
   { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
   { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
+  { screen: 'sql', labelKey: 'nav.sql', icon: <DatabaseServerIcon /> },
   { screen: 'devices', labelKey: 'nav.devices', icon: <SmartphoneIcon /> },
   { screen: 'mcp', labelKey: 'nav.mcp', icon: <McpIcon /> },
 ];
@@ -191,6 +212,10 @@ export default function App() {
     void useAppStore
       .getState()
       .loadProxyCerts()
+      .catch(() => undefined);
+    void useAppStore
+      .getState()
+      .loadSqlConnections()
       .catch(() => undefined);
     let dropped = false;
     return connectWs(
@@ -272,6 +297,8 @@ export default function App() {
           <LogcatScreen />
         ) : screen === 'database' ? (
           <DatabaseScreen />
+        ) : screen === 'sql' ? (
+          <SqlScreen />
         ) : screen === 'client' ? (
           <ClientScreen />
         ) : screen === 'mcp' ? (

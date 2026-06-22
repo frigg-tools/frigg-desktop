@@ -24,6 +24,12 @@ import type {
   ProxyCertsSnapshot,
   ProxyClientCert,
   ProxyStatus,
+  SqlConnection,
+  SqlConnectionInput,
+  SqlConnectionTestResult,
+  SqlQueryResult,
+  SqlRowEdit,
+  SqlSchema,
   TrafficExchange,
 } from '@frigg/shared';
 
@@ -303,4 +309,74 @@ export function getProxyCerts(): Promise<ProxyCertsSnapshot> {
 
 export function setProxyCerts(certs: ProxyClientCert[]): Promise<ProxyCertsSnapshot> {
   return request('/api/proxy-certs', jsonInit('PUT', { certs }));
+}
+
+export function getSqlConnections(): Promise<SqlConnection[]> {
+  return request('/api/sql/connections');
+}
+
+export function createSqlConnection(
+  input: SqlConnectionInput,
+): Promise<{ connections: SqlConnection[]; id: string }> {
+  return request('/api/sql/connections', jsonInit('POST', input));
+}
+
+export function updateSqlConnection(
+  id: string,
+  patch: Partial<SqlConnectionInput>,
+): Promise<{ connections: SqlConnection[] }> {
+  return request(`/api/sql/connections/${encodeURIComponent(id)}`, jsonInit('PUT', patch));
+}
+
+export function deleteSqlConnection(id: string): Promise<{ connections: SqlConnection[] }> {
+  return request(`/api/sql/connections/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function testSqlConnection(
+  body: SqlConnectionInput | { id: string },
+): Promise<SqlConnectionTestResult> {
+  return request('/api/sql/test', jsonInit('POST', body));
+}
+
+export function sqlSchema(id: string): Promise<SqlSchema> {
+  return request(`/api/sql/connections/${encodeURIComponent(id)}/schema`, { method: 'POST' });
+}
+
+export async function runSql(
+  id: string,
+  sql: string,
+  confirmDestructive?: boolean,
+): Promise<SqlQueryResult> {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  headers.set('X-Frigg-Locale', currentLocale());
+  const res = await fetch(`/api/sql/connections/${encodeURIComponent(id)}/query`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ sql, confirmDestructive }),
+  });
+  if (res.status === 400) {
+    const data = (await res.json().catch(() => ({}))) as {
+      confirmRequired?: boolean;
+      error?: unknown;
+    };
+    if (data.confirmRequired === true) {
+      throw new Error('destructive');
+    }
+    if (typeof data.error === 'string' && data.error.length > 0) {
+      throw new Error(data.error);
+    }
+    throw new Error(`${res.status} ${res.statusText}`.trim());
+  }
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+  return (await res.json()) as SqlQueryResult;
+}
+
+export function editSqlRow(id: string, edit: SqlRowEdit): Promise<SqlQueryResult> {
+  return request(`/api/sql/connections/${encodeURIComponent(id)}/edit`, jsonInit('POST', edit));
+}
+
+export async function disconnectSql(id: string): Promise<void> {
+  await request(`/api/sql/connections/${encodeURIComponent(id)}/disconnect`, { method: 'POST' });
 }
