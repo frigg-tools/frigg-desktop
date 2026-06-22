@@ -1,11 +1,17 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { EditorView, keymap } from '@codemirror/view';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { sql, type SQLNamespace } from '@codemirror/lang-sql';
 import { defaultKeymap } from '@codemirror/commands';
+import {
+  autocompletion,
+  type CompletionContext,
+  type CompletionResult,
+} from '@codemirror/autocomplete';
 import type { SqlSchema } from '@frigg/shared';
 import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
+import { getSqlHistory } from './history';
 
 function buildSchema(schema: SqlSchema | null): SQLNamespace {
   const result: Record<string, string[]> = {};
@@ -18,6 +24,36 @@ function buildSchema(schema: SqlSchema | null): SQLNamespace {
     }
   }
   return result;
+}
+
+function historyCompletions(context: CompletionContext): CompletionResult | null {
+  const line = context.state.doc.lineAt(context.pos);
+  const before = line.text.slice(0, context.pos - line.from);
+  const trimmed = before.replace(/^\s*/, '');
+  const indent = before.length - trimmed.length;
+  const prefix = trimmed.toLowerCase();
+  if (!context.explicit && prefix.length < 2) return null;
+  const matches = getSqlHistory().filter(
+    (statement) => statement.toLowerCase().startsWith(prefix) && statement.toLowerCase() !== prefix,
+  );
+  if (matches.length === 0) return null;
+  return {
+    from: line.from + indent,
+    to: context.pos,
+    filter: false,
+    options: matches.slice(0, 6).map((statement) => ({
+      label: statement.length > 70 ? `${statement.slice(0, 70)}…` : statement,
+      detail: 'recent',
+      type: 'text',
+      apply: statement,
+      boost: -50,
+    })),
+  };
+}
+
+function sqlLanguage(schema: SqlSchema | null): Extension {
+  const support = sql({ schema: buildSchema(schema), upperCaseKeywords: true });
+  return [support, support.language.data.of({ autocomplete: historyCompletions })];
 }
 
 const editorTheme = EditorView.theme(
@@ -72,7 +108,7 @@ const editorTheme = EditorView.theme(
   { dark: true },
 );
 
-export default function SqlQueryEditor() {
+function SqlQueryEditor() {
   const t = useT();
   const sqlSchema = useAppStore((s) => s.sqlSchema);
   const setSqlEditorSql = useAppStore((s) => s.setSqlEditorSql);
@@ -88,10 +124,9 @@ export default function SqlQueryEditor() {
     const store = useAppStore.getState();
 
     const runStatement = (view: EditorView): boolean => {
-      const current = view.state.doc.toString();
       void useAppStore
         .getState()
-        .runSql(current)
+        .runSql(view.state.doc.toString())
         .catch(() => undefined);
       return true;
     };
@@ -107,13 +142,9 @@ export default function SqlQueryEditor() {
       state: EditorState.create({
         doc: store.sqlEditorSql,
         extensions: [
-          languageCompartment.current.of(
-            sql({ schema: buildSchema(store.sqlSchema) }),
-          ),
-          keymap.of([
-            { key: 'Mod-Enter', run: runStatement },
-            ...defaultKeymap,
-          ]),
+          languageCompartment.current.of(sqlLanguage(store.sqlSchema)),
+          autocompletion({ activateOnTyping: true, maxRenderedOptions: 30 }),
+          keymap.of([{ key: 'Mod-Enter', run: runStatement }, ...defaultKeymap]),
           editorTheme,
           EditorView.lineWrapping,
           updateListener,
@@ -132,9 +163,7 @@ export default function SqlQueryEditor() {
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({
-      effects: languageCompartment.current.reconfigure(
-        sql({ schema: buildSchema(sqlSchema) }),
-      ),
+      effects: languageCompartment.current.reconfigure(sqlLanguage(sqlSchema)),
     });
   }, [sqlSchema]);
 
@@ -148,3 +177,5 @@ export default function SqlQueryEditor() {
     </div>
   );
 }
+
+export default memo(SqlQueryEditor);

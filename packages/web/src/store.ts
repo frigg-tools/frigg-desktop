@@ -33,6 +33,7 @@ import {
   type TrafficExchange,
 } from '@frigg/shared';
 import * as api from './api/client';
+import { recordSqlHistory } from './components/sql/history';
 
 export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql';
 export type LogLevelFilter = LogLevel | 'ALL';
@@ -795,6 +796,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const result = await api.runSql(id, sql);
       set({ sqlResult: result });
+      recordSqlHistory(sql);
     } catch (error) {
       if (error instanceof Error && error.message === 'destructive') {
         set({ pendingDestructiveSql: sql });
@@ -812,6 +814,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const result = await api.runSql(sqlActiveId, pendingDestructiveSql, true);
       set({ sqlResult: result, pendingDestructiveSql: null });
+      recordSqlHistory(pendingDestructiveSql);
     } catch (error) {
       set({
         sqlError: error instanceof Error ? error.message : 'Query failed',
