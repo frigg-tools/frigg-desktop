@@ -31,12 +31,13 @@ function isValidConnection(value: unknown): value is SqlConnection {
     typeof value.user === 'string' &&
     typeof value.database === 'string' &&
     isSqlSslMode(value.ssl) &&
+    (value.caCert === undefined || typeof value.caCert === 'string') &&
     typeof value.createdAt === 'number' &&
     typeof value.updatedAt === 'number'
   );
 }
 
-export type SqlConnectionPatch = Partial<Omit<SqlConnectionInput, 'password' | 'caCert'>>;
+export type SqlConnectionPatch = Partial<Omit<SqlConnectionInput, 'password'>>;
 
 export class SqlConnectionStore extends EventEmitter {
   private connections: SqlConnection[] = [];
@@ -90,6 +91,7 @@ export class SqlConnectionStore extends EventEmitter {
       user: input.user,
       database: input.database,
       ssl: input.ssl,
+      ...(input.caCert !== undefined ? { caCert: input.caCert } : {}),
       hasPassword: false,
       createdAt: now,
       updatedAt: now,
@@ -108,6 +110,7 @@ export class SqlConnectionStore extends EventEmitter {
     if (patch.user !== undefined) connection.user = patch.user;
     if (patch.database !== undefined) connection.database = patch.database;
     if (patch.ssl !== undefined) connection.ssl = patch.ssl;
+    if (patch.caCert !== undefined) connection.caCert = patch.caCert;
     connection.updatedAt = Date.now();
     this.commit();
     return this.withHasPassword(connection);

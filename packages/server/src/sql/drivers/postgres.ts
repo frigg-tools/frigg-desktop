@@ -30,7 +30,7 @@ interface KeyInfoRow {
 function sslConfigFor(conn: SqlConnection): pg.PoolConfig['ssl'] {
   if (conn.ssl === 'disable') return undefined;
   if (conn.ssl === 'require') return { rejectUnauthorized: false };
-  return { rejectUnauthorized: true };
+  return conn.caCert ? { ca: conn.caCert, rejectUnauthorized: true } : { rejectUnauthorized: true };
 }
 
 export function createPostgresDriver(conn: SqlConnection, password: string | null): SqlDriver {

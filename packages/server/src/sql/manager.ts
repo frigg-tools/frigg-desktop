@@ -7,7 +7,7 @@ import {
   type SqlRowEdit,
   type SqlSchema,
 } from '@frigg/shared';
-import { analyzeSql } from './analyze.ts';
+import { analyzeSql, hasMultipleStatements } from './analyze.ts';
 import type { SqlConnectionStore } from './connection-store.ts';
 import { createMysqlDriver } from './drivers/mysql.ts';
 import { createPostgresDriver } from './drivers/postgres.ts';
@@ -43,6 +43,7 @@ function inputToConnection(input: SqlConnectionInput): SqlConnection {
     user: input.user,
     database: input.database,
     ssl: input.ssl,
+    ...(input.caCert !== undefined ? { caCert: input.caCert } : {}),
     hasPassword: false,
     createdAt: 0,
     updatedAt: 0,
@@ -96,6 +97,9 @@ export class SqlManager {
 
   async query(id: string, sql: string, confirmDestructive: boolean): Promise<SqlQueryResult> {
     const conn = this.requireConn(id);
+    if (hasMultipleStatements(sql)) {
+      throw new Error('run one statement at a time');
+    }
     const analysis = analyzeSql(sql, { engine: conn.engine, rowLimit: SQL_ROW_LIMIT });
     if (analysis.destructive && !confirmDestructive) {
       throw new Error('destructive');

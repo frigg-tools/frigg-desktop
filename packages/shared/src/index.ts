@@ -394,6 +394,7 @@ export interface SqlConnection {
   user: string;
   database: string;
   ssl: SqlSslMode;
+  caCert?: string;
   hasPassword: boolean;
   createdAt: number;
   updatedAt: number;

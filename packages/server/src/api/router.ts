@@ -567,6 +567,8 @@ function parseSqlConnectionPatch(body: unknown): { meta: SqlConnectionPatch; pas
   }
   if (record.database !== undefined) meta.database = parseNonEmpty(record.database, 'database');
   if (record.ssl !== undefined) meta.ssl = parseSqlSslMode(record.ssl);
+  const caCert = optionalString(record.caCert, 'caCert');
+  if (caCert !== undefined) meta.caCert = caCert;
   const parsed: { meta: SqlConnectionPatch; password?: string } = { meta };
   const password = optionalString(record.password, 'password');
   if (password !== undefined) parsed.password = password;

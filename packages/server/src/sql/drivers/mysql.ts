@@ -26,7 +26,7 @@ interface KeyInfoRow {
 function sslOptionsFor(conn: SqlConnection): mysql.PoolOptions['ssl'] {
   if (conn.ssl === 'disable') return undefined;
   if (conn.ssl === 'require') return { rejectUnauthorized: false };
-  return { rejectUnauthorized: true };
+  return conn.caCert ? { ca: conn.caCert, rejectUnauthorized: true } : { rejectUnauthorized: true };
 }
 
 export function createMysqlDriver(conn: SqlConnection, password: string | null): SqlDriver {
