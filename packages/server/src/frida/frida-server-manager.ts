@@ -174,7 +174,7 @@ export class FridaServerManager extends EventEmitter {
   }
 }
 
-function mapAbi(abi: string): string | null {
+export function mapAbi(abi: string): string | null {
   if (abi.startsWith('arm64')) return 'arm64';
   if (abi.startsWith('armeabi')) return 'arm';
   if (abi === 'x86_64') return 'x86_64';

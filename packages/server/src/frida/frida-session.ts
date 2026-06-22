@@ -202,11 +202,11 @@ const FRIDA_BANNER_PATTERNS = [
   /Frida \d[\d.]* - A world-class/,
   /^toolkit$/,
   /\bCommands:\s*$/,
-  /\b(help|object\?|exit\/quit)\b\s+->/,
+  /(?:^|\s)(?:help|object\?|exit\/quit)\s+->/,
   /More info at https:\/\/frida\.re/,
 ];
 
-function cleanFridaLine(raw: string): { text: string; kind: FridaMessage['kind'] } | null {
+export function cleanFridaLine(raw: string): { text: string; kind: FridaMessage['kind'] } | null {
   const line = raw.replace(/^\[[^\]]*\]->\s?/, '');
   const trimmed = line.trim();
   if (trimmed === '') return null;

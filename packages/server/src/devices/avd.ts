@@ -25,13 +25,17 @@ function hostAbi(): string {
   return process.arch === 'arm64' ? 'arm64-v8a' : 'x86_64';
 }
 
-export async function listAvds(): Promise<Avd[]> {
-  const result = await run(emulatorBin(), ['-list-avds']);
-  if (!result.ok) return [];
-  const names = result.stdout
+export function parseAvdList(stdout: string): string[] {
+  return stdout
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => /^[A-Za-z0-9._-]+$/.test(line));
+}
+
+export async function listAvds(): Promise<Avd[]> {
+  const result = await run(emulatorBin(), ['-list-avds']);
+  if (!result.ok) return [];
+  const names = parseAvdList(result.stdout);
   const running = await runningEmulators();
   return names.map((name) => ({
     name,
