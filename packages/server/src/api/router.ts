@@ -21,8 +21,15 @@ import type {
   MockRuleInput,
   ProxyClientCert,
   ProxyStatus,
+  SqlCell,
+  SqlConnectionInput,
+  SqlEngine,
+  SqlRowEdit,
+  SqlSslMode,
 } from '@frigg/shared';
 import { ApiClientStore } from '../api-client/store.ts';
+import type { SqlManager } from '../sql/manager.ts';
+import type { SqlConnectionPatch, SqlConnectionStore } from '../sql/connection-store.ts';
 import { runRequest } from '../api-client/runner.ts';
 import { listApps } from '../devices/apps.ts';
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
@@ -59,6 +66,8 @@ export interface ApiDeps {
   apiClient: ApiClientStore;
   breakpoints: BreakpointManager;
   proxyCerts: ProxyCertStore;
+  sql: SqlManager;
+  sqlConnections: SqlConnectionStore;
   frida: FridaManager;
   reloadProxy: () => Promise<void>;
 }
@@ -526,6 +535,109 @@ function messageForError(error: unknown): string {
   return 'internal server error';
 }
 
+function parseSqlEngine(raw: unknown): SqlEngine {
+  if (raw === 'mysql' || raw === 'mariadb' || raw === 'postgres' || raw === 'sqlite') return raw;
+  badRequest('engine must be one of mysql, mariadb, postgres, sqlite');
+}
+
+function parseSqlSslMode(raw: unknown): SqlSslMode {
+  if (raw === 'disable' || raw === 'require' || raw === 'verify') return raw;
+  badRequest('ssl must be one of disable, require, verify');
+}
+
+function parseSqlPort(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0 || raw > 65535) {
+    badRequest('port must be an integer between 0 and 65535');
+  }
+  return raw;
+}
+
+function optionalString(raw: unknown, label: string): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string') badRequest(`${label} must be a string`);
+  return raw;
+}
+
+function parseSqlConnectionInput(body: unknown): SqlConnectionInput {
+  const record = asRecord(body, 'connection');
+  const input: SqlConnectionInput = {
+    name: parseNonEmpty(record.name, 'name'),
+    engine: parseSqlEngine(record.engine),
+    host: typeof record.host === 'string' ? record.host : '',
+    port: record.port === undefined ? 0 : parseSqlPort(record.port),
+    user: typeof record.user === 'string' ? record.user : '',
+    database: parseNonEmpty(record.database, 'database'),
+    ssl: record.ssl === undefined ? 'disable' : parseSqlSslMode(record.ssl),
+  };
+  const password = optionalString(record.password, 'password');
+  if (password !== undefined) input.password = password;
+  const caCert = optionalString(record.caCert, 'caCert');
+  if (caCert !== undefined) input.caCert = caCert;
+  return input;
+}
+
+function parseSqlConnectionPatch(body: unknown): { meta: SqlConnectionPatch; password?: string } {
+  const record = asRecord(body, 'connection');
+  const meta: SqlConnectionPatch = {};
+  if (record.name !== undefined) meta.name = parseNonEmpty(record.name, 'name');
+  if (record.engine !== undefined) meta.engine = parseSqlEngine(record.engine);
+  if (record.host !== undefined) {
+    if (typeof record.host !== 'string') badRequest('host must be a string');
+    meta.host = record.host;
+  }
+  if (record.port !== undefined) meta.port = parseSqlPort(record.port);
+  if (record.user !== undefined) {
+    if (typeof record.user !== 'string') badRequest('user must be a string');
+    meta.user = record.user;
+  }
+  if (record.database !== undefined) meta.database = parseNonEmpty(record.database, 'database');
+  if (record.ssl !== undefined) meta.ssl = parseSqlSslMode(record.ssl);
+  const caCert = optionalString(record.caCert, 'caCert');
+  if (caCert !== undefined) meta.caCert = caCert;
+  const parsed: { meta: SqlConnectionPatch; password?: string } = { meta };
+  const password = optionalString(record.password, 'password');
+  if (password !== undefined) parsed.password = password;
+  return parsed;
+}
+
+function parseSqlCell(raw: unknown, label: string): SqlCell {
+  if (raw === null) return null;
+  if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return raw;
+  badRequest(`${label} must be a string, number, boolean, or null`);
+}
+
+function parseSqlCellEntries(raw: unknown, label: string): Array<{ column: string; value: SqlCell }> {
+  if (!Array.isArray(raw)) badRequest(`${label} must be an array`);
+  return raw.map((entry, index) => {
+    const record = asRecord(entry, `${label}[${index}]`);
+    return {
+      column: parseNonEmpty(record.column, `${label}[${index}].column`),
+      value: parseSqlCell(record.value, `${label}[${index}].value`),
+    };
+  });
+}
+
+function parseSqlRowEdit(body: unknown): SqlRowEdit {
+  const record = asRecord(body, 'edit');
+  if (record.op !== 'update' && record.op !== 'insert' && record.op !== 'delete') {
+    badRequest('op must be one of update, insert, delete');
+  }
+  const edit: SqlRowEdit = {
+    op: record.op,
+    table: parseNonEmpty(record.table, 'table'),
+    pk: parseSqlCellEntries(record.pk ?? [], 'pk'),
+  };
+  const schema = optionalString(record.schema, 'schema');
+  if (schema !== undefined) edit.schema = schema;
+  if (record.changes !== undefined) edit.changes = parseSqlCellEntries(record.changes, 'changes');
+  return edit;
+}
+
+function rethrowNotFound(error: unknown): never {
+  if (error instanceof Error && error.message === 'not found') throw error;
+  badRequest(messageForError(error));
+}
+
 export function buildRouter(deps: ApiDeps): Router {
   const router = Router();
 
@@ -828,6 +940,120 @@ export function buildRouter(deps: ApiDeps): Router {
       } catch (error) {
         badRequest(messageForError(error));
       }
+    }),
+  );
+
+  router.get('/api/sql/connections', (_req, res) => {
+    res.json(deps.sqlConnections.list());
+  });
+
+  router.post(
+    '/api/sql/connections',
+    asyncHandler(async (req, res) => {
+      const input = parseSqlConnectionInput(req.body);
+      const conn = deps.sqlConnections.create(input);
+      if (input.password !== undefined && input.password !== '') {
+        await deps.sql.setPassword(conn.id, input.password);
+      }
+      res.json({ connections: deps.sqlConnections.list(), id: conn.id });
+    }),
+  );
+
+  router.put(
+    '/api/sql/connections/:id',
+    asyncHandler(async (req, res) => {
+      const { meta, password } = parseSqlConnectionPatch(req.body);
+      deps.sqlConnections.update(req.params.id, meta);
+      if (password !== undefined && password !== '') {
+        await deps.sql.setPassword(req.params.id, password);
+      } else {
+        await deps.sql.disconnect(req.params.id);
+      }
+      res.json({ connections: deps.sqlConnections.list() });
+    }),
+  );
+
+  router.delete(
+    '/api/sql/connections/:id',
+    asyncHandler(async (req, res) => {
+      deps.sqlConnections.delete(req.params.id);
+      await deps.sql.deletePassword(req.params.id);
+      res.json({ connections: deps.sqlConnections.list() });
+    }),
+  );
+
+  router.post(
+    '/api/sql/test',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'test');
+      const body =
+        typeof record.id === 'string' && record.id !== ''
+          ? { id: record.id }
+          : parseSqlConnectionInput(record);
+      res.json(await deps.sql.test(body));
+    }),
+  );
+
+  router.post(
+    '/api/sql/connections/:id/schema',
+    asyncHandler(async (req, res) => {
+      try {
+        res.json(await deps.sql.schema(req.params.id));
+      } catch (error) {
+        rethrowNotFound(error);
+      }
+    }),
+  );
+
+  router.post(
+    '/api/sql/connections/:id/query',
+    asyncHandler(async (req, res) => {
+      const record = asRecord(req.body, 'query');
+      const sql = parseNonEmpty(record.sql, 'sql');
+      const opts: {
+        confirmDestructive: boolean;
+        withCount: boolean;
+        offset?: number;
+        pageSize?: number;
+      } = {
+        confirmDestructive: record.confirmDestructive === true,
+        withCount: record.withCount === true,
+      };
+      if (typeof record.offset === 'number' && Number.isFinite(record.offset)) {
+        opts.offset = record.offset;
+      }
+      if (typeof record.pageSize === 'number' && Number.isFinite(record.pageSize)) {
+        opts.pageSize = record.pageSize;
+      }
+      try {
+        res.json(await deps.sql.query(req.params.id, sql, opts));
+      } catch (error) {
+        if (error instanceof Error && error.message === 'destructive') {
+          res.status(400).json({ error: 'destructive', confirmRequired: true });
+          return;
+        }
+        rethrowNotFound(error);
+      }
+    }),
+  );
+
+  router.post(
+    '/api/sql/connections/:id/edit',
+    asyncHandler(async (req, res) => {
+      const edit = parseSqlRowEdit(req.body);
+      try {
+        res.json(await deps.sql.editRow(req.params.id, edit));
+      } catch (error) {
+        rethrowNotFound(error);
+      }
+    }),
+  );
+
+  router.post(
+    '/api/sql/connections/:id/disconnect',
+    asyncHandler(async (req, res) => {
+      await deps.sql.disconnect(req.params.id);
+      res.json({ ok: true });
     }),
   );
 

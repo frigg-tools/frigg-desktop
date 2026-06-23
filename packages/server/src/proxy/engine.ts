@@ -42,6 +42,7 @@ interface ClientCertificateHostEntry {
 export class ProxyEngine {
   private readonly deps: EngineDeps;
   private server: Mockttp | null = null;
+  private boundPort = 0;
   private reloading: Promise<void> | null = null;
   private readonly mockedRuleIdByRequestId = new Map<string, string>();
   private readonly pendingRequestCaptures = new Map<string, Promise<void>>();
@@ -50,8 +51,25 @@ export class ProxyEngine {
     this.deps = deps;
   }
 
+  get port(): number {
+    return this.boundPort;
+  }
+
   async start(): Promise<void> {
     if (this.server) return;
+    const preferred = this.boundPort !== 0 ? this.boundPort : this.deps.proxyPort;
+    let server: Mockttp;
+    try {
+      server = await this.buildAndStart(preferred);
+    } catch (error) {
+      if (this.boundPort !== 0 || !isAddrInUse(error)) throw error;
+      server = await this.buildAndStart(0);
+    }
+    this.boundPort = server.port;
+    this.server = server;
+  }
+
+  private async buildAndStart(port: number): Promise<Mockttp> {
     const server = getLocal({
       https: { key: this.deps.ca.key, cert: this.deps.ca.cert },
       recordTraffic: false,
@@ -84,8 +102,13 @@ export class ProxyEngine {
     await server.on('abort', (req) => {
       void this.captureAbort(req).catch(() => {});
     });
-    await server.start(this.deps.proxyPort);
-    this.server = server;
+    try {
+      await server.start(port);
+    } catch (error) {
+      await server.stop().catch(() => undefined);
+      throw error;
+    }
+    return server;
   }
 
   async stop(): Promise<void> {
@@ -260,6 +283,13 @@ export class ProxyEngine {
     const reason = req.error?.message ?? req.error?.code ?? req.error?.name;
     this.deps.traffic.abort(req.id, reason);
   }
+}
+
+function isAddrInUse(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === 'EADDRINUSE') return true;
+  return /EADDRINUSE|address already in use/i.test(String((error as Error).message ?? ''));
 }
 
 interface BreakpointResponseInput {

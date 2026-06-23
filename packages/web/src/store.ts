@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import {
-  TRAFFIC_BUFFER_LIMIT,
   FRIDA_MESSAGE_BUFFER_LIMIT,
+  SQL_PAGE_SIZE,
+  TRAFFIC_BUFFER_LIMIT,
+  type SqlCell,
   type ApiClientCert,
   type ApiEnvironment,
   type ApiFolder,
@@ -30,11 +32,19 @@ import {
   type ProxyClientCert,
   type ProxyStatus,
   type ServerEvent,
+  type SqlConnection,
+  type SqlConnectionInput,
+  type SqlConnectionTestResult,
+  type SqlEngine,
+  type SqlQueryResult,
+  type SqlRowEdit,
+  type SqlSchema,
   type TrafficExchange,
 } from '@frigg/shared';
 import * as api from './api/client';
+import { recordSqlHistory } from './components/sql/history';
 
-export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'frida';
+export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida';
 export type LogLevelFilter = LogLevel | 'ALL';
 
 const LOG_BUFFER_LIMIT = 5000;
@@ -149,6 +159,40 @@ export interface AppState {
   updateBreakpointRule: (id: string, patch: Partial<BreakpointRuleInput>) => Promise<void>;
   deleteBreakpointRule: (id: string) => Promise<void>;
   resumeBreakpoint: (id: string, resume: BreakpointResume) => Promise<void>;
+  sqlConnections: SqlConnection[];
+  sqlActiveId: string | null;
+  sqlSchema: SqlSchema | null;
+  sqlTables: string[];
+  sqlResult: SqlQueryResult | null;
+  sqlEditorSql: string;
+  sqlBusy: boolean;
+  sqlError: string | null;
+  sqlTestResult: SqlConnectionTestResult | null;
+  pendingDestructiveSql: string | null;
+  sqlDialog: { mode: 'create' } | { mode: 'edit'; id: string } | null;
+  sqlCurrentTable: string | null;
+  sqlRows: SqlCell[][];
+  sqlHasMore: boolean;
+  sqlTotalRows: number | null;
+  sqlOffset: number;
+  sqlLoadingMore: boolean;
+  sqlPagedSql: string | null;
+  loadSqlConnections: () => Promise<void>;
+  openSqlDialog: (dialog: { mode: 'create' } | { mode: 'edit'; id: string }) => void;
+  closeSqlDialog: () => void;
+  createSqlConnection: (input: SqlConnectionInput) => Promise<void>;
+  updateSqlConnection: (id: string, patch: Partial<SqlConnectionInput>) => Promise<void>;
+  deleteSqlConnection: (id: string) => Promise<void>;
+  testSqlConnection: (body: SqlConnectionInput | { id: string }) => Promise<void>;
+  selectSqlConnection: (id: string) => Promise<void>;
+  refreshSqlSchema: () => Promise<void>;
+  browseSqlTable: (table: string) => Promise<void>;
+  setSqlEditorSql: (sql: string) => void;
+  runSql: (sql: string) => Promise<void>;
+  confirmRunSql: () => Promise<void>;
+  cancelDestructive: () => void;
+  editSqlRow: (edit: SqlRowEdit) => Promise<void>;
+  loadMoreSql: () => Promise<void>;
   fridaDeviceId: string | null;
   fridaServerStatus: FridaServerStatus;
   fridaSessionStatus: FridaSessionStatus;
@@ -232,6 +276,28 @@ function restoreTabs(workspaceId: string | null, requests: ApiRequest[]): TabSta
   const openTabIds = saved.openTabIds.filter((id) => live.has(id));
   const selectedId = saved.selectedId && openTabIds.includes(saved.selectedId) ? saved.selectedId : openTabIds[0] ?? null;
   return { openTabIds, selectedId };
+}
+
+function quoteSqlIdent(name: string, engine: SqlEngine): string {
+  if (engine === 'mysql' || engine === 'mariadb') {
+    return `\`${name.replace(/`/g, '``')}\``;
+  }
+  return `"${name.replace(/"/g, '""')}"`;
+}
+
+function applyFirstPage(
+  set: (partial: Partial<AppState>) => void,
+  result: SqlQueryResult,
+  sql: string,
+): void {
+  set({
+    sqlResult: result,
+    sqlRows: result.rows,
+    sqlHasMore: result.hasMore ?? false,
+    sqlTotalRows: result.totalRows ?? null,
+    sqlOffset: result.rows.length,
+    sqlPagedSql: result.offset !== undefined ? sql : null,
+  });
 }
 
 function appendLogs(entries: LogEntry[], incoming: LogEntry[]): LogEntry[] {
@@ -858,6 +924,194 @@ export const useAppStore = create<AppState>((set, get) => ({
     const bp = get().breakpoints;
     set({ breakpoints: { ...bp, paused: bp.paused.filter((p) => p.id !== id) } });
   },
+  sqlConnections: [],
+  sqlActiveId: null,
+  sqlSchema: null,
+  sqlTables: [],
+  sqlResult: null,
+  sqlEditorSql: '',
+  sqlBusy: false,
+  sqlError: null,
+  sqlTestResult: null,
+  pendingDestructiveSql: null,
+  sqlDialog: null,
+  sqlCurrentTable: null,
+  sqlRows: [],
+  sqlHasMore: false,
+  sqlTotalRows: null,
+  sqlOffset: 0,
+  sqlLoadingMore: false,
+  sqlPagedSql: null,
+  loadSqlConnections: async () => {
+    const connections = await api.getSqlConnections();
+    set({ sqlConnections: connections });
+  },
+  openSqlDialog: (dialog) => set({ sqlDialog: dialog, sqlTestResult: null }),
+  closeSqlDialog: () => set({ sqlDialog: null, sqlTestResult: null }),
+  createSqlConnection: async (input) => {
+    const { connections } = await api.createSqlConnection(input);
+    set({ sqlConnections: connections, sqlDialog: null, sqlTestResult: null });
+  },
+  updateSqlConnection: async (id, patch) => {
+    const { connections } = await api.updateSqlConnection(id, patch);
+    set({ sqlConnections: connections, sqlDialog: null, sqlTestResult: null });
+  },
+  deleteSqlConnection: async (id) => {
+    const { connections } = await api.deleteSqlConnection(id);
+    const patch: Partial<AppState> = { sqlConnections: connections };
+    if (get().sqlActiveId === id) {
+      patch.sqlActiveId = null;
+      patch.sqlSchema = null;
+      patch.sqlTables = [];
+      patch.sqlResult = null;
+      patch.sqlCurrentTable = null;
+      patch.sqlEditorSql = '';
+      patch.sqlError = null;
+      patch.pendingDestructiveSql = null;
+      patch.sqlRows = [];
+      patch.sqlHasMore = false;
+      patch.sqlTotalRows = null;
+      patch.sqlOffset = 0;
+      patch.sqlPagedSql = null;
+    }
+    set(patch);
+  },
+  testSqlConnection: async (body) => {
+    set({ sqlBusy: true, sqlTestResult: null });
+    try {
+      const result = await api.testSqlConnection(body);
+      set({ sqlTestResult: result });
+    } catch (error) {
+      set({
+        sqlTestResult: { ok: false, error: error instanceof Error ? error.message : 'Test failed' },
+      });
+    } finally {
+      set({ sqlBusy: false });
+    }
+  },
+  selectSqlConnection: async (id) => {
+    set({ sqlBusy: true, sqlError: null });
+    try {
+      const schema = await api.sqlSchema(id);
+      set({
+        sqlActiveId: id,
+        sqlSchema: schema,
+        sqlTables: schema.tables.map((t) => t.name),
+        sqlResult: null,
+        sqlCurrentTable: null,
+        sqlRows: [],
+        sqlHasMore: false,
+        sqlTotalRows: null,
+        sqlOffset: 0,
+        sqlPagedSql: null,
+      });
+    } catch (error) {
+      set({ sqlError: error instanceof Error ? error.message : 'Failed to connect' });
+    } finally {
+      set({ sqlBusy: false });
+    }
+  },
+  refreshSqlSchema: async () => {
+    const id = get().sqlActiveId;
+    if (!id) return;
+    set({ sqlBusy: true, sqlError: null });
+    try {
+      const schema = await api.sqlSchema(id);
+      set({ sqlSchema: schema, sqlTables: schema.tables.map((t) => t.name) });
+    } catch (error) {
+      set({ sqlError: error instanceof Error ? error.message : 'Failed to refresh schema' });
+    } finally {
+      set({ sqlBusy: false });
+    }
+  },
+  browseSqlTable: async (table) => {
+    const { sqlActiveId, sqlConnections, sqlSchema } = get();
+    if (!sqlActiveId) return;
+    const engine: SqlEngine = sqlConnections.find((c) => c.id === sqlActiveId)?.engine ?? 'postgres';
+    const meta = sqlSchema?.tables.find((t) => t.name === table);
+    const quoted = meta?.schema
+      ? `${quoteSqlIdent(meta.schema, engine)}.${quoteSqlIdent(table, engine)}`
+      : quoteSqlIdent(table, engine);
+    const sql = `SELECT * FROM ${quoted}`;
+    set({ sqlCurrentTable: table, sqlEditorSql: sql });
+    await get().runSql(sql);
+  },
+  setSqlEditorSql: (sql) => set({ sqlEditorSql: sql }),
+  runSql: async (sql) => {
+    const id = get().sqlActiveId;
+    if (!id) return;
+    set({ sqlBusy: true, sqlError: null });
+    try {
+      const result = await api.runSql(id, sql, { offset: 0, pageSize: SQL_PAGE_SIZE, withCount: true });
+      applyFirstPage(set, result, sql);
+      recordSqlHistory(sql);
+      if (result.command === 'ddl') void get().refreshSqlSchema().catch(() => undefined);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'destructive') {
+        set({ pendingDestructiveSql: sql });
+      } else {
+        set({ sqlError: error instanceof Error ? error.message : 'Query failed' });
+      }
+    } finally {
+      set({ sqlBusy: false });
+    }
+  },
+  confirmRunSql: async () => {
+    const { sqlActiveId, pendingDestructiveSql } = get();
+    if (!sqlActiveId || !pendingDestructiveSql) return;
+    set({ sqlBusy: true, sqlError: null });
+    try {
+      const result = await api.runSql(sqlActiveId, pendingDestructiveSql, {
+        confirmDestructive: true,
+        offset: 0,
+        pageSize: SQL_PAGE_SIZE,
+        withCount: true,
+      });
+      applyFirstPage(set, result, pendingDestructiveSql);
+      set({ pendingDestructiveSql: null });
+      recordSqlHistory(pendingDestructiveSql);
+      if (result.command === 'ddl') void get().refreshSqlSchema().catch(() => undefined);
+    } catch (error) {
+      set({
+        sqlError: error instanceof Error ? error.message : 'Query failed',
+        pendingDestructiveSql: null,
+      });
+    } finally {
+      set({ sqlBusy: false });
+    }
+  },
+  cancelDestructive: () => set({ pendingDestructiveSql: null }),
+  editSqlRow: async (edit) => {
+    const id = get().sqlActiveId;
+    if (!id) return;
+    set({ sqlBusy: true, sqlError: null });
+    try {
+      await api.editSqlRow(id, edit);
+    } catch (error) {
+      set({ sqlError: error instanceof Error ? error.message : 'Edit failed' });
+    } finally {
+      set({ sqlBusy: false });
+    }
+    const table = get().sqlCurrentTable;
+    if (table) await get().browseSqlTable(table);
+  },
+  loadMoreSql: async () => {
+    const { sqlActiveId, sqlPagedSql, sqlHasMore, sqlLoadingMore, sqlOffset, sqlRows } = get();
+    if (!sqlActiveId || !sqlPagedSql || !sqlHasMore || sqlLoadingMore) return;
+    set({ sqlLoadingMore: true });
+    try {
+      const result = await api.runSql(sqlActiveId, sqlPagedSql, {
+        offset: sqlOffset,
+        pageSize: SQL_PAGE_SIZE,
+      });
+      const merged = sqlRows.concat(result.rows);
+      set({ sqlRows: merged, sqlHasMore: result.hasMore ?? false, sqlOffset: merged.length });
+    } catch (error) {
+      set({ sqlError: error instanceof Error ? error.message : 'Load more failed' });
+    } finally {
+      set({ sqlLoadingMore: false });
+    }
+  },
   loadAll: async () => {
     const [status, exchanges, mocks, devices] = await Promise.all([
       api.getStatus(),
@@ -954,6 +1208,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       case 'breakpoints-updated':
         set({ breakpoints: ev.snapshot });
+        break;
+      case 'sql-connections-updated':
+        set({ sqlConnections: ev.connections });
         break;
       case 'frida-server-status':
         set({ fridaServerStatus: ev.status });

@@ -10,6 +10,9 @@
     "start": "npm run build:main && electron .",
     "dist": "npm run build:main && electron-builder"
   },
+  "dependencies": {
+    "better-sqlite3": "*"
+  },
   "devDependencies": {
     "@frigg/server": "*",
     "cross-env": "^7.0.3",
@@ -28,6 +31,9 @@
     "directories": {
       "output": "release"
     },
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
     "files": [
       "dist/**"
     ],
