@@ -213,6 +213,26 @@ server.tool('frigg_list_devices', 'List connected Android and iOS devices and th
   }
 });
 
+server.tool(
+  'frigg_diagnose_interception',
+  'Diagnose why HTTPS interception may not work for an Android app. Checks: the device proxy is routed to Frigg; the app is installed; the app is a DEBUG build that can trust the Frigg (user-installed) CA — a RELEASE build trusts only system CAs and ignores the cert, so HTTPS cannot be decrypted; and whether upstream mTLS client certs are configured (apps with mutual TLS need one). Returns a readiness verdict with per-check reasons and fixes.',
+  {
+    serial: z.string().min(1).describe('Android device serial (from frigg_list_devices)'),
+    app: z.string().min(1).describe('App package name, e.g. com.example.app'),
+  },
+  async ({ serial, app }) => {
+    try {
+      return ok(
+        await get(
+          `/api/devices/android/${encodeURIComponent(serial)}/interception?app=${encodeURIComponent(app)}`,
+        ),
+      );
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
 server.tool('frigg_client_snapshot', 'Get the full API client snapshot (workspaces, folders, requests, environments)', async () => {
   try {
     return ok(await get<ApiClientSnapshot>('/api/client'));

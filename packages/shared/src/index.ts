@@ -294,6 +294,20 @@ export interface ProxyCertsSnapshot {
   certs: ProxyClientCert[];
 }
 
+export interface InterceptionCheck {
+  id: string;
+  ok: boolean;
+  title: string;
+  detail: string;
+}
+
+export interface InterceptionReadiness {
+  serial: string;
+  app: string;
+  ready: boolean;
+  checks: InterceptionCheck[];
+}
+
 export type BreakpointDirection = 'request' | 'response' | 'both';
 
 export interface BreakpointMatcher {

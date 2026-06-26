@@ -34,6 +34,7 @@ import { runRequest } from '../api-client/runner.ts';
 import { listApps } from '../devices/apps.ts';
 import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
 import { bootAvd, createRootedAvd, listAvds } from '../devices/avd.ts';
+import { diagnoseInterception } from '../devices/interceptability.ts';
 import {
   installSimCert,
   listBootedSimulators,
@@ -783,6 +784,15 @@ export function buildRouter(deps: ApiDeps): Router {
     asyncHandler(async (req, res) => {
       await teardownAndroid(req.params.serial, localeFromRequest(req));
       res.json({ ok: true });
+    }),
+  );
+
+  router.get(
+    '/api/devices/android/:serial/interception',
+    asyncHandler(async (req, res) => {
+      const app = parseNonEmpty(req.query.app, 'app');
+      const hosts = deps.proxyCerts.snapshot().certs.map((cert) => cert.host);
+      res.json(await diagnoseInterception(req.params.serial, app, localeFromRequest(req), hosts));
     }),
   );
 

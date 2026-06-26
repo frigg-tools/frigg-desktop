@@ -96,6 +96,22 @@ const en: Dictionary = {
   'setup.step5.body':
     "If the upstream server demands a <strong>client</strong> certificate, Frigg must present it during interception — it terminates the app's TLS, so the app's own client cert stops at Frigg. Export the client cert + key as a PKCS#12 and add it under <strong>Devices → Upstream certs</strong> (upstream host + .p12 path). Without it, an mTLS API answers <code>401 Client certificate required</code>.",
   'setup.fingerprint': 'CA SHA-256 fingerprint',
+  'diagnose.proxy.title': 'Device proxy',
+  'diagnose.proxy.ok': 'Device traffic is routed to Frigg ({value}).',
+  'diagnose.proxy.missing':
+    'No HTTP proxy set on the device, so its traffic never reaches Frigg. Run device setup on the Devices screen.',
+  'diagnose.installed.title': 'App installed',
+  'diagnose.installed.missing': 'Package {app} is not installed on this device.',
+  'diagnose.trust.title': 'App trusts user certificates',
+  'diagnose.trust.debug':
+    'App is a debug build, so it can trust the Frigg (user-installed) CA. It must still ship a network_security_config that trusts <certificates src="user"/> — a debug build without it ignores the cert too.',
+  'diagnose.trust.release':
+    "App is a RELEASE build (not debuggable). On Android 7+ release builds trust only system CAs and IGNORE Frigg's user-installed certificate, so HTTPS cannot be decrypted. Install a debug build of the app, or make it trust user CAs via network_security_config.",
+  'diagnose.mtls.title': 'Upstream mTLS',
+  'diagnose.mtls.configured':
+    'Frigg presents an upstream client certificate for: {hosts}. If the app calls an mTLS API on another host, add its .p12 under Devices → Upstream certs.',
+  'diagnose.mtls.none':
+    "No upstream client certificates configured. If the app's API requires mutual TLS (mTLS), interception fails (e.g. 401 Client certificate required) until you add the client .p12 under Devices → Upstream certs.",
 };
 
 const pt: Dictionary = {
@@ -190,6 +206,22 @@ const pt: Dictionary = {
   'setup.step5.body':
     'Se o servidor upstream exige um certificado <strong>cliente</strong>, o Frigg precisa apresentá-lo durante a interceptação — ele termina o TLS do app, então o cert cliente do próprio app morre no Frigg. Exporte o cert cliente + chave como um PKCS#12 e adicione em <strong>Devices → Upstream certs</strong> (host upstream + caminho do .p12). Sem isso, uma API mTLS responde <code>401 Client certificate required</code>.',
   'setup.fingerprint': 'Impressão digital CA SHA-256',
+  'diagnose.proxy.title': 'Proxy do dispositivo',
+  'diagnose.proxy.ok': 'O tráfego do dispositivo está roteado para o Frigg ({value}).',
+  'diagnose.proxy.missing':
+    'Nenhum proxy HTTP setado no dispositivo, então o tráfego dele nunca chega ao Frigg. Rode o setup do dispositivo na tela Devices.',
+  'diagnose.installed.title': 'App instalado',
+  'diagnose.installed.missing': 'O pacote {app} não está instalado neste dispositivo.',
+  'diagnose.trust.title': 'App confia em certificados de usuário',
+  'diagnose.trust.debug':
+    'O app é um build debug, então pode confiar na CA do Frigg (instalada como usuário). Ainda precisa ter um network_security_config que confie em <certificates src="user"/> — um build debug sem isso também ignora o cert.',
+  'diagnose.trust.release':
+    'O app é um build RELEASE (não debuggable). No Android 7+ builds release confiam só em CAs do sistema e IGNORAM o certificado de usuário do Frigg, então o HTTPS não pode ser descriptografado. Instale um build debug do app, ou faça ele confiar em CAs de usuário via network_security_config.',
+  'diagnose.mtls.title': 'mTLS upstream',
+  'diagnose.mtls.configured':
+    'O Frigg apresenta um certificado cliente upstream para: {hosts}. Se o app chamar uma API mTLS em outro host, adicione o .p12 dela em Devices → Upstream certs.',
+  'diagnose.mtls.none':
+    'Nenhum certificado cliente upstream configurado. Se a API do app exige mutual TLS (mTLS), a interceptação falha (ex: 401 Client certificate required) até você adicionar o .p12 cliente em Devices → Upstream certs.',
 };
 
 const dictionaries: Record<ServerLocale, Dictionary> = { en, pt };
