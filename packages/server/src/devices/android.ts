@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AndroidCertMode, AndroidDevice, AndroidSetupResult } from '@frigg/shared';
+import { deriveProxyState, type AndroidCertMode, type AndroidDevice, type AndroidSetupResult } from '@frigg/shared';
 import { st, type ServerLocale } from '../i18n.ts';
 import { run, type ExecResult } from '../lib/exec.ts';
 import { androidCertName, type CaMaterial } from '../proxy/ca.ts';
@@ -32,12 +32,35 @@ export async function listAndroidDevices(): Promise<AndroidDevice[]> {
     .map(parseDeviceLine)
     .filter((device): device is Omit<AndroidDevice, 'proxyConfigured'> => device !== null);
   return Promise.all(
-    parsed.map(async (device) => ({
-      ...device,
-      proxyConfigured: await readProxyConfigured(device.serial),
-      avdName: device.isEmulator ? await readAvdName(device.serial) : undefined,
-    })),
+    parsed.map(async (device) => {
+      const proxyValue = await readProxyValue(device.serial);
+      return {
+        ...device,
+        proxyValue,
+        proxyConfigured: proxyValue !== undefined && proxyValue !== ':0',
+        ipAddress: device.isEmulator ? undefined : await readDeviceIp(device.serial),
+        avdName: device.isEmulator ? await readAvdName(device.serial) : undefined,
+      };
+    }),
   );
+}
+
+export function parseWlan0Ip(raw: string): string | undefined {
+  const match = raw.match(/\binet (\d{1,3}(?:\.\d{1,3}){3})/);
+  return match ? match[1] : undefined;
+}
+
+async function readDeviceIp(serial: string): Promise<string | undefined> {
+  const result = await run('adb', ['-s', serial, 'shell', 'ip', '-o', '-f', 'inet', 'addr', 'show', 'wlan0']);
+  if (!result.ok) return undefined;
+  return parseWlan0Ip(result.stdout);
+}
+
+async function readProxyValue(serial: string): Promise<string | undefined> {
+  const result = await run('adb', ['-s', serial, 'shell', 'settings', 'get', 'global', 'http_proxy']);
+  if (!result.ok) return undefined;
+  const value = result.stdout.trim();
+  return value === '' || value === 'null' ? undefined : value;
 }
 
 export async function setupAndroid(
@@ -69,6 +92,34 @@ export async function teardownAndroid(serial: string, _locale: ServerLocale): Pr
   await run('adb', ['-s', serial, 'shell', 'settings', 'put', 'global', 'http_proxy', ':0']);
 }
 
+export async function teardownAndroidProxiesPointingAt(friggAddr: string | null, locale: ServerLocale): Promise<void> {
+  if (friggAddr === null) return;
+  const devices = await listAndroidDevices();
+  await Promise.allSettled(
+    devices
+      .filter((device) => deriveProxyState(device.proxyValue, friggAddr) === 'frigg')
+      .map((device) => teardownAndroid(device.serial, locale)),
+  );
+}
+
+export async function installAndroidCert(
+  serial: string,
+  opts: { apiPort: number; lanIp: string | null; ca: CaMaterial; locale: ServerLocale },
+): Promise<{ certMode: AndroidCertMode; messages: string[]; fingerprint: string }> {
+  const messages: string[] = [];
+  const isEmulator = serial.startsWith('emulator-');
+  const proxyHost = isEmulator ? '10.0.2.2' : opts.lanIp;
+  const certMode = await installCa(serial, opts, proxyHost, messages, opts.locale);
+  return { certMode, messages, fingerprint: opts.ca.fingerprint };
+}
+
+export async function openTrustedCredentials(serial: string): Promise<{ ok: boolean }> {
+  const result = await run('adb', ['-s', serial, 'shell', 'am', 'start', '-a', 'com.android.settings.TRUSTED_CREDENTIALS_USER']);
+  if (result.ok) return { ok: true };
+  const fallback = await run('adb', ['-s', serial, 'shell', 'am', 'start', '-a', 'android.settings.SECURITY_SETTINGS']);
+  return { ok: fallback.ok };
+}
+
 function parseDeviceLine(line: string): Omit<AndroidDevice, 'proxyConfigured'> | null {
   const tokens = line.trim().split(/\s+/);
   const serial = tokens[0];
@@ -85,13 +136,6 @@ function parseDeviceLine(line: string): Omit<AndroidDevice, 'proxyConfigured'> |
 
 function parseDeviceState(token: string): AndroidDevice['state'] {
   return token === 'device' || token === 'offline' || token === 'unauthorized' ? token : 'unknown';
-}
-
-async function readProxyConfigured(serial: string): Promise<boolean> {
-  const result = await run('adb', ['-s', serial, 'shell', 'settings', 'get', 'global', 'http_proxy']);
-  if (!result.ok) return false;
-  const value = result.stdout.trim();
-  return value !== '' && value !== 'null' && value !== ':0';
 }
 
 async function installCa(

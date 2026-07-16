@@ -32,7 +32,15 @@ import type { SqlManager } from '../sql/manager.ts';
 import type { SqlConnectionPatch, SqlConnectionStore } from '../sql/connection-store.ts';
 import { runRequest } from '../api-client/runner.ts';
 import { listApps } from '../devices/apps.ts';
-import { adbStatus, listAndroidDevices, setupAndroid, teardownAndroid } from '../devices/android.ts';
+import {
+  adbStatus,
+  installAndroidCert,
+  listAndroidDevices,
+  openTrustedCredentials,
+  setupAndroid,
+  teardownAndroid,
+} from '../devices/android.ts';
+import type { CertTrustTracker } from '../devices/cert-trust-tracker.ts';
 import { bootAvd, createRootedAvd, listAvds } from '../devices/avd.ts';
 import { diagnoseInterception } from '../devices/interceptability.ts';
 import {
@@ -70,6 +78,7 @@ export interface ApiDeps {
   sql: SqlManager;
   sqlConnections: SqlConnectionStore;
   frida: FridaManager;
+  certTrust: CertTrustTracker;
   reloadProxy: () => Promise<void>;
 }
 
@@ -755,8 +764,14 @@ export function buildRouter(deps: ApiDeps): Router {
         listPhysicalIosDevices(),
         getMacProxyState(),
       ]);
+      const now = Date.now();
+      const androidWithCert = android.map((device) => ({
+        ...device,
+        certTrusted: device.ipAddress === undefined ? undefined : deps.certTrust.isTrusted(device.ipAddress, now),
+        lastDecryptedAt: deps.certTrust.lastDecryptedAt(device.ipAddress),
+      }));
       const snapshot: DevicesSnapshot = {
-        android,
+        android: androidWithCert,
         iosSimulators,
         iosDevices,
         tooling: { adb, xcrun, macosProxy },
@@ -784,6 +799,26 @@ export function buildRouter(deps: ApiDeps): Router {
     asyncHandler(async (req, res) => {
       await teardownAndroid(req.params.serial, localeFromRequest(req));
       res.json({ ok: true });
+    }),
+  );
+
+  router.post(
+    '/api/devices/android/:serial/install-cert',
+    asyncHandler(async (req, res) => {
+      const result = await installAndroidCert(req.params.serial, {
+        apiPort: deps.apiPort,
+        lanIp: getLanIp(),
+        ca: deps.ca,
+        locale: localeFromRequest(req),
+      });
+      res.json(result);
+    }),
+  );
+
+  router.post(
+    '/api/devices/android/:serial/open-trusted-creds',
+    asyncHandler(async (req, res) => {
+      res.json(await openTrustedCredentials(req.params.serial));
     }),
   );
 

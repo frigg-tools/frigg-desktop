@@ -39,9 +39,14 @@ async function main(): Promise<void> {
     apiPort: portFromEnv('FRIGG_API_PORT', DEFAULT_API_PORT),
   });
   printBanner(frigg);
-  process.on('SIGINT', () => {
+  let stopping = false;
+  const shutdown = (): void => {
+    if (stopping) return;
+    stopping = true;
     void frigg.stop().then(() => process.exit(0));
-  });
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 main().catch((error: NodeJS.ErrnoException & { port?: number }) => {

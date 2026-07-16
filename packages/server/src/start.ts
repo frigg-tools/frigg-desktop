@@ -29,6 +29,8 @@ import { ensureCa } from './proxy/ca.ts';
 import { ProxyEngine } from './proxy/engine.ts';
 import { ProxyCertStore } from './proxy/proxy-cert-store.ts';
 import { TrafficStore } from './proxy/traffic-store.ts';
+import { CertTrustTracker } from './devices/cert-trust-tracker.ts';
+import { teardownAndroidProxiesPointingAt } from './devices/android.ts';
 import {
   createFileSecretBox,
   SqlConnectionStore,
@@ -102,6 +104,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const ca = await ensureCa();
   const mocks = await MockStore.load(mocksPath);
   const traffic = new TrafficStore();
+  const certTrust = new CertTrustTracker();
   const breakpoints = new BreakpointManager();
   const proxyCerts = await ProxyCertStore.load(proxyCertsPath);
 
@@ -135,6 +138,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     sql,
     sqlConnections,
     frida,
+    certTrust,
     reloadProxy: () => engine.reload(),
   };
 
@@ -146,6 +150,11 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const httpServer = http.createServer(app);
   const hub = new WsHub(httpServer, '/ws');
   traffic.on('event', (ev: ServerEvent) => hub.broadcast(ev));
+  traffic.on('event', (ev: ServerEvent) => {
+    if (ev.type === 'request' && ev.exchange.request.protocol === 'https') {
+      certTrust.recordDecryptedHttps(ev.exchange.request.clientAddress, Date.now());
+    }
+  });
   mocks.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   logcat.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   breakpoints.on('event', (ev: ServerEvent) => hub.broadcast(ev));
@@ -160,6 +169,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
 
   const lanIp = getLanIp();
   const host = lanIp ?? 'localhost';
+  const friggProxyAddr = lanIp === null ? null : `${lanIp}:${actualProxyPort}`;
 
   const stop = async (): Promise<void> => {
     deviceWatcher.dispose();
@@ -174,6 +184,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
       sql.disposeAll(),
       frida.stop(),
       disableMacProxyIfEnabledByFrigg(),
+      teardownAndroidProxiesPointingAt(friggProxyAddr, 'en'),
     ]);
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   };
