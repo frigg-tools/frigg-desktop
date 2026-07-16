@@ -183,7 +183,7 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
           className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-rose-500/30 hover:text-rose-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending === 'teardown' ? <Spinner /> : null}
-          {t('action.remove')}
+          {t('devices.android.disableProxy')}
         </button>
       </div>
       {error !== null ? (
