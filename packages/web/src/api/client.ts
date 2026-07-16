@@ -1,4 +1,5 @@
 import type {
+  AndroidCertMode,
   AndroidSetupResult,
   Avd,
   AvdCreateResult,
@@ -137,6 +138,18 @@ export function setupAndroid(serial: string): Promise<AndroidSetupResult> {
 
 export function teardownAndroid(serial: string): Promise<{ ok: boolean }> {
   return request(`/api/devices/android/${encodeURIComponent(serial)}/teardown`, {
+    method: 'POST',
+  });
+}
+
+export function installCertAndroid(
+  serial: string,
+): Promise<{ certMode: AndroidCertMode; messages: string[]; fingerprint: string }> {
+  return request(`/api/devices/android/${encodeURIComponent(serial)}/install-cert`, { method: 'POST' });
+}
+
+export function openTrustedCreds(serial: string): Promise<{ ok: boolean }> {
+  return request(`/api/devices/android/${encodeURIComponent(serial)}/open-trusted-creds`, {
     method: 'POST',
   });
 }

@@ -191,6 +191,19 @@ export interface AndroidDevice {
   state: 'device' | 'offline' | 'unauthorized' | 'unknown';
   isEmulator: boolean;
   proxyConfigured: boolean;
+  ipAddress?: string;
+  proxyValue?: string;
+  certTrusted?: boolean;
+  lastDecryptedAt?: number;
+}
+
+export type ProxyState = 'frigg' | 'other' | 'off';
+
+export function deriveProxyState(value: string | undefined, friggAddr: string | null): ProxyState {
+  const normalized = (value ?? '').trim();
+  if (normalized === '' || normalized === 'null' || normalized === ':0') return 'off';
+  if (friggAddr !== null && normalized === friggAddr) return 'frigg';
+  return 'other';
 }
 
 export interface AndroidSetupResult {
