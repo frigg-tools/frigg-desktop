@@ -16,7 +16,9 @@
     "desktop": "concurrently -n server,web,app -c green,cyan,magenta \"npm run dev:server\" \"npm run dev:web\" \"npm run dev -w @frigg/desktop\"",
     "desktop:dist": "npm run build && npm run dist -w @frigg/desktop",
     "mcp": "tsx packages/mcp/src/index.ts",
-    "build:plugin": "node scripts/build-plugin.mjs"
+    "build:plugin": "node scripts/build-plugin.mjs",
+    "landing": "npm run dev -w @frigg/landing",
+    "landing:build": "npm run build -w @frigg/landing"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
