@@ -22,8 +22,8 @@ export type ReleaseState =
   | { status: 'error' };
 
 const RELEASE: Release = {
-  version: 'v1.0.0',
-  assets: [{ arch: 'apple', url: `${DOWNLOAD_BASE}/Frigg-1.0.0-arm64.dmg`, size: 103760259 }],
+  version: 'v1.1.0',
+  assets: [{ arch: 'apple', url: `${DOWNLOAD_BASE}/Frigg-1.1.0-arm64.dmg`, size: 105725442 }],
 };
 
 export function detectArch(): Arch {
