@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
-import type { ServerEvent } from '@frigg/shared';
+import type { ServerEvent, AppLogEvent } from '@frigg/shared';
 import { ApiClientStore } from './api-client/store.ts';
 import { buildRouter, type ApiDeps } from './api/router.ts';
 import { WsHub } from './api/ws.ts';
@@ -166,6 +166,10 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   sqlConnections.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   frida.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   deviceWatcher.on('event', (ev: ServerEvent) => hub.broadcast(ev));
+  loggerService.onLog((entry) => {
+    const event: AppLogEvent = { type: 'app-log', entry };
+    hub.broadcast(event);
+  });
   deviceWatcher.start();
 
   const actualApiPort = await listenWithFallback(httpServer, apiPort);
