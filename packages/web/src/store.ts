@@ -47,7 +47,7 @@ import {
 import * as api from './api/client';
 import { recordSqlHistory } from './components/sql/history';
 
-export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida';
+export type Screen = 'traffic' | 'mocks' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida' | 'logs';
 export type LogLevelFilter = LogLevel | 'ALL';
 
 const LOG_BUFFER_LIMIT = 5000;

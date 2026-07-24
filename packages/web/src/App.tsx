@@ -12,6 +12,7 @@ import SqlScreen from './screens/SqlScreen';
 import ClientScreen from './screens/ClientScreen';
 import McpScreen from './screens/McpScreen';
 import FridaScreen from './screens/FridaScreen';
+import LogsScreen from './screens/LogsScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
 import PausedExchangeModal from './components/breakpoints/PausedExchangeModal';
 
@@ -77,6 +78,26 @@ function TerminalIcon() {
       <path d="m4 8 4 4-4 4" />
       <path d="M12 16h6" />
       <rect x="2" y="3" width="20" height="18" rx="2.5" />
+    </svg>
+  );
+}
+
+function LogsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+      <path d="M10 9H8" />
     </svg>
   );
 }
@@ -186,6 +207,7 @@ const NAV_ITEMS: NavItem[] = [
   { screen: 'sql', labelKey: 'nav.sql', icon: <DatabaseServerIcon /> },
   { screen: 'devices', labelKey: 'nav.devices', icon: <SmartphoneIcon /> },
   { screen: 'mcp', labelKey: 'nav.mcp', icon: <McpIcon /> },
+  { screen: 'logs', labelKey: 'nav.logs', icon: <LogsIcon /> },
 ];
 
 function LanguageToggle() {
@@ -331,6 +353,8 @@ export default function App() {
           <McpScreen />
         ) : screen === 'frida' ? (
           <FridaScreen />
+        ) : screen === 'logs' ? (
+          <LogsScreen />
         ) : (
           <DevicesScreen />
         )}
