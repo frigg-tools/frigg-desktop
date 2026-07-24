@@ -6,6 +6,9 @@ import type {
   ApiClientCert,
   ApiKeyValue,
   ApiRequest,
+  AppLogEntry,
+  AppLogLevel,
+  AppLogSource,
   BodyMatchMode,
   BreakpointDirection,
   BreakpointMatcher,
@@ -27,6 +30,7 @@ import type {
   SqlRowEdit,
   SqlSslMode,
 } from '@frigg/shared';
+import type { LoggerService } from '../logging/logger-service.ts';
 import { ApiClientStore } from '../api-client/store.ts';
 import type { SqlManager } from '../sql/manager.ts';
 import type { SqlConnectionPatch, SqlConnectionStore } from '../sql/connection-store.ts';
@@ -71,6 +75,7 @@ export interface ApiDeps {
   proxyPort: number;
   apiPort: number;
   logcat: LogcatManager;
+  loggerService: LoggerService;
   db: DbInspector;
   apiClient: ApiClientStore;
   breakpoints: BreakpointManager;
@@ -871,6 +876,33 @@ export function buildRouter(deps: ApiDeps): Router {
     res.json(deps.logcat.status);
   });
 
+  router.get('/api/logs', asyncHandler(async (req, res) => {
+    const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+    const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+    const level = typeof req.query.level === 'string' ? (req.query.level as AppLogLevel) : undefined;
+    const source = typeof req.query.source === 'string' ? (req.query.source as AppLogSource) : undefined;
+    const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+    const entries = await deps.loggerService.query({ from, to, level, source, q, limit });
+    res.json(entries);
+  }));
+
+  router.post('/api/logs', (req, res) => {
+    const body = req.body as Partial<AppLogEntry>;
+    if (!body.message || typeof body.message !== 'string') {
+      badRequest('message is required');
+    }
+    const entry = deps.loggerService.log({
+      level: body.level ?? 'info',
+      source: body.source ?? 'web',
+      context: body.context ?? 'web',
+      message: body.message,
+      error: body.error,
+      metadata: body.metadata,
+    });
+    res.json(entry);
+  });
+
   router.get(
     '/api/frida/snapshot',
     asyncHandler(async (_req, res) => {
@@ -1294,7 +1326,14 @@ export function buildRouter(deps: ApiDeps): Router {
 
   router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const status = statusForError(error);
-    if (status === 500) console.error(error);
+    if (status === 500) {
+      deps.loggerService.error(
+        'server',
+        'api-router',
+        'API error',
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
     res.status(status).json({ error: messageForError(error) });
   });
 

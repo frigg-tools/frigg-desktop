@@ -1,6 +1,8 @@
 import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
 import { startFrigg } from './start.ts';
 
+export { LoggerService } from './logging/logger-service.ts';
+
 function portFromEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   if (!raw) return fallback;
@@ -37,6 +39,10 @@ async function main(): Promise<void> {
   const frigg = await startFrigg({
     proxyPort: portFromEnv('FRIGG_PROXY_PORT', DEFAULT_PROXY_PORT),
     apiPort: portFromEnv('FRIGG_API_PORT', DEFAULT_API_PORT),
+  });
+  frigg.loggerService.info('server', 'cli', 'Frigg server started', {
+    apiPort: frigg.apiPort,
+    proxyPort: frigg.proxyPort,
   });
   printBanner(frigg);
   let stopping = false;

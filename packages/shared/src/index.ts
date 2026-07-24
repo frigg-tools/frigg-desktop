@@ -296,6 +296,28 @@ export interface LogSessionStatus {
   error: string | null;
 }
 
+export type AppLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+export type AppLogSource = 'server' | 'desktop' | 'web';
+
+export interface AppLogEntry {
+  timestamp: string; // ISO 8601
+  level: AppLogLevel;
+  source: AppLogSource;
+  context?: string;
+  message: string;
+  error?: {
+    name: string;
+    message: string;
+    stack?: string;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+export interface AppLogEvent {
+  type: 'app-log';
+  entry: AppLogEntry;
+}
+
 export interface ProxyClientCert {
   id: string;
   host: string;
@@ -452,7 +474,8 @@ export type ServerEvent =
   | { type: 'sql-connections-updated'; connections: SqlConnection[] }
   | { type: 'frida-server-status'; status: FridaServerStatus }
   | { type: 'frida-session-status'; status: FridaSessionStatus }
-  | { type: 'frida-message'; message: FridaMessage };
+  | { type: 'frida-message'; message: FridaMessage }
+  | AppLogEvent;
 
 export interface MocksSnapshot {
   folders: MockFolder[];

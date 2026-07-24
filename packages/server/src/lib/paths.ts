@@ -12,6 +12,10 @@ export const sqlConnectionsPath = path.join(friggDir, 'sql-connections.json');
 export const sqlSecretsPath = path.join(friggDir, 'sql-secrets.json');
 export const sqlSecretKeyPath = path.join(friggDir, 'sql-secret.key');
 
+export function logsPath(): string {
+  return path.join(friggDir, 'logs');
+}
+
 export function ensureFriggDirs(): void {
   fs.mkdirSync(path.join(friggDir, 'ca'), { recursive: true });
 }

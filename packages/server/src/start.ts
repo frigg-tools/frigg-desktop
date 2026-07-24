@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
-import type { ServerEvent } from '@frigg/shared';
+import type { ServerEvent, AppLogEvent } from '@frigg/shared';
 import { ApiClientStore } from './api-client/store.ts';
 import { buildRouter, type ApiDeps } from './api/router.ts';
 import { WsHub } from './api/ws.ts';
@@ -15,12 +15,14 @@ import { getLanIp } from './lib/net.ts';
 import {
   apiClientPath,
   ensureFriggDirs,
+  logsPath,
   mocksPath,
   proxyCertsPath,
   sqlConnectionsPath,
   sqlSecretKeyPath,
   sqlSecretsPath,
 } from './lib/paths.ts';
+import { LoggerService } from './logging/logger-service.ts';
 import { FridaManager } from './frida/index.ts';
 import { LogcatManager } from './logcat/index.ts';
 import { MockStore } from './mocks/store.ts';
@@ -54,6 +56,7 @@ export interface FriggHandles {
   uiUrl: string;
   setupUrl: string;
   webUiAvailable: boolean;
+  loggerService: LoggerService;
   stop: () => Promise<void>;
 }
 
@@ -101,6 +104,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const apiPort = options.apiPort ?? DEFAULT_API_PORT;
 
   ensureFriggDirs();
+  const loggerService = new LoggerService(logsPath());
   const ca = await ensureCa();
   const mocks = await MockStore.load(mocksPath);
   const traffic = new TrafficStore();
@@ -131,6 +135,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     proxyPort: actualProxyPort,
     apiPort,
     logcat,
+    loggerService,
     db,
     apiClient,
     breakpoints,
@@ -161,11 +166,17 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   sqlConnections.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   frida.on('event', (ev: ServerEvent) => hub.broadcast(ev));
   deviceWatcher.on('event', (ev: ServerEvent) => hub.broadcast(ev));
+  loggerService.onLog((entry) => {
+    const event: AppLogEvent = { type: 'app-log', entry };
+    hub.broadcast(event);
+  });
   deviceWatcher.start();
 
   const actualApiPort = await listenWithFallback(httpServer, apiPort);
   deps.apiPort = actualApiPort;
-  httpServer.on('error', (error) => console.error(`HTTP server error: ${error.message}`));
+  httpServer.on('error', (error) => {
+    loggerService.error('server', 'http-server', 'HTTP server error', error);
+  });
 
   const lanIp = getLanIp();
   const host = lanIp ?? 'localhost';
@@ -173,6 +184,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
 
   const stop = async (): Promise<void> => {
     deviceWatcher.dispose();
+    loggerService.dispose();
     await Promise.allSettled([
       engine.stop(),
       mocks.flush(),
@@ -197,6 +209,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     uiUrl: `http://localhost:${actualApiPort}`,
     setupUrl: `http://${host}:${actualApiPort}/setup`,
     webUiAvailable,
+    loggerService,
     stop,
   };
 }
