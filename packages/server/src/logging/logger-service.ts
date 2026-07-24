@@ -51,7 +51,7 @@ export class LoggerService {
     }
   }
 
-  log(partial: Omit<AppLogEntry, 'timestamp'>): AppLogEntry {
+  log(partial: Omit<AppLogEntry, 'timestamp'> & { timestamp?: string }): AppLogEntry {
     if (this.disposed) throw new Error('LoggerService is disposed');
     const entry: AppLogEntry = { timestamp: new Date().toISOString(), ...partial };
     this.buffer.push(entry);
