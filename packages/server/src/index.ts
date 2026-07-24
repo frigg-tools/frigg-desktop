@@ -1,6 +1,8 @@
 import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
 import { startFrigg } from './start.ts';
 
+export { LoggerService } from './logging/logger-service.ts';
+
 function portFromEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   if (!raw) return fallback;

@@ -10,6 +10,7 @@ import {
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
+import { initDesktopErrorHandlers, setDesktopLogService } from './logging/desktop-logger';
 
 interface DesktopSecretBox {
   encrypt(plain: string): string;
@@ -80,6 +81,7 @@ async function resolveAppUrl(): Promise<string> {
     webDir: path.join(process.resourcesPath, 'web'),
     ...(secretBox ? { secretBox } : {}),
   });
+  setDesktopLogService(frigg.loggerService);
   stopServer = frigg.stop;
   return frigg.uiUrl;
 }
@@ -141,6 +143,7 @@ function buildMenu(): void {
 async function bootstrap(): Promise<void> {
   ensureToolingOnPath();
   buildMenu();
+  initDesktopErrorHandlers();
   try {
     const url = await resolveAppUrl();
     createWindow(url);
