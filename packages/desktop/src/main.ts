@@ -10,7 +10,7 @@ import {
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import { initDesktopErrorHandlers, setDesktopLogService } from './logging/desktop-logger';
+import { desktopError, initDesktopErrorHandlers, setDesktopLogService } from './logging/desktop-logger';
 
 interface DesktopSecretBox {
   encrypt(plain: string): string;
@@ -181,6 +181,6 @@ app.on('before-quit', (event) => {
   isQuitting = true;
   event.preventDefault();
   void stopServer()
-    .catch((error) => console.error('Frigg shutdown error:', error))
+    .catch((error) => desktopError('desktop', 'Shutdown error', error))
     .finally(() => app.exit(0));
 });

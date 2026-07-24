@@ -1326,7 +1326,14 @@ export function buildRouter(deps: ApiDeps): Router {
 
   router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const status = statusForError(error);
-    if (status === 500) console.error(error);
+    if (status === 500) {
+      deps.loggerService.error(
+        'server',
+        'api-router',
+        'API error',
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
     res.status(status).json({ error: messageForError(error) });
   });
 

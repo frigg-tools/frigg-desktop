@@ -174,7 +174,9 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
 
   const actualApiPort = await listenWithFallback(httpServer, apiPort);
   deps.apiPort = actualApiPort;
-  httpServer.on('error', (error) => console.error(`HTTP server error: ${error.message}`));
+  httpServer.on('error', (error) => {
+    loggerService.error('server', 'http-server', 'HTTP server error', error);
+  });
 
   const lanIp = getLanIp();
   const host = lanIp ?? 'localhost';
