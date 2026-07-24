@@ -10,6 +10,9 @@ import {
   type ApiRequest,
   type ApiRunResult,
   type ApiWorkspace,
+  type AppLogEntry,
+  type AppLogLevel,
+  type AppLogSource,
   type Avd,
   type AvdCreateResult,
   type BreakpointResume,
@@ -94,6 +97,10 @@ export interface AppState {
   logPackage: string;
   logApps: DeviceApp[];
   logFilters: LogFilters;
+  appLogs: AppLogEntry[];
+  appLogFilters: { minLevel: AppLogLevel | 'ALL'; text: string; source: AppLogSource | 'ALL' };
+  setAppLogFilters: (patch: Partial<AppState['appLogFilters']>) => void;
+  loadAppLogs: () => Promise<void>;
   setLogTarget: (target: LogTarget | null) => void;
   setLogPackage: (value: string) => void;
   setLogFilters: (patch: Partial<LogFilters>) => void;
@@ -445,6 +452,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   logPackage: '',
   logApps: [],
   logFilters: { minLevel: 'ALL', text: '' },
+  appLogs: [],
+  appLogFilters: { minLevel: 'ALL', text: '', source: 'ALL' },
+  setAppLogFilters: (patch) => set((s) => ({ appLogFilters: { ...s.appLogFilters, ...patch } })),
+  loadAppLogs: async () => {
+    const entries = await api.getAppLogs();
+    set({ appLogs: entries.slice(-5000) });
+  },
   setLogTarget: (target) => {
     set({ logTarget: target, logPackage: '', logApps: [] });
     if (target) void get().loadLogApps();
@@ -1188,6 +1202,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         resetPendingLogs();
         set({ logEntries: [] });
         break;
+      case 'app-log': {
+        set((s) => ({ appLogs: [...s.appLogs, ev.entry].slice(-5000) }));
+        break;
+      }
       case 'log-status':
         set({ logStatus: ev.status });
         break;

@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { connectWs } from './api/ws';
 import { useAppStore, type Screen } from './store';
+import { initWebLogger } from './logging/web-logger';
 import { useT, useLocale } from './i18n';
 import TrafficScreen from './screens/TrafficScreen';
 import MocksScreen from './screens/MocksScreen';
@@ -217,6 +218,7 @@ export default function App() {
   const t = useT();
 
   useEffect(() => {
+    initWebLogger();
     void useAppStore
       .getState()
       .loadAll()

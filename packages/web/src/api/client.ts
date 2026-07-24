@@ -1,6 +1,7 @@
 import type {
   AndroidCertMode,
   AndroidSetupResult,
+  AppLogEntry,
   Avd,
   AvdCreateResult,
   ApiClientCert,
@@ -67,7 +68,7 @@ function currentLocale(): string {
   return 'en';
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set('X-Frigg-Locale', currentLocale());
   const res = await fetch(path, { ...init, headers });
@@ -77,12 +78,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-function jsonInit(method: 'POST' | 'PUT', payload: unknown): RequestInit {
+export function jsonInit(method: 'POST' | 'PUT', payload: unknown): RequestInit {
   return {
     method,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   };
+}
+
+export function getAppLogs(limit = 200): Promise<AppLogEntry[]> {
+  return request(`/api/logs?limit=${limit}`);
 }
 
 export function getStatus(): Promise<ProxyStatus> {
