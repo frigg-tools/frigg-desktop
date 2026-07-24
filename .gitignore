@@ -24,3 +24,7 @@ release/
 .frigg/
 
 .claude/agent-memory/
+
+# worktrees
+.worktrees/
+WorktreeContext.md
