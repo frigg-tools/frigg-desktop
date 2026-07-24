@@ -38,6 +38,10 @@ async function main(): Promise<void> {
     proxyPort: portFromEnv('FRIGG_PROXY_PORT', DEFAULT_PROXY_PORT),
     apiPort: portFromEnv('FRIGG_API_PORT', DEFAULT_API_PORT),
   });
+  frigg.loggerService.info('server', 'cli', 'Frigg server started', {
+    apiPort: frigg.apiPort,
+    proxyPort: frigg.proxyPort,
+  });
   printBanner(frigg);
   let stopping = false;
   const shutdown = (): void => {

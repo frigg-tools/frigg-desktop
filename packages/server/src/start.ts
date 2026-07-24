@@ -15,12 +15,14 @@ import { getLanIp } from './lib/net.ts';
 import {
   apiClientPath,
   ensureFriggDirs,
+  logsPath,
   mocksPath,
   proxyCertsPath,
   sqlConnectionsPath,
   sqlSecretKeyPath,
   sqlSecretsPath,
 } from './lib/paths.ts';
+import { LoggerService } from './logging/logger-service.ts';
 import { FridaManager } from './frida/index.ts';
 import { LogcatManager } from './logcat/index.ts';
 import { MockStore } from './mocks/store.ts';
@@ -54,6 +56,7 @@ export interface FriggHandles {
   uiUrl: string;
   setupUrl: string;
   webUiAvailable: boolean;
+  loggerService: LoggerService;
   stop: () => Promise<void>;
 }
 
@@ -101,6 +104,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const apiPort = options.apiPort ?? DEFAULT_API_PORT;
 
   ensureFriggDirs();
+  const loggerService = new LoggerService(logsPath());
   const ca = await ensureCa();
   const mocks = await MockStore.load(mocksPath);
   const traffic = new TrafficStore();
@@ -131,6 +135,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     proxyPort: actualProxyPort,
     apiPort,
     logcat,
+    loggerService,
     db,
     apiClient,
     breakpoints,
@@ -173,6 +178,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
 
   const stop = async (): Promise<void> => {
     deviceWatcher.dispose();
+    loggerService.dispose();
     await Promise.allSettled([
       engine.stop(),
       mocks.flush(),
@@ -197,6 +203,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     uiUrl: `http://localhost:${actualApiPort}`,
     setupUrl: `http://${host}:${actualApiPort}/setup`,
     webUiAvailable,
+    loggerService,
     stop,
   };
 }
