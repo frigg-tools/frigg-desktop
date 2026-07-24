@@ -70,7 +70,7 @@ export class LoggerService {
   private appendToFile(entry: AppLogEntry): void {
     try {
       const line = JSON.stringify(entry) + '\n';
-      writeFileSync(this.fileNameFor(), line, { flag: 'a' });
+      writeFileSync(this.fileNameFor(new Date(entry.timestamp)), line, { flag: 'a' });
     } catch {
       // best-effort persistence
     }
