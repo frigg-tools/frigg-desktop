@@ -17,7 +17,7 @@
   "dependencies": {
     "@frigg/shared": "*",
     "better-sqlite3": "^12.11.1",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "mockttp": "^4.0.0",
     "mysql2": "^3.22.5",
     "pg": "^8.22.0",
