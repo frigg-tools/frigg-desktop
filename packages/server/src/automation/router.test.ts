@@ -174,6 +174,17 @@ describe('automation REST router', () => {
       .expect(({ body }) => expect(body.error).toContain('not supported'));
   });
 
+  it.each([
+    ['keyboard_not_ready', { id: 'text', type: 'text', data: { text: 'Login42' } }],
+    ['app_start_timeout', { id: 'launch', type: 'launchApp', data: { packageName: 'com.example.app' } }],
+  ] as const)('returns a device conflict when readiness condition %s times out', async (code, node) => {
+    device.perform.mockRejectedValueOnce(Object.assign(new Error('Android action readiness timed out.'), { code }));
+    await local(request(app).post('/api/automation-devices/emulator-5554/test-action'))
+      .send({ requestId: `readiness-${code}`, node })
+      .expect(409)
+      .expect(({ body }) => expect(body.error).toContain('readiness'));
+  });
+
   it('creates a run, polls its final snapshot, and fetches its opaque screenshot artifact', async () => {
     const created = await automations.create(definition);
     const response = await local(request(app).post(`/api/automations/${created.id}/runs`))

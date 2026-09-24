@@ -36,6 +36,7 @@ function tap(data: Record<string, unknown>): AutomationNode {
 function readyRunner(implementation?: Runner) {
   const runner = vi.fn<Runner>(implementation ?? (async (_command, args) => {
     if (args[2] === 'get-state') return result(Buffer.from('device\n'));
+    if (args[2] === 'shell' && args[3] === 'dumpsys' && args[4] === 'input_method') return result(Buffer.from('mInputShown=true\n'));
     if (args[2] === 'shell' && args[3] === 'dumpsys') return result(Buffer.from('SurfaceOrientation: 0\n'));
     if (args[2] === 'exec-out') return result(png(400, 800));
     return result();
@@ -67,7 +68,101 @@ describe('AndroidAutomationDevice', () => {
     await device.perform('emulator-5554', {
       id: 'text', type: 'text', data: { text: 'Hi 42' }, position: { x: 0, y: 0 },
     }, new AbortController().signal);
-    expect(runner).toHaveBeenCalledWith('adb', ['-s', 'emulator-5554', 'shell', 'input', 'text', 'Hi%s42'], expect.any(Object));
+    expect(runner.mock.calls.map((call) => call[1])).toEqual([
+      ['-s', 'emulator-5554', 'get-state'],
+      ['-s', 'emulator-5554', 'shell', 'dumpsys', 'input_method'],
+      ['-s', 'emulator-5554', 'shell', 'input', 'text', 'Hi%s42'],
+    ]);
+  });
+
+  it('waits for the soft keyboard to become visible before typing', async () => {
+    let keyboardChecks = 0;
+    const runner = readyRunner(async (_command, args) => {
+      if (args[2] === 'get-state') return result(Buffer.from('device\n'));
+      if (args[2] === 'shell' && args[3] === 'dumpsys' && args[4] === 'input_method') {
+        keyboardChecks += 1;
+        return result(Buffer.from(keyboardChecks === 1 ? 'mInputShown=false\n' : 'mInputShown=true\n'));
+      }
+      return result();
+    });
+
+    await new AndroidAutomationDevice(runner).perform('emulator-5554', {
+      id: 'text', type: 'text', data: { text: 'Login42' }, position: { x: 0, y: 0 },
+    }, new AbortController().signal);
+
+    expect(keyboardChecks).toBe(2);
+    expect(runner.mock.calls.at(-1)?.[1]).toEqual(['-s', 'emulator-5554', 'shell', 'input', 'text', 'Login42']);
+  });
+
+  it('waits for the launched package to reach the foreground', async () => {
+    let foregroundChecks = 0;
+    const runner = readyRunner(async (_command, args) => {
+      if (args[2] === 'get-state') return result(Buffer.from('device\n'));
+      if (args[2] === 'shell' && args[3] === 'dumpsys' && args[4] === 'activity' && args[5] === 'activities') {
+        foregroundChecks += 1;
+        const foreground = foregroundChecks === 1
+          ? 'mResumedActivity: ActivityRecord{abc com.android.launcher3/.Launcher}\nActivityRecord{def com.example.app/.MainActivity}\n'
+          : 'mResumedActivity: ActivityRecord{def com.example.app/.MainActivity}\n';
+        return result(Buffer.from(foreground));
+      }
+      return result();
+    });
+
+    await new AndroidAutomationDevice(runner).perform('emulator-5554', {
+      id: 'launch', type: 'launchApp', data: { packageName: 'com.example.app' }, position: { x: 0, y: 0 },
+    }, new AbortController().signal);
+
+    expect(foregroundChecks).toBe(2);
+    expect(runner.mock.calls.at(-1)?.[1]).toEqual([
+      '-s', 'emulator-5554', 'shell', 'dumpsys', 'activity', 'activities',
+    ]);
+  });
+
+  it('does not type when the keyboard never becomes visible', async () => {
+    vi.useFakeTimers();
+    const runner = readyRunner(async (_command, args) => {
+      if (args[2] === 'get-state') return result(Buffer.from('device\n'));
+      if (args[2] === 'shell' && args[3] === 'dumpsys' && args[4] === 'input_method') {
+        return result(Buffer.from('mInputShown=false\n'));
+      }
+      return result();
+    });
+
+    try {
+      const pending = new AndroidAutomationDevice(runner).perform('emulator-5554', {
+        id: 'text', type: 'text', data: { text: 'Login42' }, position: { x: 0, y: 0 },
+      }, new AbortController().signal);
+      const rejection = expect(pending).rejects.toMatchObject({ code: 'keyboard_not_ready' });
+      await vi.advanceTimersByTimeAsync(5_100);
+      await rejection;
+      expect(runner.mock.calls.filter((call) => call[1][4] === 'input_method').length).toBeGreaterThan(1);
+      expect(runner.mock.calls.some((call) => call[1].includes('text'))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('fails to launch when the package never reaches the foreground', async () => {
+    vi.useFakeTimers();
+    const runner = readyRunner(async (_command, args) => {
+      if (args[2] === 'get-state') return result(Buffer.from('device\n'));
+      if (args[2] === 'shell' && args[3] === 'dumpsys' && args[4] === 'activity' && args[5] === 'activities') {
+        return result(Buffer.from('mResumedActivity: ActivityRecord{abc com.android.launcher3/.Launcher}\n'));
+      }
+      return result();
+    });
+
+    try {
+      const pending = new AndroidAutomationDevice(runner).perform('emulator-5554', {
+        id: 'launch', type: 'launchApp', data: { packageName: 'com.example.app' }, position: { x: 0, y: 0 },
+      }, new AbortController().signal);
+      const rejection = expect(pending).rejects.toMatchObject({ code: 'app_start_timeout' });
+      await vi.advanceTimersByTimeAsync(20_100);
+      await rejection;
+      expect(runner.mock.calls.filter((call) => call[1][4] === 'activity').length).toBeGreaterThan(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
