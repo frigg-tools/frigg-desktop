@@ -5,6 +5,7 @@ import { initWebLogger } from './logging/web-logger';
 import { useT, useLocale } from './i18n';
 import TrafficScreen from './screens/TrafficScreen';
 import MocksScreen from './screens/MocksScreen';
+import AutomationScreen from './screens/AutomationScreen';
 import DevicesScreen from './screens/DevicesScreen';
 import LogcatScreen from './screens/LogcatScreen';
 import DatabaseScreen from './screens/DatabaseScreen';
@@ -43,6 +44,17 @@ function BoltIcon() {
       className="h-4 w-4"
     >
       <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
+    </svg>
+  );
+}
+
+function AutomationIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <rect x="3" y="4" width="6" height="6" rx="1.5" />
+      <rect x="15" y="14" width="6" height="6" rx="1.5" />
+      <path d="M9 7h3a3 3 0 0 1 3 3v4" />
+      <path d="m13 12 2 2 2-2" />
     </svg>
   );
 }
@@ -201,6 +213,7 @@ const NAV_ITEMS: NavItem[] = [
   { screen: 'traffic', labelKey: 'nav.traffic', icon: <ActivityIcon /> },
   { screen: 'client', labelKey: 'nav.client', icon: <SendIcon /> },
   { screen: 'mocks', labelKey: 'nav.mocks', icon: <BoltIcon /> },
+  { screen: 'automation', labelKey: 'nav.automation', icon: <AutomationIcon /> },
   { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
   { screen: 'frida', labelKey: 'nav.frida', icon: <FridaIcon /> },
   { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
@@ -341,6 +354,8 @@ export default function App() {
           <TrafficScreen />
         ) : screen === 'mocks' ? (
           <MocksScreen />
+        ) : screen === 'automation' ? (
+          <AutomationScreen />
         ) : screen === 'logcat' ? (
           <LogcatScreen />
         ) : screen === 'database' ? (

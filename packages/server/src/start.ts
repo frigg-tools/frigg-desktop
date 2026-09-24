@@ -17,6 +17,8 @@ import {
   ensureFriggDirs,
   logsPath,
   mocksPath,
+  automationsPath,
+  automationRunsPath,
   proxyCertsPath,
   sqlConnectionsPath,
   sqlSecretKeyPath,
@@ -40,11 +42,16 @@ import {
   SqlSecretStore,
   type SecretBox,
 } from './sql/index.ts';
+import { AutomationStore } from './automation/store.ts';
+import { AutomationRunStore } from './automation/run-store.ts';
+import { AutomationManager } from './automation/manager.ts';
+import { AndroidAutomationDevice } from './automation/adb.ts';
 
 export interface StartFriggOptions {
   proxyPort?: number;
   apiPort?: number;
   webDir?: string;
+  uiPort?: number;
   secretBox?: SecretBox;
 }
 
@@ -111,6 +118,19 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const certTrust = new CertTrustTracker();
   const breakpoints = new BreakpointManager();
   const proxyCerts = await ProxyCertStore.load(proxyCertsPath);
+  let automationManagerForGuard: AutomationManager | undefined;
+  const automations = await AutomationStore.load(automationsPath, {
+    isActive: (automationId) => automationManagerForGuard?.isActive(automationId) ?? false,
+  });
+  const automationRuns = await AutomationRunStore.load(automationRunsPath);
+  const automationDevice = new AndroidAutomationDevice();
+  const automationManager = new AutomationManager({
+    automations,
+    runs: automationRuns,
+    device: automationDevice,
+  });
+  automationManagerForGuard = automationManager;
+  await automationManager.initialize();
 
   const engine = new ProxyEngine({ proxyPort, ca, mocks, traffic, breakpoints, proxyCerts });
   await engine.start();
@@ -145,6 +165,13 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     frida,
     certTrust,
     reloadProxy: () => engine.reload(),
+    automation: {
+      automations,
+      runs: automationRuns,
+      manager: automationManager,
+      device: automationDevice,
+      configuredUiPort: options.uiPort ?? 5173,
+    },
   };
 
   const app = express();
@@ -183,6 +210,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const friggProxyAddr = lanIp === null ? null : `${lanIp}:${actualProxyPort}`;
 
   const stop = async (): Promise<void> => {
+    await automationManager.shutdown();
     deviceWatcher.dispose();
     loggerService.dispose();
     await Promise.allSettled([

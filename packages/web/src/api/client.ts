@@ -78,6 +78,14 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export async function requestBlob(path: string): Promise<{ blob: Blob; headers: Headers }> {
+  const headers = new Headers();
+  headers.set('X-Frigg-Locale', currentLocale());
+  const res = await fetch(path, { headers });
+  if (!res.ok) throw new Error(await readError(res));
+  return { blob: await res.blob(), headers: res.headers };
+}
+
 export function jsonInit(method: 'POST' | 'PUT', payload: unknown): RequestInit {
   return {
     method,

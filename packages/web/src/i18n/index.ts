@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useAppStore, type Locale } from '../store';
 import { common } from './common';
 import { traffic } from './traffic';
@@ -11,6 +12,7 @@ import { mcp } from './mcp';
 import { breakpoints } from './breakpoints';
 import { sql } from './sql';
 import { frida } from './frida';
+import { automation } from './automation';
 
 export type { Locale };
 
@@ -32,6 +34,7 @@ const bundles: Record<string, Bundle> = {
   breakpoints,
   sql,
   frida,
+  automation,
 };
 
 const flattened: Record<Locale, Record<string, string>> = { en: {}, pt: {} };
@@ -60,7 +63,7 @@ export function translate(locale: Locale, key: string, vars?: Record<string, str
 
 export function useT(): TranslateFn {
   const locale = useAppStore((s) => s.locale);
-  return (key, vars) => translate(locale, key, vars);
+  return useCallback((key, vars) => translate(locale, key, vars), [locale]);
 }
 
 export function useLocale(): [Locale, (locale: Locale) => void] {

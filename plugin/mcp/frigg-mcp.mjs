@@ -3768,6 +3768,7 @@ var require_fast_uri = __commonJS({
       return uriTokens.join("");
     }
     var URI_PARSE = /^(?:([^#/:?]+):)?(?:\/\/((?:([^#/?@]*)@)?(\[[^#/?\]]+\]|[^#/:?]*)(?::(\d*))?))?([^#?]*)(?:\?([^#]*))?(?:#((?:.|[\n\r])*))?/u;
+    var AUTHORITY_PREFIX = /^(?:[^#/:?]+:)?\/\/([^/?#]*)/;
     function getParseError(parsed, matches) {
       if (matches[2] !== void 0 && parsed.path && parsed.path[0] !== "/") {
         return 'URI path must start with "/" when authority is present.';
@@ -3796,6 +3797,11 @@ var require_fast_uri = __commonJS({
         } else {
           uri = "//" + uri;
         }
+      }
+      const authorityMatch = uri.match(AUTHORITY_PREFIX);
+      if (authorityMatch !== null && authorityMatch[1].indexOf("\\") !== -1) {
+        parsed.error = "URI authority must not contain a literal backslash.";
+        malformedAuthorityOrPort = true;
       }
       const matches = uri.match(URI_PARSE);
       if (matches) {
@@ -3840,7 +3846,7 @@ var require_fast_uri = __commonJS({
         if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport)) {
           if (parsed.host && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
             try {
-              parsed.host = URL.domainToASCII(parsed.host.toLowerCase());
+              parsed.host = new URL("http://" + parsed.host).hostname;
             } catch (e) {
               parsed.error = parsed.error || "Host's domain name can not be converted to ASCII: " + e;
             }
@@ -30982,6 +30988,219 @@ function put(path, body) {
 function del(path) {
   return request("DELETE", path);
 }
+async function getImage(path) {
+  const res = await fetch(`${baseUrl}${path}`);
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (typeof body === "object" && body !== null && "error" in body && typeof body.error === "string") message = body.error;
+    } catch {
+    }
+    throw new Error(message);
+  }
+  const mimeType = (res.headers.get("content-type") ?? "").split(";", 1)[0]?.trim().toLowerCase();
+  if (mimeType !== "image/png") throw new Error(`Frigg returned ${mimeType || "an unknown content type"} instead of a PNG image.`);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return { type: "image", mimeType: "image/png", data: bytes.toString("base64") };
+}
+
+// packages/shared/src/automation.ts
+var AUTOMATION_NODE_TYPE = {
+  start: "start",
+  end: "end",
+  launchApp: "launchApp",
+  tap: "tap",
+  longPress: "longPress",
+  swipe: "swipe",
+  text: "text",
+  key: "key",
+  wait: "wait",
+  screenshot: "screenshot"
+};
+var AUTOMATION_RUN_STATUS = {
+  starting: "starting",
+  running: "running",
+  cancelling: "cancelling",
+  completed: "completed",
+  failed: "failed",
+  cancelled: "cancelled",
+  interrupted: "interrupted"
+};
+
+// packages/mcp/src/automation.ts
+var defaultApi = { get, post, put, del, image: getImage };
+var positionSchema = external_exports.object({ x: external_exports.number(), y: external_exports.number() });
+var nodeSchema = external_exports.object({
+  id: external_exports.string().min(1).max(128),
+  type: external_exports.enum(AUTOMATION_NODE_TYPE),
+  data: external_exports.record(external_exports.string(), external_exports.unknown()).default({}),
+  position: positionSchema.optional()
+});
+var edgeSchema = external_exports.object({
+  id: external_exports.string().min(1).max(128),
+  source: external_exports.string().min(1),
+  target: external_exports.string().min(1)
+});
+var automationSchema = external_exports.object({
+  name: external_exports.string().min(1).max(80),
+  description: external_exports.string().max(500).default(""),
+  schemaVersion: external_exports.literal(1).default(1),
+  nodes: external_exports.array(nodeSchema).min(2).max(100),
+  edges: external_exports.array(edgeSchema)
+});
+function normalizeAutomation(input) {
+  return {
+    ...input,
+    nodes: input.nodes.map((node, index) => ({
+      ...node,
+      position: node.position ?? { x: 80 + index * 240, y: 160 }
+    }))
+  };
+}
+function textResult(value) {
+  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+}
+function errorResult(error51) {
+  return {
+    content: [{ type: "text", text: error51 instanceof Error ? error51.message : String(error51) }],
+    isError: true
+  };
+}
+async function runTool(work) {
+  try {
+    return textResult(await work());
+  } catch (error51) {
+    return errorResult(error51);
+  }
+}
+async function runImageTool(work) {
+  try {
+    return { content: [await work()] };
+  } catch (error51) {
+    return errorResult(error51);
+  }
+}
+function registerAutomationTools(server2, api = defaultApi) {
+  server2.tool("frigg_automations_catalog", "List connected Android devices and the supported automation blocks and keys.", async () => runTool(() => api.get("/api/automations/catalog")));
+  server2.tool("frigg_list_automations", "List saved Android automations.", async () => runTool(() => api.get("/api/automations")));
+  server2.tool(
+    "frigg_get_automation",
+    "Get an automation graph and its current revision.",
+    { id: external_exports.string().min(1).describe("Automation ID") },
+    async ({ id }) => runTool(() => api.get(`/api/automations/${encodeURIComponent(id)}`))
+  );
+  server2.tool(
+    "frigg_create_automation",
+    "Create an automation from a connected sequence of typed Android action blocks.",
+    { automation: automationSchema.describe("Graph with nodes and edges; node positions are optional") },
+    async ({ automation }) => runTool(() => api.post("/api/automations", normalizeAutomation(automation)))
+  );
+  server2.tool(
+    "frigg_update_automation",
+    "Update a saved automation using its expected revision to prevent overwriting newer edits.",
+    {
+      id: external_exports.string().min(1).describe("Automation ID"),
+      expectedRevision: external_exports.number().int().positive().describe("Revision returned by the last read"),
+      automation: automationSchema.describe("Updated graph with nodes and edges")
+    },
+    async ({ id, expectedRevision, automation }) => runTool(() => api.put(
+      `/api/automations/${encodeURIComponent(id)}`,
+      { ...normalizeAutomation(automation), expectedRevision }
+    ))
+  );
+  server2.tool(
+    "frigg_duplicate_automation",
+    "Duplicate an automation, including its block positions and action settings.",
+    { id: external_exports.string().min(1).describe("Automation ID") },
+    async ({ id }) => runTool(() => api.post(`/api/automations/${encodeURIComponent(id)}/duplicate`, {}))
+  );
+  server2.tool(
+    "frigg_delete_automation",
+    "Delete an automation and its saved run history. An active automation must be cancelled first.",
+    { id: external_exports.string().min(1).describe("Automation ID") },
+    async ({ id }) => runTool(() => api.del(`/api/automations/${encodeURIComponent(id)}`))
+  );
+  server2.tool(
+    "frigg_validate_automation",
+    "Validate an automation graph without saving or executing it.",
+    { automation: automationSchema.describe("Graph to validate") },
+    async ({ automation }) => runTool(() => api.post("/api/automations/validate", normalizeAutomation(automation)))
+  );
+  server2.tool(
+    "frigg_run_automation",
+    "Run one saved automation on a selected connected Android device. Use a stable request ID to make retries idempotent.",
+    {
+      id: external_exports.string().min(1).describe("Automation ID"),
+      expectedRevision: external_exports.number().int().positive(),
+      serial: external_exports.string().min(1).describe("Exact Android serial from the device catalog"),
+      requestId: external_exports.string().min(1).max(128).describe("Caller-generated ID reused if this request is retried")
+    },
+    async ({ id, expectedRevision, serial, requestId }) => runTool(() => api.post(
+      `/api/automations/${encodeURIComponent(id)}/runs`,
+      { expectedRevision, serial, requestId }
+    ))
+  );
+  server2.tool(
+    "frigg_list_automation_runs",
+    "List automation run snapshots, optionally filtered by automation ID or run status.",
+    {
+      automationId: external_exports.string().optional(),
+      status: external_exports.enum(AUTOMATION_RUN_STATUS).optional()
+    },
+    async ({ automationId, status }) => runTool(async () => {
+      const query = new URLSearchParams();
+      if (automationId !== void 0) query.set("automationId", automationId);
+      const suffix = query.size > 0 ? `?${query.toString()}` : "";
+      const runs = await api.get(`/api/automation-runs${suffix}`);
+      return status ? runs.filter((run) => run.status === status) : runs;
+    })
+  );
+  server2.tool(
+    "frigg_get_automation_run",
+    "Get the saved snapshot, step results, and artifact metadata for one automation run.",
+    { id: external_exports.string().min(1).describe("Run ID") },
+    async ({ id }) => runTool(() => api.get(`/api/automation-runs/${encodeURIComponent(id)}`))
+  );
+  server2.tool(
+    "frigg_cancel_automation_run",
+    "Cancel a running automation after its current device command returns.",
+    { id: external_exports.string().min(1).describe("Run ID") },
+    async ({ id }) => runTool(() => api.post(`/api/automation-runs/${encodeURIComponent(id)}/cancel`, {}))
+  );
+  server2.tool(
+    "frigg_test_automation_action",
+    "Test one validated action block on a selected Android device. Reuse requestId to deduplicate a retried command.",
+    {
+      serial: external_exports.string().min(1).describe("Exact Android serial from the device catalog"),
+      requestId: external_exports.string().min(1).max(128).describe("Caller-generated ID reused if this request is retried"),
+      node: nodeSchema.describe("One supported action node with its typed settings")
+    },
+    async ({ serial, requestId, node }) => runTool(() => api.post(
+      `/api/automation-devices/${encodeURIComponent(serial)}/test-action`,
+      { requestId, node: { ...node, position: node.position ?? { x: 0, y: 0 } } }
+    ))
+  );
+  server2.tool(
+    "frigg_automation_screenshot",
+    "Capture and return the current screen of one connected Android device as an image.",
+    { serial: external_exports.string().min(1).describe("Exact Android serial from the device catalog") },
+    async ({ serial }) => runImageTool(() => api.image(
+      `/api/automation-devices/${encodeURIComponent(serial)}/screenshot`
+    ))
+  );
+  server2.tool(
+    "frigg_automation_artifact",
+    "Fetch one PNG screenshot artifact from an automation run.",
+    {
+      runId: external_exports.string().min(1).describe("Automation run ID"),
+      artifactId: external_exports.string().min(1).describe("Opaque artifact ID returned in the run snapshot")
+    },
+    async ({ runId, artifactId }) => runImageTool(() => api.image(
+      `/api/automation-runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}/image`
+    ))
+  );
+}
 
 // packages/mcp/src/index.ts
 function ok(value) {
@@ -30992,6 +31211,7 @@ function err(e) {
   return { content: [{ type: "text", text: msg }], isError: true };
 }
 var server = new McpServer({ name: "frigg", version: "0.1.0" });
+registerAutomationTools(server);
 server.tool("frigg_status", "Get Frigg proxy status (ports, LAN IP, cert fingerprint, exchange count)", async () => {
   try {
     return ok(await get("/api/status"));
@@ -31167,6 +31387,25 @@ server.tool("frigg_list_devices", "List connected Android and iOS devices and th
     return err(e);
   }
 });
+server.tool(
+  "frigg_diagnose_interception",
+  "Diagnose why HTTPS interception may not work for an Android app. Checks: the device proxy is routed to Frigg; the app is installed; the app is a DEBUG build that can trust the Frigg (user-installed) CA \u2014 a RELEASE build trusts only system CAs and ignores the cert, so HTTPS cannot be decrypted; and whether upstream mTLS client certs are configured (apps with mutual TLS need one). Returns a readiness verdict with per-check reasons and fixes.",
+  {
+    serial: external_exports.string().min(1).describe("Android device serial (from frigg_list_devices)"),
+    app: external_exports.string().min(1).describe("App package name, e.g. com.example.app")
+  },
+  async ({ serial, app }) => {
+    try {
+      return ok(
+        await get(
+          `/api/devices/android/${encodeURIComponent(serial)}/interception?app=${encodeURIComponent(app)}`
+        )
+      );
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
 server.tool("frigg_client_snapshot", "Get the full API client snapshot (workspaces, folders, requests, environments)", async () => {
   try {
     return ok(await get("/api/client"));
@@ -31462,6 +31701,132 @@ server.tool(
         variables.push({ key, value, enabled: true });
       }
       return ok(await put(`/api/client/environments/${environmentId}`, { variables }));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool(
+  "frigg_frida_snapshot",
+  "Get the Frida toolkit snapshot: on-device frida-server status, the running script session, the built-in example scripts, and the host frida-tools version (null if not installed).",
+  async () => {
+    try {
+      return ok(await get("/api/frida/snapshot"));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool(
+  "frigg_frida_status",
+  "Get the frida-server status for a specific device (installed, running, version).",
+  { deviceId: external_exports.string().describe("adb serial of the Android device/emulator") },
+  async ({ deviceId }) => {
+    try {
+      return ok(await get(`/api/frida/status?deviceId=${encodeURIComponent(deviceId)}`));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool(
+  "frigg_frida_install",
+  "Download a matching frida-server and install it onto the device (requires frida-tools on the host).",
+  { deviceId: external_exports.string().describe("adb serial of the Android device/emulator") },
+  async ({ deviceId }) => {
+    try {
+      return ok(await post("/api/frida/install", { deviceId }));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool(
+  "frigg_frida_start",
+  "Start frida-server on the device (adb root + setenforce 0 + launch). Needs a rooted device/emulator (google_apis image).",
+  { deviceId: external_exports.string().describe("adb serial of the Android device/emulator") },
+  async ({ deviceId }) => {
+    try {
+      return ok(await post("/api/frida/server/start", { deviceId }));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool(
+  "frigg_frida_stop",
+  "Stop frida-server on the device.",
+  { deviceId: external_exports.string().optional().describe("adb serial (defaults to the last device frida-server was started on)") },
+  async ({ deviceId }) => {
+    try {
+      return ok(await post("/api/frida/server/stop", deviceId ? { deviceId } : {}));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool(
+  "frigg_frida_run",
+  "Inject and run a Frida script against an app on the device. Streams console.log/send() output over the Frigg WebSocket; this returns the initial session status.",
+  {
+    deviceId: external_exports.string().describe("adb serial of the Android device/emulator"),
+    target: external_exports.string().min(1).describe("Target package or process name, e.g. com.example.app"),
+    source: external_exports.string().min(1).describe("The Frida JavaScript to inject"),
+    spawnMode: external_exports.boolean().optional().describe("Spawn the app (-f) instead of attaching to a running one (default false)"),
+    scriptId: external_exports.string().optional().describe("Optional label for the script")
+  },
+  async ({ deviceId, target, source, spawnMode, scriptId }) => {
+    try {
+      return ok(
+        await post("/api/frida/run", {
+          deviceId,
+          target,
+          source,
+          spawnMode: spawnMode ?? false,
+          scriptId: scriptId ?? "custom"
+        })
+      );
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool("frigg_frida_stop_script", "Stop the running Frida script session.", async () => {
+  try {
+    return ok(await post("/api/frida/stop", {}));
+  } catch (e) {
+    return err(e);
+  }
+});
+server.tool("frigg_list_avds", "List Android Virtual Devices (AVDs) and whether each is currently booted.", async () => {
+  try {
+    return ok(await get("/api/avd"));
+  } catch (e) {
+    return err(e);
+  }
+});
+server.tool(
+  "frigg_boot_avd",
+  "Boot an Android emulator (AVD) by name.",
+  { name: external_exports.string().min(1).describe("AVD name") },
+  async ({ name }) => {
+    try {
+      return ok(await post("/api/avd/boot", { name }));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+server.tool(
+  "frigg_create_avd",
+  "Create a rooted (google_apis) AVD from an already-installed system image.",
+  {
+    name: external_exports.string().min(1).describe("New AVD name"),
+    apiLevel: external_exports.number().int().optional().describe("Android API level (default 34); the google_apis image for this level must already be installed")
+  },
+  async ({ name, apiLevel }) => {
+    try {
+      return ok(await post("/api/avd/create", { name, apiLevel: apiLevel ?? 34 }));
     } catch (e) {
       return err(e);
     }

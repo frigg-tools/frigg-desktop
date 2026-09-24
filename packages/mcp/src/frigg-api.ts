@@ -36,3 +36,27 @@ export function put<T>(path: string, body: unknown): Promise<T> {
 export function del<T>(path: string): Promise<T> {
   return request<T>('DELETE', path);
 }
+
+export interface McpImageContent {
+  type: 'image';
+  mimeType: 'image/png';
+  data: string;
+}
+
+export async function getImage(path: string): Promise<McpImageContent> {
+  const res = await fetch(`${baseUrl}${path}`);
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const body: unknown = await res.json();
+      if (typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string') message = body.error;
+    } catch {
+      // Preserve the HTTP status when the server did not return a JSON error body.
+    }
+    throw new Error(message);
+  }
+  const mimeType = (res.headers.get('content-type') ?? '').split(';', 1)[0]?.trim().toLowerCase();
+  if (mimeType !== 'image/png') throw new Error(`Frigg returned ${mimeType || 'an unknown content type'} instead of a PNG image.`);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return { type: 'image', mimeType: 'image/png', data: bytes.toString('base64') };
+}

@@ -4,6 +4,7 @@ export const common: Bundle = {
   en: {
     'nav.traffic': 'Traffic',
     'nav.mocks': 'Mocks',
+    'nav.automation': 'Automation',
     'nav.devices': 'Devices',
     'nav.logcat': 'Logcat',
     'nav.database': 'Database',
@@ -44,6 +45,7 @@ export const common: Bundle = {
   pt: {
     'nav.traffic': 'Tráfego',
     'nav.mocks': 'Mocks',
+    'nav.automation': 'Automação',
     'nav.devices': 'Dispositivos',
     'nav.logcat': 'Logcat',
     'nav.database': 'Banco de dados',
