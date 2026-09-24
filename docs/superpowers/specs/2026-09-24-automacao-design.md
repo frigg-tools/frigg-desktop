@@ -1,7 +1,7 @@
 # Automação — proposta de design
 
 - Data: 2026-09-24
-- Status: proposta para revisão; não autoriza implementação.
+- Status: aprovado pelo usuário em 2026-09-24 para implementação; primeira versão sequencial.
 - Branch: `codex/feat-automacao`
 - Base: `origin/main` em `d27d7c2cbf254b79c828afd2dd02242844269958`.
 
@@ -11,7 +11,7 @@ Criar a área **Automação** no Frigg para montar fluxos visuais inspirados no 
 
 O usuário confirmou que quer selecionar blocos e marcar cliques/gestos numa captura da tela do dispositivo. A captura é uma ferramenta para configurar a ação: clicar nela não dispara automaticamente uma ação real. O botão “Testar ação” executa explicitamente o bloco selecionado.
 
-As demais escolhas deste documento são recomendações para revisão. O recorte inicial proposto é um fluxo sequencial, disparado pela interface ou MCP, em um dispositivo selecionado por execução. Condições e repetições são uma decisão de escopo em discussão.
+As demais escolhas deste documento são recomendações. O usuário autorizou executar o plano em 2026-09-24; para a primeira versão, adotar o fluxo sequencial recomendado, disparado pela interface ou MCP, em um dispositivo selecionado por execução. Condições e repetições ficam para uma etapa futura.
 
 Sucesso: criar um fluxo, posicionar um clique pela captura, conectar outras ações, salvar, executar e acompanhar cada etapa; depois listar, editar, executar e excluir esse mesmo fluxo via MCP, com a interface refletindo as alterações.
 
