@@ -30,6 +30,9 @@ export class DeviceAutomationError extends Error {
 }
 
 const timeoutMs = 15_000;
+const appForegroundTimeoutMs = 20_000;
+const keyboardVisibleTimeoutMs = 5_000;
+const readinessPollMs = 100;
 const supportedText = /^[A-Za-z0-9.,:@/_ -]*$/;
 const packageNamePattern = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$/;
 const keyEvents: Record<AutomationKey, string> = {
@@ -73,6 +76,41 @@ function parseRotation(output: Buffer): 0 | 1 | 2 | 3 {
   const rotation = tryParseRotation(output);
   if (rotation === null) throw new DeviceAutomationError('unsupported_rotation', 'Android did not report a supported display rotation.');
   return rotation;
+}
+
+function appIsForeground(output: string, packageName: string): boolean {
+  const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const packageInForeground = new RegExp(`(?:^|[\\s=:])${escapedPackageName}(?=/)`);
+  return output.split(/\r?\n/).some((line) =>
+    /\b(?:m?ResumedActivity|topResumedActivity)\b/.test(line) && packageInForeground.test(line),
+  );
+}
+
+function keyboardIsVisible(output: string): boolean {
+  return /\bmInputShown\s*=\s*true\b/i.test(output);
+}
+
+function waitForNextCheck(durationMs: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Automation cancelled.', 'AbortError'));
+      return;
+    }
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, durationMs);
+    const abort = () => {
+      cleanup();
+      reject(new DOMException('Automation cancelled.', 'AbortError'));
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+  });
 }
 
 function asData(value: AutomationActionData): Record<string, unknown> {
@@ -163,6 +201,15 @@ export class AndroidAutomationDevice {
           throw new DeviceAutomationError('invalid_package_name', 'Enter a valid Android package name.');
         }
         await this.command(serial, ['shell', 'monkey', '-p', packageName, '-c', 'android.intent.category.LAUNCHER', '1'], signal);
+        await this.waitForReadiness(
+          serial,
+          ['shell', 'dumpsys', 'activity', 'activities'],
+          (output) => appIsForeground(output, packageName),
+          appForegroundTimeoutMs,
+          'app_start_timeout',
+          `Android app ${packageName} did not reach the foreground within ${appForegroundTimeoutMs} ms.`,
+          signal,
+        );
         return;
       }
       case AUTOMATION_NODE_TYPE.forceStopApp:
@@ -215,9 +262,20 @@ export class AndroidAutomationDevice {
         ], signal);
         return;
       }
-      case AUTOMATION_NODE_TYPE.text:
-        await this.command(serial, ['shell', 'input', 'text', normalizedText(data.text)], signal);
+      case AUTOMATION_NODE_TYPE.text: {
+        const text = normalizedText(data.text);
+        await this.waitForReadiness(
+          serial,
+          ['shell', 'dumpsys', 'input_method'],
+          keyboardIsVisible,
+          keyboardVisibleTimeoutMs,
+          'keyboard_not_ready',
+          'The Android keyboard did not become visible. Tap a text field and try again.',
+          signal,
+        );
+        await this.command(serial, ['shell', 'input', 'text', text], signal);
         return;
+      }
       case AUTOMATION_NODE_TYPE.key: {
         const key = data.key;
         if (typeof key !== 'string' || !(key in keyEvents)) {
@@ -238,6 +296,32 @@ export class AndroidAutomationDevice {
   private async command(serial: string, args: string[], signal: AbortSignal): Promise<void> {
     const result = await this.execute('adb', ['-s', serial, ...args], { timeoutMs, signal });
     assertOk(result, 'Android action failed');
+  }
+
+  private async waitForReadiness(
+    serial: string,
+    args: string[],
+    ready: (output: string) => boolean,
+    waitTimeoutMs: number,
+    errorCode: string,
+    errorMessage: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const deadline = Date.now() + waitTimeoutMs;
+    while (true) {
+      if (signal.aborted) throw new DOMException('Automation cancelled.', 'AbortError');
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) throw new DeviceAutomationError(errorCode, errorMessage);
+      const result = await this.execute('adb', ['-s', serial, ...args], {
+        timeoutMs: Math.min(timeoutMs, remainingMs),
+        signal,
+      });
+      assertOk(result, 'Could not check Android action readiness');
+      if (ready(result.stdout.toString('utf8'))) return;
+      const nextCheckInMs = Math.min(readinessPollMs, deadline - Date.now());
+      if (nextCheckInMs <= 0) throw new DeviceAutomationError(errorCode, errorMessage);
+      await waitForNextCheck(nextCheckInMs, signal);
+    }
   }
 
   private assertSerial(serial: string): void {

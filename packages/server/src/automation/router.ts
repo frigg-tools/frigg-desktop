@@ -70,7 +70,10 @@ function mapError(error: unknown): RouteError {
     'invalid_package_name', 'unsupported_key', 'unsupported_text', 'unsupported_adb_command', 'invalid_gesture_duration', 'invalid_capture',
   ].includes(code)) return new RouteError(400, error instanceof Error ? error.message : 'Invalid request.');
   if (code === 'artifact_limit_exceeded') return new RouteError(507, error instanceof Error ? error.message : 'Screenshot storage is full.');
-  if (code && ['device_not_ready', 'adb_failed', 'invalid_device_serial', 'invalid_screenshot', 'unsupported_rotation'].includes(code)) {
+  if (code && [
+    'device_not_ready', 'adb_failed', 'invalid_device_serial', 'invalid_screenshot', 'unsupported_rotation',
+    'keyboard_not_ready', 'app_start_timeout',
+  ].includes(code)) {
     return new RouteError(409, error instanceof Error ? error.message : 'Android device is not ready.');
   }
   return new RouteError(500, error instanceof Error ? error.message : 'Automation request failed.');
