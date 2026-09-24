@@ -11,6 +11,7 @@ import type {
   TrafficExchange,
 } from '@frigg/shared';
 import { del, get, post, put } from './frigg-api.ts';
+import { registerAutomationTools } from './automation.ts';
 
 function ok(value: unknown): { content: [{ type: 'text'; text: string }] } {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
@@ -22,6 +23,8 @@ function err(e: unknown): { content: [{ type: 'text'; text: string }]; isError: 
 }
 
 const server = new McpServer({ name: 'frigg', version: '0.1.0' });
+
+registerAutomationTools(server);
 
 server.tool('frigg_status', 'Get Frigg proxy status (ports, LAN IP, cert fingerprint, exchange count)', async () => {
   try {

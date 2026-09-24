@@ -67,6 +67,7 @@ import { certToDer, type CaMaterial } from '../proxy/ca.ts';
 import type { ProxyCertStore } from '../proxy/proxy-cert-store.ts';
 import type { TrafficStore } from '../proxy/traffic-store.ts';
 import { setupPageHtml } from './setup-page.ts';
+import { buildAutomationRouter, type AutomationRouterOptions } from '../automation/router.ts';
 
 export interface ApiDeps {
   traffic: TrafficStore;
@@ -85,6 +86,7 @@ export interface ApiDeps {
   frida: FridaManager;
   certTrust: CertTrustTracker;
   reloadProxy: () => Promise<void>;
+  automation?: Omit<AutomationRouterOptions, 'apiPort'>;
 }
 
 const MAX_PATTERN_LENGTH = 2048;
@@ -655,6 +657,10 @@ function rethrowNotFound(error: unknown): never {
 
 export function buildRouter(deps: ApiDeps): Router {
   const router = Router();
+
+  if (deps.automation) {
+    router.use(buildAutomationRouter({ ...deps.automation, apiPort: () => deps.apiPort }));
+  }
 
   router.get('/api/status', (_req, res) => {
     const status: ProxyStatus = {
