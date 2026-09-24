@@ -31,6 +31,56 @@ describe('AutomationStore', () => {
     await rm(directory, { recursive: true, force: true });
   });
 
+  it('creates, renames, lists and persists automation folders', async () => {
+    const created = await store.createFolder('  Sign-in flows  ');
+    expect(created.name).toBe('Sign-in flows');
+
+    const unfiled = await store.create(definition);
+    const assigned = await store.update(unfiled.id, { ...definition, folderId: created.id }, unfiled.revision);
+    expect(assigned.folderId).toBe(created.id);
+    expect((await store.duplicate(assigned.id)).folderId).toBe(created.id);
+
+    const renamed = await store.renameFolder(created.id, 'Account checks');
+    expect(renamed).toMatchObject({ id: created.id, name: 'Account checks', createdAt: created.createdAt });
+    expect(await store.listFolders()).toEqual([renamed]);
+
+    const reloaded = await AutomationStore.load(filePath);
+    expect(await reloaded.listFolders()).toEqual([renamed]);
+    expect(reloaded.get(assigned.id)?.folderId).toBe(created.id);
+  });
+
+  it('keeps old automation files without a folder collection readable', async () => {
+    await writeFile(filePath, JSON.stringify({
+      schemaVersion: 1,
+      automations: [{ ...definition, id: 'legacy-automation', revision: 1, createdAt: 1, updatedAt: 1 }],
+    }), 'utf8');
+    const legacyStore = await AutomationStore.load(filePath);
+
+    expect(await legacyStore.listFolders()).toEqual([]);
+    expect(legacyStore.get('legacy-automation')).toMatchObject({ name: definition.name, revision: 1 });
+    expect(legacyStore.get('legacy-automation')).not.toHaveProperty('folderId');
+  });
+
+  it('unfiles automations when deleting their folder and preserves their workflow', async () => {
+    const folder = await store.createFolder('Login');
+    const created = await store.create({ ...definition, folderId: folder.id });
+
+    await store.deleteFolder(folder.id);
+
+    const unfiled = store.get(created.id);
+    expect(unfiled).toMatchObject({ id: created.id, name: definition.name, revision: 2, nodes: definition.nodes, edges: definition.edges });
+    expect(unfiled).not.toHaveProperty('folderId');
+    expect(await store.listFolders()).toEqual([]);
+    const reloaded = await AutomationStore.load(filePath);
+    expect(reloaded.get(created.id)).not.toHaveProperty('folderId');
+  });
+
+  it('rejects duplicate folder names and automation assignments to missing folders', async () => {
+    await store.createFolder('Login');
+    await expect(store.createFolder(' login ')).rejects.toMatchObject({ code: 'folder_name_conflict' });
+    await expect(store.create({ ...definition, folderId: 'missing-folder' })).rejects.toMatchObject({ code: 'folder_not_found' });
+  });
+
   it('persists a new definition and reloads it with stable metadata', async () => {
     const created = await store.create(definition);
     const loaded = await AutomationStore.load(filePath);
@@ -74,6 +124,22 @@ describe('AutomationStore', () => {
     expect(duplicate.revision).toBe(1);
     expect(store.get(created.id)?.nodes[0]?.position.x).toBe(0);
     expect(store.get(duplicate.id)?.nodes[0]?.position.x).toBe(0);
+  });
+
+  it('duplicates coordinate actions without keeping the original reference screenshot pointer', async () => {
+    const coordinateDefinition = {
+      ...definition,
+      nodes: [
+        definition.nodes[0]!,
+        { id: 'tap', type: 'tap' as const, data: { point: { x: 0.5, y: 0.5, referenceWidth: 400, referenceHeight: 800, referenceRotation: 0 as const }, referenceCaptureId: '8c7fb58a-5cf9-46fa-829b-d443fe611388' }, position: { x: 100, y: 0 } },
+        definition.nodes[1]!,
+      ],
+      edges: [{ id: 'a', source: 'start', target: 'tap' }, { id: 'b', source: 'tap', target: 'end' }],
+    };
+    const created = await store.create(coordinateDefinition);
+    const duplicate = await store.duplicate(created.id);
+    expect(duplicate.nodes[1]?.data).toMatchObject({ point: { x: 0.5, y: 0.5, referenceWidth: 400, referenceHeight: 800, referenceRotation: 0 } });
+    expect(duplicate.nodes[1]?.data).not.toHaveProperty('referenceCaptureId');
   });
 
   it('chooses a new duplicate name when a copy with that name already exists', async () => {

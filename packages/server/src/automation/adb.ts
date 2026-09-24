@@ -7,6 +7,7 @@ import {
   type AutomationPoint,
 } from '@frigg/shared';
 import { runBuffer, type ExecBufferResult } from '../lib/exec.ts';
+import { parseSafeAdbCommand } from './adb-command.ts';
 
 export interface DeviceScreenshot {
   png: Buffer;
@@ -162,6 +163,24 @@ export class AndroidAutomationDevice {
           throw new DeviceAutomationError('invalid_package_name', 'Enter a valid Android package name.');
         }
         await this.command(serial, ['shell', 'monkey', '-p', packageName, '-c', 'android.intent.category.LAUNCHER', '1'], signal);
+        return;
+      }
+      case AUTOMATION_NODE_TYPE.forceStopApp:
+      case AUTOMATION_NODE_TYPE.clearAppData: {
+        const packageName = data.packageName;
+        if (typeof packageName !== 'string' || !packageNamePattern.test(packageName)) {
+          throw new DeviceAutomationError('invalid_package_name', 'Enter a valid Android package name.');
+        }
+        const args = node.type === AUTOMATION_NODE_TYPE.forceStopApp
+          ? ['shell', 'am', 'force-stop', packageName]
+          : ['shell', 'pm', 'clear', packageName];
+        await this.command(serial, args, signal);
+        return;
+      }
+      case AUTOMATION_NODE_TYPE.adbCommand: {
+        const command = parseSafeAdbCommand(data.command);
+        if (!command) throw new DeviceAutomationError('unsupported_adb_command', 'This ADB command is not supported.');
+        await this.command(serial, ['shell', ...command], signal);
         return;
       }
       case AUTOMATION_NODE_TYPE.tap: {

@@ -3,10 +3,12 @@ import {
   type AndroidDevice,
   type Automation,
   type AutomationDefinition,
+  type AutomationFolder,
   type AutomationNode,
   type AutomationNodeType,
   type AutomationRun,
   type AutomationRunStatus,
+  type AutomationReferenceCapture,
   type AutomationKey,
   type AutomationValidationResult,
 } from '@frigg/shared';
@@ -25,12 +27,44 @@ export interface AutomationScreenshot {
   rotation: 0 | 1 | 2 | 3;
 }
 
+export function listAutomationReferenceCaptures(automationId: string, nodeId: string): Promise<AutomationReferenceCapture[]> {
+  return request(`/api/automations/${encodeURIComponent(automationId)}/nodes/${encodeURIComponent(nodeId)}/reference-captures`);
+}
+
+export function listAutomationReferenceCapturesForAutomation(automationId: string): Promise<AutomationReferenceCapture[]> {
+  return request(`/api/automations/${encodeURIComponent(automationId)}/reference-captures`);
+}
+
+export function captureAutomationReference(automationId: string, nodeId: string, nodeType: AutomationNodeType, serial: string): Promise<AutomationReferenceCapture> {
+  return request(`/api/automations/${encodeURIComponent(automationId)}/nodes/${encodeURIComponent(nodeId)}/reference-captures`, jsonInit('POST', { serial, nodeType }));
+}
+
+export function getAutomationReferenceImage(automationId: string, captureId: string): Promise<{ blob: Blob; headers: Headers }> {
+  return requestBlob(`/api/automations/${encodeURIComponent(automationId)}/reference-captures/${encodeURIComponent(captureId)}/image`);
+}
+
 export function getAutomationCatalog(): Promise<AutomationCatalog> {
   return request('/api/automations/catalog');
 }
 
 export function listAutomations(): Promise<Automation[]> {
   return request('/api/automations');
+}
+
+export function listAutomationFolders(): Promise<AutomationFolder[]> {
+  return request('/api/automation-folders');
+}
+
+export function createAutomationFolder(name: string): Promise<AutomationFolder> {
+  return request('/api/automation-folders', jsonInit('POST', { name }));
+}
+
+export function renameAutomationFolder(id: string, name: string): Promise<AutomationFolder> {
+  return request(`/api/automation-folders/${encodeURIComponent(id)}`, jsonInit('PUT', { name }));
+}
+
+export function deleteAutomationFolder(id: string): Promise<{ ok: boolean }> {
+  return request(`/api/automation-folders/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function getAutomation(id: string): Promise<Automation> {

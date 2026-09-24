@@ -70,6 +70,27 @@ describe('AndroidAutomationDevice', () => {
     expect(runner).toHaveBeenCalledWith('adb', ['-s', 'emulator-5554', 'shell', 'input', 'text', 'Hi%s42'], expect.any(Object));
   });
 
+  it.each([
+    { type: 'forceStopApp', command: ['shell', 'am', 'force-stop', 'com.example.app'] },
+    { type: 'clearAppData', command: ['shell', 'pm', 'clear', 'com.example.app'] },
+    { type: 'adbCommand', command: ['shell', 'dumpsys', 'activity'] },
+  ] as const)('dispatches $type to the selected Android device', async ({ type, command }) => {
+    const runner = readyRunner();
+    const data = type === 'adbCommand' ? { command: 'dumpsys activity' } : { packageName: 'com.example.app' };
+    await new AndroidAutomationDevice(runner).perform('emulator-5554', {
+      id: 'command', type, data, position: { x: 0, y: 0 },
+    }, new AbortController().signal);
+    expect(runner).toHaveBeenCalledWith('adb', ['-s', 'emulator-5554', ...command], expect.any(Object));
+  });
+
+  it('rejects an unsafe custom ADB command before sending it to the device', async () => {
+    const runner = readyRunner();
+    await expect(new AndroidAutomationDevice(runner).perform('emulator-5554', {
+      id: 'command', type: 'adbCommand', data: { command: 'input tap 1 2; reboot' }, position: { x: 0, y: 0 },
+    }, new AbortController().signal)).rejects.toMatchObject({ code: 'unsupported_adb_command' });
+    expect(runner.mock.calls.map((call) => call[1])).toEqual([['-s', 'emulator-5554', 'get-state']]);
+  });
+
   it('rejects shell-significant text before issuing an input command', async () => {
     const runner = readyRunner();
     const device = new AndroidAutomationDevice(runner);

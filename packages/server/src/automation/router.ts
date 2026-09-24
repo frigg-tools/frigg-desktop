@@ -11,6 +11,7 @@ import { AndroidAutomationDevice, type DeviceScreenshot } from './adb.ts';
 import { automationAccessMiddleware } from './access.ts';
 import { AutomationManager } from './manager.ts';
 import { AutomationRunStore } from './run-store.ts';
+import { AutomationReferenceStore } from './reference-store.ts';
 import { AutomationStore } from './store.ts';
 import { validateAutomation } from './validation.ts';
 import type { AutomationDevice } from './runner.ts';
@@ -18,6 +19,7 @@ import type { AutomationDevice } from './runner.ts';
 export interface AutomationRouterOptions {
   automations: AutomationStore;
   runs: AutomationRunStore;
+  references?: AutomationReferenceStore;
   manager: AutomationManager;
   device?: AutomationDevice;
   apiPort: () => number;
@@ -59,13 +61,13 @@ function errorCode(error: unknown): string | undefined {
 function mapError(error: unknown): RouteError {
   if (error instanceof RouteError) return error;
   const code = errorCode(error);
-  if (code && ['not_found', 'run_not_found', 'artifact_not_found'].includes(code)) return new RouteError(404, error instanceof Error ? error.message : 'Not found.');
+  if (code && ['not_found', 'folder_not_found', 'run_not_found', 'artifact_not_found', 'capture_not_found'].includes(code)) return new RouteError(404, error instanceof Error ? error.message : 'Not found.');
   if (code && [
-    'revision_conflict', 'automation_active', 'device_busy', 'idempotency_conflict', 'run_terminal',
+    'revision_conflict', 'automation_active', 'folder_name_conflict', 'device_busy', 'idempotency_conflict', 'run_terminal',
   ].includes(code)) return new RouteError(409, error instanceof Error ? error.message : 'Conflict.');
   if (code && [
-    'invalid_automation', 'invalid_request', 'invalid_run', 'unsupported_action', 'invalid_point',
-    'invalid_package_name', 'unsupported_key', 'unsupported_text', 'invalid_gesture_duration',
+    'invalid_folder', 'invalid_automation', 'invalid_request', 'invalid_run', 'unsupported_action', 'invalid_point',
+    'invalid_package_name', 'unsupported_key', 'unsupported_text', 'unsupported_adb_command', 'invalid_gesture_duration', 'invalid_capture',
   ].includes(code)) return new RouteError(400, error instanceof Error ? error.message : 'Invalid request.');
   if (code === 'artifact_limit_exceeded') return new RouteError(507, error instanceof Error ? error.message : 'Screenshot storage is full.');
   if (code && ['device_not_ready', 'adb_failed', 'invalid_device_serial', 'invalid_screenshot', 'unsupported_rotation'].includes(code)) {
@@ -88,6 +90,14 @@ function sendScreenshot(res: Response, screen: DeviceScreenshot): void {
     .set('X-Frigg-Screen-Height', String(screen.height))
     .set('X-Frigg-Screen-Rotation', String(screen.rotation))
     .send(screen.png);
+}
+
+function supportsReferenceCapture(node: AutomationNode): boolean {
+  return node.type === AUTOMATION_NODE_TYPE.tap || node.type === AUTOMATION_NODE_TYPE.longPress || node.type === AUTOMATION_NODE_TYPE.swipe;
+}
+
+function supportsReferenceType(type: unknown): boolean {
+  return type === AUTOMATION_NODE_TYPE.tap || type === AUTOMATION_NODE_TYPE.longPress || type === AUTOMATION_NODE_TYPE.swipe;
 }
 
 function parseTestAction(body: unknown): AutomationNode {
@@ -135,6 +145,7 @@ export function buildAutomationRouter(options: AutomationRouterOptions): Router 
   });
 
   router.use('/api/automations', access);
+  router.use('/api/automation-folders', access);
   router.use('/api/automation-runs', access);
   router.use('/api/automation-devices', access);
 
@@ -144,6 +155,25 @@ export function buildAutomationRouter(options: AutomationRouterOptions): Router 
       nodeTypes: Object.values(AUTOMATION_NODE_TYPE),
       keys: Object.values(AUTOMATION_KEY),
     });
+  }));
+
+  router.get('/api/automation-folders', (_req, res) => {
+    res.json(options.automations.listFolders());
+  });
+
+  router.post('/api/automation-folders', asyncRoute(async (req, res) => {
+    const body = asRecord(req.body, 'folder');
+    res.status(201).json(await options.automations.createFolder(body.name));
+  }));
+
+  router.put('/api/automation-folders/:id', asyncRoute(async (req, res) => {
+    const body = asRecord(req.body, 'folder');
+    res.json(await options.automations.renameFolder(req.params.id, body.name));
+  }));
+
+  router.delete('/api/automation-folders/:id', asyncRoute(async (req, res) => {
+    await options.automations.deleteFolder(req.params.id);
+    res.json({ ok: true });
   }));
 
   router.post('/api/automations/validate', (req, res) => {
@@ -179,7 +209,57 @@ export function buildAutomationRouter(options: AutomationRouterOptions): Router 
     const expectedRevision = parseRevision(body.expectedRevision);
     const validation = validateAutomation(body);
     if (!validation.valid) throw new RouteError(400, 'Automation is invalid.', validation.issues);
-    res.json(await options.automations.update(req.params.id, validation.automation, expectedRevision));
+    const updated = await options.automations.update(req.params.id, validation.automation, expectedRevision);
+    await options.references?.retainNodes(updated.id, new Set(updated.nodes.filter(supportsReferenceCapture).map((node) => node.id)));
+    res.json(updated);
+  }));
+
+  router.get('/api/automations/:id/reference-captures', (req, res, next) => {
+    if (!options.automations.get(req.params.id)) {
+      next(new RouteError(404, 'Automation not found.'));
+      return;
+    }
+    res.json(options.references?.list(req.params.id) ?? []);
+  });
+
+  router.get('/api/automations/:id/nodes/:nodeId/reference-captures', (req, res) => {
+    const automation = options.automations.get(req.params.id);
+    if (!automation) throw new RouteError(404, 'Automation not found.');
+    if (req.params.nodeId.length > 128) throw new RouteError(400, 'Action ID is invalid.');
+    const storedNode = automation.nodes.find((item) => item.id === req.params.nodeId);
+    if (storedNode && !supportsReferenceCapture(storedNode)) throw new RouteError(400, 'Reference captures are only available for tap and gesture actions.');
+    res.json(options.references?.list(req.params.id, req.params.nodeId) ?? []);
+  });
+
+  router.post('/api/automations/:id/nodes/:nodeId/reference-captures', asyncRoute(async (req, res) => {
+    const body = asRecord(req.body, 'capture');
+    const automation = options.automations.get(req.params.id);
+    if (!automation) throw new RouteError(404, 'Automation not found.');
+    if (req.params.nodeId.length > 128) throw new RouteError(400, 'Action ID is invalid.');
+    const storedNode = automation.nodes.find((item) => item.id === req.params.nodeId);
+    const nodeType = storedNode?.type ?? body.nodeType;
+    if ((storedNode && !supportsReferenceCapture(storedNode)) || !supportsReferenceType(nodeType)) {
+      throw new RouteError(400, 'Reference captures are only available for tap and gesture actions.');
+    }
+    const serial = parseNonEmptyString(body.serial, 'serial');
+    const screen = await device.screenshot(serial, new AbortController().signal);
+    if (!options.references) throw new RouteError(503, 'Reference capture storage is unavailable.');
+    res.status(201).json(await options.references.add({
+      automationId: req.params.id,
+      nodeId: req.params.nodeId,
+      serial,
+      png: screen.png,
+      width: screen.width,
+      height: screen.height,
+      rotation: screen.rotation,
+    }));
+  }));
+
+  router.get('/api/automations/:id/reference-captures/:captureId/image', asyncRoute(async (req, res) => {
+    const capture = options.references?.list(req.params.id).find((item) => item.id === req.params.captureId);
+    if (!capture) throw new RouteError(404, 'Reference capture not found.');
+    const png = await options.references!.readImage(capture.id);
+    res.status(200).set('Content-Type', 'image/png').set('Cache-Control', 'no-store').send(png);
   }));
 
   router.post('/api/automations/:id/duplicate', asyncRoute(async (req, res) => {
@@ -188,6 +268,7 @@ export function buildAutomationRouter(options: AutomationRouterOptions): Router 
 
   router.delete('/api/automations/:id', asyncRoute(async (req, res) => {
     await options.manager.deleteAutomation(req.params.id);
+    await options.references?.deleteForAutomation(req.params.id);
     res.json({ ok: true });
   }));
 

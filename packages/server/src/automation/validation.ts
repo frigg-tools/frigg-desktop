@@ -10,6 +10,7 @@ import {
   type AutomationValidationIssue,
   type AutomationValidationResult,
 } from '@frigg/shared';
+import { parseSafeAdbCommand } from './adb-command.ts';
 
 const MAX_NODES = 100;
 const MAX_WAIT_MS = 60_000;
@@ -17,6 +18,7 @@ const MAX_GESTURE_MS = 10_000;
 const MIN_GESTURE_MS = 1;
 const SUPPORTED_TEXT = /^[A-Za-z0-9.,:@/_ -]*$/;
 const PACKAGE_NAME = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$/;
+const CAPTURE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const NODE_TYPES = new Set<string>(Object.values(AUTOMATION_NODE_TYPE));
 const KEYS = new Set<string>(Object.values(AUTOMATION_KEY));
 
@@ -86,6 +88,15 @@ function parseDuration(
   return value;
 }
 
+function parseReferenceCaptureId(data: RecordValue, nodeId: string, issues: AutomationValidationIssue[]): string | undefined | null {
+  if (data.referenceCaptureId === undefined) return undefined;
+  if (typeof data.referenceCaptureId !== 'string' || !CAPTURE_ID.test(data.referenceCaptureId)) {
+    addIssue(issues, 'invalid_capture', 'Reference capture ID is invalid.', { nodeId, field: 'data.referenceCaptureId' });
+    return null;
+  }
+  return data.referenceCaptureId;
+}
+
 function parseNode(value: unknown, index: number, issues: AutomationValidationIssue[]): AutomationNode | null {
   if (!isRecord(value)) {
     addIssue(issues, 'invalid_node', 'Node must be an object.', { field: `nodes.${index}` });
@@ -127,13 +138,32 @@ function parseNode(value: unknown, index: number, issues: AutomationValidationIs
       }
       break;
     }
+    case AUTOMATION_NODE_TYPE.forceStopApp:
+    case AUTOMATION_NODE_TYPE.clearAppData: {
+      const packageName = typeof data.packageName === 'string' ? data.packageName.trim() : '';
+      if (!PACKAGE_NAME.test(packageName)) {
+        addIssue(issues, 'invalid_package_name', 'Enter a valid Android package name.', { nodeId, field: 'data.packageName' });
+      } else {
+        parsed = { packageName };
+      }
+      break;
+    }
+    case AUTOMATION_NODE_TYPE.adbCommand: {
+      if (parseSafeAdbCommand(data.command) === null) {
+        addIssue(issues, 'unsupported_adb_command', 'This ADB command is not supported. Use a safe input, am force-stop, pm list packages, dumpsys, getprop, or settings get command.', { nodeId, field: 'data.command' });
+      } else {
+        parsed = { command: data.command as string };
+      }
+      break;
+    }
     case AUTOMATION_NODE_TYPE.tap:
     case AUTOMATION_NODE_TYPE.longPress: {
       const point = parsePoint(data.point, id, 'data.point', issues);
-      if (type === AUTOMATION_NODE_TYPE.tap && point) parsed = { point };
+      const referenceCaptureId = parseReferenceCaptureId(data, id, issues);
+      if (type === AUTOMATION_NODE_TYPE.tap && point && referenceCaptureId !== null) parsed = { point, ...(referenceCaptureId ? { referenceCaptureId } : {}) };
       if (type === AUTOMATION_NODE_TYPE.longPress) {
         const durationMs = parseDuration(data.durationMs, id, 'data.durationMs', MIN_GESTURE_MS, MAX_GESTURE_MS, 'invalid_gesture_duration', issues);
-        if (point && durationMs !== null) parsed = { point, durationMs };
+        if (point && durationMs !== null && referenceCaptureId !== null) parsed = { point, durationMs, ...(referenceCaptureId ? { referenceCaptureId } : {}) };
       }
       break;
     }
@@ -141,7 +171,8 @@ function parseNode(value: unknown, index: number, issues: AutomationValidationIs
       const start = parsePoint(data.start, id, 'data.start', issues);
       const end = parsePoint(data.end, id, 'data.end', issues);
       const durationMs = parseDuration(data.durationMs, id, 'data.durationMs', MIN_GESTURE_MS, MAX_GESTURE_MS, 'invalid_gesture_duration', issues);
-      if (start && end && durationMs !== null) parsed = { start, end, durationMs };
+      const referenceCaptureId = parseReferenceCaptureId(data, id, issues);
+      if (start && end && durationMs !== null && referenceCaptureId !== null) parsed = { start, end, durationMs, ...(referenceCaptureId ? { referenceCaptureId } : {}) };
       break;
     }
     case AUTOMATION_NODE_TYPE.text: {
@@ -290,6 +321,10 @@ export function validateAutomation(input: unknown): AutomationValidationResult {
   }
   const schemaVersion = input.schemaVersion === undefined ? 1 : input.schemaVersion;
   if (schemaVersion !== 1) addIssue(issues, 'unsupported_schema_version', 'Only schema version 1 is supported.', { field: 'schemaVersion' });
+  const folderId = input.folderId === undefined ? undefined : typeof input.folderId === 'string' ? input.folderId.trim() : '';
+  if (input.folderId !== undefined && (!folderId || folderId.length > 128)) {
+    addIssue(issues, 'invalid_folder_id', 'Folder ID must contain 1 to 128 characters.', { field: 'folderId' });
+  }
   if (!Array.isArray(input.nodes)) addIssue(issues, 'invalid_nodes', 'Nodes must be an array.', { field: 'nodes' });
   const rawNodes = Array.isArray(input.nodes) ? input.nodes : [];
   if (rawNodes.length > MAX_NODES) addIssue(issues, 'node_limit_exceeded', `Automation can contain at most ${MAX_NODES} nodes.`, { field: 'nodes' });
@@ -315,6 +350,7 @@ export function validateAutomation(input: unknown): AutomationValidationResult {
     name,
     description: description as string,
     schemaVersion: 1,
+    ...(folderId ? { folderId } : {}),
     nodes,
     edges,
   };

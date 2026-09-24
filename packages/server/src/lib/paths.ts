@@ -10,6 +10,7 @@ export const apiClientPath = path.join(friggDir, 'api-client.json');
 export const proxyCertsPath = path.join(friggDir, 'proxy-certs.json');
 export const automationsPath = path.join(friggDir, 'automations.json');
 export const automationRunsPath = path.join(friggDir, 'automation-runs');
+export const automationReferencesPath = path.join(friggDir, 'automation-references');
 export const sqlConnectionsPath = path.join(friggDir, 'sql-connections.json');
 export const sqlSecretsPath = path.join(friggDir, 'sql-secrets.json');
 export const sqlSecretKeyPath = path.join(friggDir, 'sql-secret.key');

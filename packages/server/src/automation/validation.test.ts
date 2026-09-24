@@ -18,8 +18,30 @@ function linearFlow(action: ReturnType<typeof node>) {
 }
 
 describe('validateAutomation', () => {
+  it('preserves a valid optional folder assignment', () => {
+    const result = validateAutomation({
+      ...linearFlow(node('action', 'wait', { durationMs: 100 })),
+      folderId: 'folder-1',
+    });
+
+    expect(result.valid).toBe(true);
+    if (result.valid) expect(result.automation).toHaveProperty('folderId', 'folder-1');
+  });
+
+  it('rejects an empty folder assignment instead of silently dropping it', () => {
+    const result = validateAutomation({
+      ...linearFlow(node('action', 'wait', { durationMs: 100 })),
+      folderId: '   ',
+    });
+
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: 'invalid_folder_id', field: 'folderId' }));
+  });
+
   it.each([
     node('action', 'launchApp', { packageName: 'com.example.app' }),
+    node('action', 'forceStopApp', { packageName: 'com.example.app' }),
+    node('action', 'clearAppData', { packageName: 'com.example.app' }),
+    node('action', 'adbCommand', { command: 'dumpsys activity' }),
     node('action', 'tap', {
       point: { x: 0.5, y: 0.5, referenceWidth: 400, referenceHeight: 800, referenceRotation: 0 },
     }),
@@ -38,6 +60,36 @@ describe('validateAutomation', () => {
     node('action', 'screenshot'),
   ])('accepts a valid %s action', (action) => {
     expect(validateAutomation(linearFlow(action))).toMatchObject({ valid: true });
+  });
+
+  it.each([
+    'input tap 120 640',
+    'am force-stop com.example.app',
+    'pm list packages -3',
+    'dumpsys window',
+  ])('accepts a supported ADB shell command: %s', (command) => {
+    expect(validateAutomation(linearFlow(node('action', 'adbCommand', { command })))).toMatchObject({ valid: true });
+  });
+
+  it.each([
+    'input tap 1 2; reboot',
+    'pm clear com.example.app',
+    'rm -rf /',
+    'dumpsys window | reboot',
+  ])('rejects unsafe ADB shell command: %s', (command) => {
+    expect(validateAutomation(linearFlow(node('action', 'adbCommand', { command }))).issues).toContainEqual(
+      expect.objectContaining({ code: 'unsupported_adb_command', nodeId: 'action', field: 'data.command' }),
+    );
+  });
+
+  it('keeps valid reference capture IDs on coordinate actions and rejects malformed IDs', () => {
+    const captureId = '8c7fb58a-5cf9-46fa-829b-d443fe611388';
+    const point = { x: 0.5, y: 0.5, referenceWidth: 400, referenceHeight: 800, referenceRotation: 0 };
+    const valid = validateAutomation(linearFlow(node('tap', 'tap', { point, referenceCaptureId: captureId })));
+    expect(valid.valid).toBe(true);
+    if (valid.valid) expect(valid.automation.nodes.find((item) => item.id === 'tap')?.data).toHaveProperty('referenceCaptureId', captureId);
+    expect(validateAutomation(linearFlow(node('tap', 'tap', { point, referenceCaptureId: '../capture.png' }))).issues)
+      .toContainEqual(expect.objectContaining({ code: 'invalid_capture', nodeId: 'tap' }));
   });
 
   it('rejects a branch before execution and reports the branching node', () => {

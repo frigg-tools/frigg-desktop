@@ -49,9 +49,31 @@ describe('Frigg automation MCP tools', () => {
     expect(tools).toEqual(expect.arrayContaining([
       'frigg_automations_catalog', 'frigg_list_automations', 'frigg_get_automation', 'frigg_create_automation',
       'frigg_update_automation', 'frigg_duplicate_automation', 'frigg_delete_automation', 'frigg_validate_automation',
+      'frigg_list_automation_folders', 'frigg_create_automation_folder', 'frigg_rename_automation_folder', 'frigg_delete_automation_folder',
       'frigg_run_automation', 'frigg_list_automation_runs', 'frigg_get_automation_run', 'frigg_cancel_automation_run',
       'frigg_test_automation_action', 'frigg_automation_screenshot', 'frigg_automation_artifact',
     ]));
+  });
+
+  it('exposes folder CRUD and preserves folder assignments in workflow create and update calls', async () => {
+    const api = apiMock();
+    const { client, server } = await connected(api);
+    open.push({ client, server });
+
+    await client.callTool({ name: 'frigg_list_automation_folders', arguments: {} });
+    await client.callTool({ name: 'frigg_create_automation_folder', arguments: { name: 'Login' } });
+    await client.callTool({ name: 'frigg_rename_automation_folder', arguments: { id: 'folder/id', name: 'Account checks' } });
+    await client.callTool({ name: 'frigg_delete_automation_folder', arguments: { id: 'folder/id' } });
+    expect(api.get).toHaveBeenCalledWith('/api/automation-folders');
+    expect(api.post).toHaveBeenCalledWith('/api/automation-folders', { name: 'Login' });
+    expect(api.put).toHaveBeenCalledWith('/api/automation-folders/folder%2Fid', { name: 'Account checks' });
+    expect(api.del).toHaveBeenCalledWith('/api/automation-folders/folder%2Fid');
+
+    const assigned = { ...graph, folderId: 'folder-1' };
+    await client.callTool({ name: 'frigg_create_automation', arguments: { automation: assigned } });
+    expect(api.post).toHaveBeenCalledWith('/api/automations', expect.objectContaining({ folderId: 'folder-1' }));
+    await client.callTool({ name: 'frigg_update_automation', arguments: { id: 'flow-1', expectedRevision: 2, automation: assigned } });
+    expect(api.put).toHaveBeenCalledWith('/api/automations/flow-1', expect.objectContaining({ folderId: 'folder-1', expectedRevision: 2 }));
   });
 
   it('uses the shared CRUD and validation endpoints and fills omitted canvas positions deterministically', async () => {
@@ -80,6 +102,39 @@ describe('Frigg automation MCP tools', () => {
     await client.callTool({ name: 'frigg_list_automations', arguments: {} });
     expect(api.get).toHaveBeenCalledWith('/api/automations/catalog');
     expect(api.get).toHaveBeenCalledWith('/api/automations');
+  });
+
+  it('accepts the new app-management and ADB blocks through MCP automation tools', async () => {
+    const api = apiMock();
+    const { client, server } = await connected(api);
+    open.push({ client, server });
+    const automation = {
+      name: 'App maintenance',
+      nodes: [
+        { id: 'start', type: 'start', data: {} },
+        { id: 'close', type: 'forceStopApp', data: { packageName: 'com.example.app' } },
+        { id: 'clear', type: 'clearAppData', data: { packageName: 'com.example.app' } },
+        { id: 'adb', type: 'adbCommand', data: { command: 'dumpsys activity' } },
+        { id: 'end', type: 'end', data: {} },
+      ],
+      edges: [
+        { id: 'a', source: 'start', target: 'close' },
+        { id: 'b', source: 'close', target: 'clear' },
+        { id: 'c', source: 'clear', target: 'adb' },
+        { id: 'd', source: 'adb', target: 'end' },
+      ],
+    };
+
+    const result = await client.callTool({ name: 'frigg_create_automation', arguments: { automation } });
+
+    expect(result.isError).not.toBe(true);
+    expect(api.post).toHaveBeenCalledWith('/api/automations', expect.objectContaining({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ type: 'forceStopApp' }),
+        expect.objectContaining({ type: 'clearAppData' }),
+        expect.objectContaining({ type: 'adbCommand' }),
+      ]),
+    }));
   });
 
   it('passes request IDs unchanged for runs and device test actions and encodes path IDs', async () => {

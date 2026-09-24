@@ -5,23 +5,32 @@ import {
   type AndroidDevice,
   type Automation,
   type AutomationDefinition,
+  type AutomationFolder,
   type AutomationActionData,
   type AutomationNode,
   type AutomationRun,
+  type AutomationReferenceCapture,
   type AutomationRunStatus,
 } from '@frigg/shared';
 import { useT } from '../i18n';
 import {
   cancelAutomationRun,
   captureAutomationScreenshot,
+  captureAutomationReference,
   createAutomation,
+  createAutomationFolder,
+  deleteAutomationFolder,
   deleteAutomation,
   duplicateAutomation,
   getAutomationRun,
+  getAutomationReferenceImage,
   getAutomationCatalog,
   isAutomationRunActive,
   listAutomationRuns,
+  listAutomationFolders,
+  listAutomationReferenceCaptures,
   listAutomations,
+  renameAutomationFolder,
   startAutomationRun,
   testAutomationAction,
   updateAutomation,
@@ -29,17 +38,19 @@ import {
 import AutomationCanvas from '../components/automation/AutomationCanvas';
 import NodeProperties from '../components/automation/NodeProperties';
 import RunInspector from '../components/automation/RunInspector';
+import AutomationFolderSidebar, { type AutomationFolderFilter } from '../components/automation/AutomationFolderSidebar';
 import type { DeviceCapture } from '../components/automation/DeviceScreenshotPicker';
 
 const primaryButton = 'inline-flex items-center justify-center gap-2 rounded-md bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:cursor-not-allowed disabled:opacity-40';
 const secondaryButton = 'inline-flex items-center justify-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:cursor-not-allowed disabled:opacity-40';
 const smallButton = 'inline-flex items-center justify-center rounded px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300';
 
-function blankAutomation(name: string): AutomationDefinition {
+function blankAutomation(name: string, folderId?: string): AutomationDefinition {
   return {
     name,
     description: '',
     schemaVersion: 1,
+    ...(folderId ? { folderId } : {}),
     nodes: [
       { id: 'start', type: AUTOMATION_NODE_TYPE.start, data: {}, position: { x: 70, y: 22 } },
       { id: 'end', type: AUTOMATION_NODE_TYPE.end, data: {}, position: { x: 70, y: 105 } },
@@ -53,6 +64,7 @@ function asDefinition(automation: Automation): AutomationDefinition {
     name: automation.name,
     description: automation.description,
     schemaVersion: automation.schemaVersion,
+    ...(automation.folderId ? { folderId: automation.folderId } : {}),
     nodes: automation.nodes,
     edges: automation.edges,
   };
@@ -80,7 +92,21 @@ function AutomationMark() {
   );
 }
 
-type ScreenCapture = DeviceCapture & { objectUrl: string };
+type ScreenCapture = DeviceCapture & { objectUrl: string; nodeId?: string };
+
+function isCoordinateAction(node: AutomationNode | null | undefined): boolean {
+  return node?.type === AUTOMATION_NODE_TYPE.tap || node?.type === AUTOMATION_NODE_TYPE.longPress || node?.type === AUTOMATION_NODE_TYPE.swipe;
+}
+
+function attachReferenceCapture(node: AutomationNode, captureId: string): AutomationNode {
+  if ((node.type === AUTOMATION_NODE_TYPE.tap || node.type === AUTOMATION_NODE_TYPE.longPress) && 'point' in node.data) {
+    return { ...node, data: { ...node.data, referenceCaptureId: captureId } as AutomationActionData };
+  }
+  if (node.type === AUTOMATION_NODE_TYPE.swipe && 'start' in node.data) {
+    return { ...node, data: { ...node.data, referenceCaptureId: captureId } as AutomationActionData };
+  }
+  return node;
+}
 
 function geometryMatches(point: { referenceWidth: number; referenceHeight: number; referenceRotation: number }, capture: ScreenCapture): boolean {
   return point.referenceWidth === capture.width && point.referenceHeight === capture.height && point.referenceRotation === capture.rotation;
@@ -127,6 +153,8 @@ function DeleteDialog({ automation, deleting, onCancel, onConfirm, t }: {
 export default function AutomationScreen() {
   const t = useT();
   const [automations, setAutomations] = useState<Automation[]>([]);
+  const [folders, setFolders] = useState<AutomationFolder[]>([]);
+  const [folderFilter, setFolderFilter] = useState<AutomationFolderFilter>('all');
   const [devices, setDevices] = useState<AndroidDevice[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Automation | null>(null);
@@ -140,6 +168,7 @@ export default function AutomationScreen() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [capture, setCapture] = useState<ScreenCapture | null>(null);
+  const [captureHistory, setCaptureHistory] = useState<AutomationReferenceCapture[]>([]);
   const [activeRun, setActiveRun] = useState<AutomationRun | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Automation | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -147,21 +176,34 @@ export default function AutomationScreen() {
 
   const selected = useMemo(() => automations.find((automation) => automation.id === selectedId) ?? null, [automations, selectedId]);
   const onlineDevices = useMemo(() => devices.filter((device) => device.state === 'device'), [devices]);
+  const folderCounts = useMemo(() => Object.fromEntries(
+    folders.map((folder) => [folder.id, automations.filter((automation) => automation.folderId === folder.id).length]),
+  ), [automations, folders]);
+  const unfiledCount = useMemo(() => automations.filter((automation) => !automation.folderId).length, [automations]);
   const filteredAutomations = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return automations;
-    return automations.filter((automation) => `${automation.name} ${automation.description}`.toLowerCase().includes(query));
-  }, [automations, search]);
+    return automations.filter((automation) => {
+      const inFolder = folderFilter === 'all' || (folderFilter === 'unfiled'
+        ? !automation.folderId
+        : automation.folderId === folderFilter);
+      const matchesSearch = !query || `${automation.name} ${automation.description}`.toLowerCase().includes(query);
+      return inFolder && matchesSearch;
+    });
+  }, [automations, folderFilter, search]);
   const actionCount = draft?.nodes.filter((node) => node.type !== AUTOMATION_NODE_TYPE.start && node.type !== AUTOMATION_NODE_TYPE.end).length ?? 0;
   const selectedNode = draft?.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedReferenceId = selectedNode && 'referenceCaptureId' in selectedNode.data && typeof selectedNode.data.referenceCaptureId === 'string'
+    ? selectedNode.data.referenceCaptureId
+    : undefined;
 
   const loadScreen = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [items, catalog] = await Promise.all([listAutomations(), getAutomationCatalog()]);
+      const [items, catalog, savedFolders] = await Promise.all([listAutomations(), getAutomationCatalog(), listAutomationFolders()]);
       setAutomations(items);
       setDevices(catalog.devices);
+      setFolders(savedFolders);
       setSelectedSerial((current) => current || catalog.devices.find((device) => device.state === 'device')?.serial || '');
     } catch (cause) {
       setError(friendlyError(cause, t('automation.error.load')));
@@ -178,6 +220,44 @@ export default function AutomationScreen() {
     if (!capture) return;
     return () => URL.revokeObjectURL(capture.objectUrl);
   }, [capture?.objectUrl]);
+
+  useEffect(() => {
+    if (!draft || !selectedNodeId || !isCoordinateAction(selectedNode)) {
+      setCaptureHistory([]);
+      if (capture?.captureId) setCapture(null);
+      return;
+    }
+    let current = true;
+    setCaptureHistory([]);
+    void listAutomationReferenceCaptures(draft.id, selectedNodeId)
+      .then(async (history) => {
+        if (!current) return;
+        setCaptureHistory(history);
+        const preferred = history.find((item) => item.id === selectedReferenceId) ?? history[0];
+        if (!preferred) {
+          if (capture?.captureId) setCapture(null);
+          return;
+        }
+        const image = await getAutomationReferenceImage(draft.id, preferred.id);
+        if (!current) return;
+        const objectUrl = URL.createObjectURL(image.blob);
+        setCapture({
+          blob: image.blob,
+          width: preferred.width,
+          height: preferred.height,
+          rotation: preferred.rotation,
+          serial: preferred.serial,
+          capturedAt: preferred.createdAt,
+          captureId: preferred.id,
+          nodeId: preferred.nodeId,
+          objectUrl,
+        });
+      })
+      .catch((cause) => {
+        if (current) setError(friendlyError(cause, t('automation.error.capture')));
+      });
+    return () => { current = false; };
+  }, [draft?.id, selectedNodeId, selectedNode?.type, selectedReferenceId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -217,6 +297,7 @@ export default function AutomationScreen() {
     setDraft(automation);
     setActiveRun(null);
     setCapture(null);
+    setCaptureHistory([]);
     setSelectedNodeId(null);
     setTestStatus('');
     setError('');
@@ -234,13 +315,51 @@ export default function AutomationScreen() {
       suffix += 1;
     }
     try {
-      const created = await createAutomation(blankAutomation(name));
+      const selectedFolderId = folders.some((folder) => folder.id === folderFilter) ? folderFilter : undefined;
+      const created = await createAutomation(blankAutomation(name, selectedFolderId));
       setAutomations((items) => [created, ...items]);
       openAutomation(created);
     } catch (cause) {
       setError(friendlyError(cause, t('automation.error.create')));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const addFolder = async (name: string) => {
+    setError('');
+    try {
+      const created = await createAutomationFolder(name);
+      setFolders((items) => [...items, created]);
+      setFolderFilter(created.id);
+    } catch (cause) {
+      setError(friendlyError(cause, t('automation.error.folder')));
+      throw cause;
+    }
+  };
+
+  const renameFolder = async (id: string, name: string) => {
+    setError('');
+    try {
+      const updated = await renameAutomationFolder(id, name);
+      setFolders((items) => items.map((folder) => folder.id === updated.id ? updated : folder));
+    } catch (cause) {
+      setError(friendlyError(cause, t('automation.error.folder')));
+      throw cause;
+    }
+  };
+
+  const removeFolder = async (id: string) => {
+    setError('');
+    try {
+      await deleteAutomationFolder(id);
+      const [items, savedFolders] = await Promise.all([listAutomations(), listAutomationFolders()]);
+      setAutomations(items);
+      setFolders(savedFolders);
+      if (folderFilter === id) setFolderFilter('unfiled');
+    } catch (cause) {
+      setError(friendlyError(cause, t('automation.error.folder')));
+      throw cause;
     }
   };
 
@@ -315,10 +434,30 @@ export default function AutomationScreen() {
     setCapturing(true);
     setError('');
     try {
-      const screenshot = await captureAutomationScreenshot(selectedSerial);
-      const nextCapture: ScreenCapture = { ...screenshot, serial: selectedSerial, capturedAt: Date.now(), objectUrl: URL.createObjectURL(screenshot.blob) };
+      let nextCapture: ScreenCapture;
+      if (draft && selectedNode && isCoordinateAction(selectedNode)) {
+        const metadata = await captureAutomationReference(draft.id, selectedNode.id, selectedNode.type, selectedSerial);
+        const image = await getAutomationReferenceImage(draft.id, metadata.id);
+        nextCapture = {
+          blob: image.blob,
+          width: metadata.width,
+          height: metadata.height,
+          rotation: metadata.rotation,
+          serial: metadata.serial,
+          capturedAt: metadata.createdAt,
+          captureId: metadata.id,
+          nodeId: metadata.nodeId,
+          objectUrl: URL.createObjectURL(image.blob),
+        };
+        setCaptureHistory((history) => [metadata, ...history.filter((item) => item.id !== metadata.id)]);
+      } else {
+        const screenshot = await captureAutomationScreenshot(selectedSerial);
+        nextCapture = { ...screenshot, serial: selectedSerial, capturedAt: Date.now(), objectUrl: URL.createObjectURL(screenshot.blob) };
+      }
       if (draft && invalidateStaleCoordinates(draft.nodes, nextCapture).changed) setError(t('automation.picker.geometryChanged'));
-      setDraft((current) => current ? { ...current, nodes: invalidateStaleCoordinates(current.nodes, nextCapture).nodes } : current);
+      setDraft((current) => current ? { ...current, nodes: invalidateStaleCoordinates(current.nodes, nextCapture).nodes.map((node) =>
+        node.id === selectedNode?.id && nextCapture.captureId ? attachReferenceCapture(node, nextCapture.captureId) : node,
+      ) } : current);
       setCapture(nextCapture);
     } catch (cause) {
       setError(friendlyError(cause, t('automation.error.capture')));
@@ -340,6 +479,29 @@ export default function AutomationScreen() {
     setDraft((current) => current ? { ...current, nodes: current.nodes.map((node) => node.id === nodeId ? { ...node, data } : node) } : current);
     setTestStatus('');
   }, []);
+
+  const selectReferenceCapture = useCallback(async (item: AutomationReferenceCapture) => {
+    if (!draft || !selectedNode || !isCoordinateAction(selectedNode)) return;
+    setError('');
+    try {
+      const image = await getAutomationReferenceImage(draft.id, item.id);
+      const nextCapture: ScreenCapture = {
+        blob: image.blob,
+        width: item.width,
+        height: item.height,
+        rotation: item.rotation,
+        serial: item.serial,
+        capturedAt: item.createdAt,
+        captureId: item.id,
+        nodeId: item.nodeId,
+        objectUrl: URL.createObjectURL(image.blob),
+      };
+      setCapture(nextCapture);
+      setDraft((current) => current ? { ...current, nodes: current.nodes.map((node) => node.id === selectedNode.id ? attachReferenceCapture(node, item.id) : node) } : current);
+    } catch (cause) {
+      setError(friendlyError(cause, t('automation.error.capture')));
+    }
+  }, [draft, selectedNode, t, updateNodeData]);
 
   const runTestAction = async (node: AutomationNode) => {
     if (!selectedSerial) {
@@ -444,7 +606,7 @@ export default function AutomationScreen() {
           <div className="grid min-h-full grid-cols-1 xl:grid-cols-[minmax(0,1fr)_310px]">
             <main className="flex min-w-0 flex-col gap-3 p-3 lg:p-4 xl:overflow-y-auto">
               {error && <p role="alert" className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p>}
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <label className="space-y-1.5">
                   <span className="text-[10px] font-medium text-zinc-500">{t('automation.editor.name')}</span>
                   <input value={draft.name} maxLength={80} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder={t('automation.editor.namePlaceholder')} className="w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-emerald-500/70" />
@@ -452,6 +614,13 @@ export default function AutomationScreen() {
                 <label className="space-y-1.5">
                   <span className="text-[10px] font-medium text-zinc-500">{t('automation.editor.description')}</span>
                   <input value={draft.description} maxLength={500} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder={t('automation.editor.descriptionPlaceholder')} className="w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-emerald-500/70" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-medium text-zinc-500">{t('automation.editor.folder')}</span>
+                  <select value={draft.folderId ?? ''} onChange={(event) => setDraft({ ...draft, folderId: event.target.value || undefined })} className="w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-emerald-500/70">
+                    <option value="">{t('automation.editor.folderUnfiled')}</option>
+                    {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+                  </select>
                 </label>
               </div>
 
@@ -483,12 +652,12 @@ export default function AutomationScreen() {
                 </select>
                 {onlineDevices.length === 0 && <p className="text-[10px] text-amber-300/90">{t('automation.editor.noDevices')}</p>}
                 {devices.some((device) => device.state === 'unauthorized') && <p className="text-[10px] text-amber-300/90">{t('automation.editor.unauthorized')}</p>}
-                <button type="button" onClick={() => void captureScreen()} disabled={!onlineSelected || capturing || active} className={`${secondaryButton} w-full py-2 text-xs`}>
+                {!isCoordinateAction(selectedNode) && <button type="button" onClick={() => void captureScreen()} disabled={!onlineSelected || capturing || active} className={`${secondaryButton} w-full py-2 text-xs`}>
                   {capturing ? t('automation.editor.capturing') : t('automation.editor.capture')}
-                </button>
+                </button>}
               </section>
 
-              <NodeProperties node={selectedNode} capture={capture} imageUrl={captureUrl} capturing={capturing} onCapture={() => void captureScreen()} onChange={(data) => selectedNode && updateNodeData(selectedNode.id, data)} onTest={(node) => void runTestAction(node)} testStatus={testStatus} t={t} />
+              <NodeProperties node={selectedNode} capture={capture} imageUrl={captureUrl} capturing={capturing} captureHistory={captureHistory} onCapture={() => void captureScreen()} onSelectCapture={(item) => void selectReferenceCapture(item)} onChange={(data) => selectedNode && updateNodeData(selectedNode.id, data)} onTest={(node) => void runTestAction(node)} testStatus={testStatus} t={t} />
 
               <section className="space-y-3 border-t border-zinc-800 pt-4">
                 <div className="flex items-center justify-between gap-2">
@@ -528,48 +697,65 @@ export default function AutomationScreen() {
 
         {error && <p role="alert" className="mb-5 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p>}
 
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-xs font-medium text-zinc-500">{automations.length} {t('automation.list.count')}</p>
-          {automations.length > 0 && <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('automation.search')} className="w-64 max-w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-emerald-500/70" />}
-        </div>
+        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <AutomationFolderSidebar
+            folders={folders}
+            filter={folderFilter}
+            totalCount={automations.length}
+            unfiledCount={unfiledCount}
+            folderCounts={folderCounts}
+            onFilterChange={setFolderFilter}
+            onCreateFolder={addFolder}
+            onRenameFolder={renameFolder}
+            onDeleteFolder={removeFolder}
+          />
+          <section className="min-w-0">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-xs font-medium text-zinc-500">{filteredAutomations.length} {t('automation.list.count')}</p>
+              {automations.length > 0 && <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('automation.search')} className="w-64 max-w-full rounded-md border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-emerald-500/70" />}
+            </div>
 
-        {loading ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-5 py-8 text-sm text-zinc-500">{t('automation.loading')}</div>
-        ) : filteredAutomations.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-900/20 px-6 py-14 text-center">
-            <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300"><AutomationMark /></span>
-            <h2 className="font-display text-xl font-semibold text-zinc-100">{search ? t('automation.list.noMatch') : t('automation.list.emptyTitle')}</h2>
-            <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-zinc-400">{search ? t('automation.list.noMatchHint') : t('automation.list.emptyHint')}</p>
-            {!search && <button type="button" onClick={() => void createNew()} disabled={creating} className={`${primaryButton} mt-5`}>{t('automation.new')}</button>}
-          </div>
-        ) : (
-          <div className="divide-y divide-zinc-800/80 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/30">
-            {filteredAutomations.map((automation) => {
-              const actions = automation.nodes.filter((node) => node.type !== AUTOMATION_NODE_TYPE.start && node.type !== AUTOMATION_NODE_TYPE.end).length;
-              return (
-                <article key={automation.id} className="group flex flex-wrap items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-zinc-900/80 sm:px-5">
-                  <button type="button" onClick={() => openAutomation(automation)} aria-label={t('automation.list.open', { name: automation.name })} className="flex min-w-0 flex-1 items-center gap-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-emerald-300"><AutomationMark /></span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-zinc-100">{automation.name}</span>
-                      <span className="mt-1 block truncate text-xs text-zinc-500">{automation.description || t('automation.list.noDescription')}</span>
-                    </span>
-                  </button>
-                  <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
-                    <div className="flex items-center gap-4 text-xs text-zinc-500">
-                      <span>{actions} {t('automation.editor.actions')}</span>
-                      <span>{t('automation.list.revision', { revision: automation.revision })}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button type="button" onClick={() => void duplicate(automation)} className={smallButton}>{t('automation.editor.duplicate')}</button>
-                      <button type="button" onClick={() => setDeleteTarget(automation)} className={`${smallButton} hover:text-rose-300`}>{t('automation.list.delete')}</button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+            {loading ? (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-5 py-8 text-sm text-zinc-500">{t('automation.loading')}</div>
+            ) : filteredAutomations.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-900/20 px-6 py-14 text-center">
+                <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300"><AutomationMark /></span>
+                <h2 className="font-display text-xl font-semibold text-zinc-100">{search ? t('automation.list.noMatch') : folderFilter === 'all' ? t('automation.list.emptyTitle') : t('automation.folders.noItemsTitle')}</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-zinc-400">{search ? t('automation.list.noMatchHint') : folderFilter === 'all' ? t('automation.list.emptyHint') : t('automation.folders.noItemsHint')}</p>
+                {!search && <button type="button" onClick={() => void createNew()} disabled={creating} className={`${primaryButton} mt-5`}>{t('automation.new')}</button>}
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-800/80 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/30">
+                {filteredAutomations.map((automation) => {
+                  const actions = automation.nodes.filter((node) => node.type !== AUTOMATION_NODE_TYPE.start && node.type !== AUTOMATION_NODE_TYPE.end).length;
+                  const folderName = folders.find((folder) => folder.id === automation.folderId)?.name ?? t('automation.folders.unfiled');
+                  return (
+                    <article key={automation.id} className="group flex flex-wrap items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-zinc-900/80 sm:px-5">
+                      <button type="button" onClick={() => openAutomation(automation)} aria-label={t('automation.list.open', { name: automation.name })} className="flex min-w-0 flex-1 items-center gap-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-emerald-300"><AutomationMark /></span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold text-zinc-100">{automation.name}</span>
+                          <span className="mt-1 block truncate text-xs text-zinc-500">{automation.description || t('automation.list.noDescription')}</span>
+                          <span className="mt-1 inline-flex max-w-full items-center gap-1 rounded border border-zinc-800 bg-zinc-950/70 px-1.5 py-0.5 text-[10px] text-zinc-500"><span aria-hidden="true">▰</span><span className="truncate">{folderName}</span></span>
+                        </span>
+                      </button>
+                      <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+                        <div className="flex items-center gap-4 text-xs text-zinc-500">
+                          <span>{actions} {t('automation.editor.actions')}</span>
+                          <span>{t('automation.list.revision', { revision: automation.revision })}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => void duplicate(automation)} className={smallButton}>{t('automation.editor.duplicate')}</button>
+                          <button type="button" onClick={() => setDeleteTarget(automation)} className={`${smallButton} hover:text-rose-300`}>{t('automation.list.delete')}</button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
       {deleteTarget && <DeleteDialog automation={deleteTarget} deleting={deleting} onCancel={() => setDeleteTarget(null)} onConfirm={() => void confirmDelete()} t={t} />}
     </div>

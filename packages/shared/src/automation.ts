@@ -2,6 +2,9 @@ export const AUTOMATION_NODE_TYPE = {
   start: 'start',
   end: 'end',
   launchApp: 'launchApp',
+  forceStopApp: 'forceStopApp',
+  clearAppData: 'clearAppData',
+  adbCommand: 'adbCommand',
   tap: 'tap',
   longPress: 'longPress',
   swipe: 'swipe',
@@ -60,9 +63,10 @@ export interface AutomationPosition {
 export type AutomationActionData =
   | Record<string, never>
   | { packageName: string }
-  | { point: AutomationPoint }
-  | { point: AutomationPoint; durationMs: number }
-  | { start: AutomationPoint; end: AutomationPoint; durationMs: number }
+  | { command: string }
+  | { point: AutomationPoint; referenceCaptureId?: string }
+  | { point: AutomationPoint; durationMs: number; referenceCaptureId?: string }
+  | { start: AutomationPoint; end: AutomationPoint; durationMs: number; referenceCaptureId?: string }
   | { text: string }
   | { key: AutomationKey }
   | { durationMs: number }
@@ -85,8 +89,16 @@ export interface AutomationDefinition {
   name: string;
   description: string;
   schemaVersion: 1;
+  folderId?: string;
   nodes: AutomationNode[];
   edges: AutomationEdge[];
+}
+
+export interface AutomationFolder {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface Automation extends AutomationDefinition {
@@ -129,6 +141,19 @@ export interface AutomationArtifact {
   rotation: 0 | 1 | 2 | 3;
   createdAt: number;
   nodeId?: string;
+}
+
+export interface AutomationReferenceCapture {
+  id: string;
+  automationId: string;
+  nodeId: string;
+  serial: string;
+  mimeType: 'image/png';
+  size: number;
+  width: number;
+  height: number;
+  rotation: 0 | 1 | 2 | 3;
+  createdAt: number;
 }
 
 export interface AutomationRun {

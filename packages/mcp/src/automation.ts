@@ -34,6 +34,7 @@ const automationSchema = z.object({
   name: z.string().min(1).max(80),
   description: z.string().max(500).default(''),
   schemaVersion: z.literal(1).default(1),
+  folderId: z.string().min(1).max(128).optional().describe('Folder ID from frigg_list_automation_folders; omit to keep the automation unfiled'),
   nodes: z.array(nodeSchema).min(2).max(100),
   edges: z.array(edgeSchema),
 });
@@ -83,6 +84,30 @@ export function registerAutomationTools(server: McpServer, api: AutomationApi = 
 
   server.tool('frigg_list_automations', 'List saved Android automations.', async () =>
     runTool(() => api.get('/api/automations')));
+
+  server.tool('frigg_list_automation_folders', 'List folders used to organize Android automations.', async () =>
+    runTool(() => api.get('/api/automation-folders')));
+
+  server.tool(
+    'frigg_create_automation_folder',
+    'Create a top-level folder for Android automations.',
+    { name: z.string().trim().min(1).max(80) },
+    async ({ name }) => runTool(() => api.post('/api/automation-folders', { name })),
+  );
+
+  server.tool(
+    'frigg_rename_automation_folder',
+    'Rename a top-level automation folder.',
+    { id: z.string().min(1), name: z.string().trim().min(1).max(80) },
+    async ({ id, name }) => runTool(() => api.put(`/api/automation-folders/${encodeURIComponent(id)}`, { name })),
+  );
+
+  server.tool(
+    'frigg_delete_automation_folder',
+    'Delete a folder. Its automations remain saved and become unfiled.',
+    { id: z.string().min(1) },
+    async ({ id }) => runTool(() => api.del(`/api/automation-folders/${encodeURIComponent(id)}`)),
+  );
 
   server.tool(
     'frigg_get_automation',

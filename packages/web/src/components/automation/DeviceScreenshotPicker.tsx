@@ -12,6 +12,7 @@ export interface AutomationGesture {
 export interface DeviceCapture extends AutomationScreenshot {
   serial: string;
   capturedAt: number;
+  captureId?: string;
 }
 
 export default function DeviceScreenshotPicker({

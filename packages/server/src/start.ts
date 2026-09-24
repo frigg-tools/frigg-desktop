@@ -19,6 +19,7 @@ import {
   mocksPath,
   automationsPath,
   automationRunsPath,
+  automationReferencesPath,
   proxyCertsPath,
   sqlConnectionsPath,
   sqlSecretKeyPath,
@@ -44,6 +45,7 @@ import {
 } from './sql/index.ts';
 import { AutomationStore } from './automation/store.ts';
 import { AutomationRunStore } from './automation/run-store.ts';
+import { AutomationReferenceStore } from './automation/reference-store.ts';
 import { AutomationManager } from './automation/manager.ts';
 import { AndroidAutomationDevice } from './automation/adb.ts';
 
@@ -123,6 +125,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     isActive: (automationId) => automationManagerForGuard?.isActive(automationId) ?? false,
   });
   const automationRuns = await AutomationRunStore.load(automationRunsPath);
+  const automationReferences = await AutomationReferenceStore.load(automationReferencesPath);
   const automationDevice = new AndroidAutomationDevice();
   const automationManager = new AutomationManager({
     automations,
@@ -168,6 +171,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     automation: {
       automations,
       runs: automationRuns,
+      references: automationReferences,
       manager: automationManager,
       device: automationDevice,
       configuredUiPort: options.uiPort ?? 5173,

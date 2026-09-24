@@ -8,10 +8,11 @@ import type { AutomationDefinition, AutomationNode, AndroidDevice } from '@frigg
 import type { DeviceScreenshot } from './adb.ts';
 import { AutomationStore } from './store.ts';
 import { AutomationRunStore } from './run-store.ts';
+import { AutomationReferenceStore } from './reference-store.ts';
 import { AutomationManager } from './manager.ts';
 import { buildAutomationRouter } from './router.ts';
 
-const screenshotBytes = Buffer.from([137, 80, 78, 71, 1, 2, 3]);
+const screenshotBytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
 const definition: AutomationDefinition = {
   name: 'Capture screen', description: '', schemaVersion: 1,
   nodes: [
@@ -29,6 +30,7 @@ describe('automation REST router', () => {
   let directory: string;
   let automations: AutomationStore;
   let runs: AutomationRunStore;
+  let references: AutomationReferenceStore;
   let manager: AutomationManager;
   let app: express.Express;
   let device: {
@@ -45,6 +47,7 @@ describe('automation REST router', () => {
     directory = await mkdtemp(join(tmpdir(), 'frigg-automation-api-'));
     automations = await AutomationStore.load(join(directory, 'automations.json'));
     runs = await AutomationRunStore.load(join(directory, 'runs'));
+    references = await AutomationReferenceStore.load(join(directory, 'references'));
     device = {
       assertReady: vi.fn(async () => undefined),
       screenshot: vi.fn(async (): Promise<DeviceScreenshot> => ({ png: screenshotBytes, width: 400, height: 800, rotation: 0 })),
@@ -56,7 +59,7 @@ describe('automation REST router', () => {
     app = express();
     app.use(express.json());
     app.use(buildAutomationRouter({
-      automations, runs, manager, device,
+      automations, runs, references, manager, device,
       apiPort: () => 4848, configuredUiPort: 5173,
       listDevices,
     }));
@@ -74,6 +77,7 @@ describe('automation REST router', () => {
   it('lists the Android catalog and returns binary screenshots with geometry headers', async () => {
     const catalog = await local(request(app).get('/api/automations/catalog')).expect(200);
     expect(catalog.body.devices).toEqual([android]);
+    expect(catalog.body.nodeTypes).toEqual(expect.arrayContaining(['forceStopApp', 'clearAppData', 'adbCommand']));
     const screenshot = await local(request(app).get('/api/automation-devices/emulator-5554/screenshot')).expect(200);
     expect(screenshot.headers['content-type']).toContain('image/png');
     expect(screenshot.headers['x-frigg-screen-width']).toBe('400');
@@ -94,6 +98,63 @@ describe('automation REST router', () => {
     await local(request(app).get(`/api/automations/${created.body.id}`)).expect(404);
   });
 
+  it('manages folders through REST and leaves their automations saved when a folder is deleted', async () => {
+    const folder = await local(request(app).post('/api/automation-folders')).send({ name: '  Sign-in  ' }).expect(201);
+    expect(folder.body).toMatchObject({ name: 'Sign-in' });
+    await local(request(app).get('/api/automation-folders')).expect(200).expect(({ body }) => expect(body).toEqual([folder.body]));
+
+    const created = await local(request(app).post('/api/automations'))
+      .send({ ...definition, folderId: folder.body.id }).expect(201);
+    expect(created.body.folderId).toBe(folder.body.id);
+    await local(request(app).post('/api/automation-folders')).send({ name: 'sign-in' }).expect(409);
+    await local(request(app).put(`/api/automation-folders/${folder.body.id}`)).send({ name: 'Account checks' })
+      .expect(200).expect(({ body }) => expect(body).toMatchObject({ id: folder.body.id, name: 'Account checks' }));
+    await local(request(app).delete(`/api/automation-folders/${folder.body.id}`)).expect(200);
+
+    const unfiled = await local(request(app).get(`/api/automations/${created.body.id}`)).expect(200);
+    expect(unfiled.body).toMatchObject({ name: definition.name, revision: 2, nodes: definition.nodes, edges: definition.edges });
+    expect(unfiled.body).not.toHaveProperty('folderId');
+    await local(request(app).get('/api/automation-folders')).expect(200).expect(({ body }) => expect(body).toEqual([]));
+  });
+
+  it('rejects assignments to folders that do not exist', async () => {
+    await local(request(app).post('/api/automations'))
+      .send({ ...definition, folderId: 'missing-folder' }).expect(404);
+  });
+
+  it('saves reference screenshots against coordinate cards and removes them with the card', async () => {
+    const tapDefinition: AutomationDefinition = {
+      ...definition,
+      name: 'Tap with reference',
+      nodes: [
+        { id: 'start', type: 'start', data: {}, position: { x: 0, y: 0 } },
+        { id: 'tap', type: 'tap', data: { point: { x: 0.4, y: 0.6, referenceWidth: 400, referenceHeight: 800, referenceRotation: 0 } }, position: { x: 100, y: 0 } },
+        { id: 'end', type: 'end', data: {}, position: { x: 200, y: 0 } },
+      ],
+      edges: [{ id: 'one', source: 'start', target: 'tap' }, { id: 'two', source: 'tap', target: 'end' }],
+    };
+    const created = await local(request(app).post('/api/automations')).send(tapDefinition).expect(201);
+    const captured = await local(request(app).post(`/api/automations/${created.body.id}/nodes/tap/reference-captures`))
+      .send({ serial: 'emulator-5554' }).expect(201);
+    expect(captured.body).toMatchObject({ automationId: created.body.id, nodeId: 'tap', width: 400, height: 800, rotation: 0 });
+    const draftCapture = await local(request(app).post(`/api/automations/${created.body.id}/nodes/draft-tap/reference-captures`))
+      .send({ serial: 'emulator-5554', nodeType: 'tap' }).expect(201);
+    expect(draftCapture.body.nodeId).toBe('draft-tap');
+    await local(request(app).get(`/api/automations/${created.body.id}/nodes/draft-tap/reference-captures`))
+      .expect(200).expect(({ body }) => expect(body.map((item: { id: string }) => item.id)).toEqual([draftCapture.body.id]));
+    await local(request(app).get(`/api/automations/${created.body.id}/nodes/tap/reference-captures`))
+      .expect(200).expect(({ body }) => expect(body.map((item: { id: string }) => item.id)).toEqual([captured.body.id]));
+    await local(request(app).get(`/api/automations/${created.body.id}/reference-captures/${captured.body.id}/image`))
+      .expect(200).expect(({ body }) => expect(body).toEqual(screenshotBytes));
+    await local(request(app).put(`/api/automations/${created.body.id}`)).send({
+      ...tapDefinition,
+      expectedRevision: 1,
+      nodes: [tapDefinition.nodes[0], tapDefinition.nodes[2]],
+      edges: [{ id: 'only', source: 'start', target: 'end' }],
+    }).expect(200);
+    await local(request(app).get(`/api/automations/${created.body.id}/reference-captures`)).expect(200).expect(({ body }) => expect(body).toEqual([]));
+  });
+
   it('tests only schema-validated typed device actions', async () => {
     await local(request(app).post('/api/automation-devices/emulator-5554/test-action'))
       .send({ requestId: 'home-test', node: { id: 'press-home', type: 'key', data: { key: 'HOME' } } }).expect(200);
@@ -103,6 +164,14 @@ describe('automation REST router', () => {
     await local(request(app).post('/api/automation-devices/emulator-5554/test-action'))
       .send({ node: { id: 'shell', type: 'shell', data: { command: 'anything' } } }).expect(400);
     expect(device.perform).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a client error when a custom ADB action is rejected by the device guard', async () => {
+    device.perform.mockRejectedValueOnce(Object.assign(new Error('This ADB command is not supported.'), { code: 'unsupported_adb_command' }));
+    await local(request(app).post('/api/automation-devices/emulator-5554/test-action'))
+      .send({ requestId: 'unsupported-adb-test', node: { id: 'shell', type: 'adbCommand', data: { command: 'dumpsys activity' } } })
+      .expect(400)
+      .expect(({ body }) => expect(body.error).toContain('not supported'));
   });
 
   it('creates a run, polls its final snapshot, and fetches its opaque screenshot artifact', async () => {
@@ -128,11 +197,12 @@ describe('automation REST router', () => {
       next();
     });
     remote.use(buildAutomationRouter({
-      automations, runs, manager, device,
+      automations, runs, references, manager, device,
       apiPort: () => 4848, configuredUiPort: 5173,
       listDevices,
     }));
     await request(remote).get('/api/automations').set('Host', 'localhost:4848').expect(403);
+    await request(remote).get('/api/automation-folders').set('Host', 'localhost:4848').expect(403);
     await request(remote).get('/api/automation-devices/emulator-5554/screenshot')
       .set('Host', 'localhost:4848').expect(403);
     expect(snapshot).not.toHaveBeenCalled();
