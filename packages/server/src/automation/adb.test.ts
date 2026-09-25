@@ -33,6 +33,11 @@ function tap(data: Record<string, unknown>): AutomationNode {
   return { id: 'tap-node', type: 'tap', data, position: { x: 0, y: 0 } };
 }
 
+function textInputScript(text: string): string {
+  const commands = Array.from(text, (character) => `input text ${character === ' ' ? '%s' : character}`);
+  return `set -e; ${commands.join('; sleep 0.05; ')}; sleep 0.05`;
+}
+
 function readyRunner(implementation?: Runner) {
   const runner = vi.fn<Runner>(implementation ?? (async (_command, args) => {
     if (args[2] === 'get-state') return result(Buffer.from('device\n'));
@@ -62,7 +67,7 @@ describe('AndroidAutomationDevice', () => {
     expect(outcome.code).toBeNull();
   });
 
-  it('encodes supported text and scopes input to the selected serial', async () => {
+  it('types supported text character by character with a short IME settle time', async () => {
     const runner = readyRunner();
     const device = new AndroidAutomationDevice(runner);
     await device.perform('emulator-5554', {
@@ -71,8 +76,9 @@ describe('AndroidAutomationDevice', () => {
     expect(runner.mock.calls.map((call) => call[1])).toEqual([
       ['-s', 'emulator-5554', 'get-state'],
       ['-s', 'emulator-5554', 'shell', 'dumpsys', 'input_method'],
-      ['-s', 'emulator-5554', 'shell', 'input', 'text', 'Hi%s42'],
+      ['-s', 'emulator-5554', 'shell', textInputScript('Hi 42')],
     ]);
+    expect(runner.mock.calls.at(-1)?.[2]?.timeoutMs).toBe(15_750);
   });
 
   it('waits for the soft keyboard to become visible before typing', async () => {
@@ -91,7 +97,7 @@ describe('AndroidAutomationDevice', () => {
     }, new AbortController().signal);
 
     expect(keyboardChecks).toBe(2);
-    expect(runner.mock.calls.at(-1)?.[1]).toEqual(['-s', 'emulator-5554', 'shell', 'input', 'text', 'Login42']);
+    expect(runner.mock.calls.at(-1)?.[1]).toEqual(['-s', 'emulator-5554', 'shell', textInputScript('Login42')]);
   });
 
   it('waits for the launched package to reach the foreground', async () => {
