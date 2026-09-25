@@ -1,6 +1,6 @@
 {
   "name": "@frigg/desktop",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "description": "Frigg desktop shell (Electron)",
   "main": "dist/main.cjs",
