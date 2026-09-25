@@ -33,6 +33,7 @@ const timeoutMs = 15_000;
 const appForegroundTimeoutMs = 20_000;
 const keyboardVisibleTimeoutMs = 5_000;
 const readinessPollMs = 100;
+const textCharacterDelayMs = 50;
 const supportedText = /^[A-Za-z0-9.,:@/_ -]*$/;
 const packageNamePattern = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$/;
 const keyEvents: Record<AutomationKey, string> = {
@@ -157,11 +158,18 @@ function assertGeometry(point: AutomationPoint, screenshot: DeviceScreenshot): v
   }
 }
 
-function normalizedText(value: unknown): string {
+function validatedText(value: unknown): string {
   if (typeof value !== 'string' || value.length > 1_000 || !supportedText.test(value)) {
     throw new DeviceAutomationError('unsupported_text', 'Text supports ASCII letters, digits, spaces, and . , : @ / _ - only.');
   }
-  return value.replaceAll(' ', '%s');
+  return value;
+}
+
+function textInputScript(text: string): string {
+  const delaySeconds = (textCharacterDelayMs / 1_000).toFixed(2);
+  const commands = Array.from(text, (character) => `input text ${character === ' ' ? '%s' : character}`);
+  if (commands.length === 0) return '';
+  return `set -e; ${commands.join(`; sleep ${delaySeconds}; `)}; sleep ${delaySeconds}`;
 }
 
 export class AndroidAutomationDevice {
@@ -263,7 +271,7 @@ export class AndroidAutomationDevice {
         return;
       }
       case AUTOMATION_NODE_TYPE.text: {
-        const text = normalizedText(data.text);
+        const text = validatedText(data.text);
         await this.waitForReadiness(
           serial,
           ['shell', 'dumpsys', 'input_method'],
@@ -273,7 +281,11 @@ export class AndroidAutomationDevice {
           'The Android keyboard did not become visible. Tap a text field and try again.',
           signal,
         );
-        await this.command(serial, ['shell', 'input', 'text', text], signal);
+        const script = textInputScript(text);
+        if (script !== '') {
+          const textTimeoutMs = timeoutMs + text.length * (textCharacterDelayMs + 100);
+          await this.command(serial, ['shell', script], signal, textTimeoutMs);
+        }
         return;
       }
       case AUTOMATION_NODE_TYPE.key: {
@@ -293,8 +305,8 @@ export class AndroidAutomationDevice {
     }
   }
 
-  private async command(serial: string, args: string[], signal: AbortSignal): Promise<void> {
-    const result = await this.execute('adb', ['-s', serial, ...args], { timeoutMs, signal });
+  private async command(serial: string, args: string[], signal: AbortSignal, commandTimeoutMs = timeoutMs): Promise<void> {
+    const result = await this.execute('adb', ['-s', serial, ...args], { timeoutMs: commandTimeoutMs, signal });
     assertOk(result, 'Android action failed');
   }
 
