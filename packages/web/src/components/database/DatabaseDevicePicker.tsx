@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { AndroidDevice, IosSimulator, LogTarget } from '@frigg/shared';
 import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
@@ -30,15 +31,23 @@ function buildTarget(
 export default function DatabaseDevicePicker() {
   const t = useT();
   const devices = useAppStore((s) => s.devices);
+  const activeDevice = useAppStore((s) => s.activeDevice);
   const dbTarget = useAppStore((s) => s.dbTarget);
   const setDbTarget = useAppStore((s) => s.setDbTarget);
 
   const android = devices?.android ?? [];
   const iosSimulators = devices?.iosSimulators ?? [];
 
+  useEffect(() => {
+    if (!activeDevice || targetValue(dbTarget) === targetValue(activeDevice)) return;
+    const next = buildTarget(targetValue(activeDevice), android, iosSimulators);
+    if (next) setDbTarget(next);
+  }, [activeDevice, dbTarget, setDbTarget, devices]);
+
   return (
     <select
       value={targetValue(dbTarget)}
+      aria-label={t('database.device.placeholder')}
       onChange={(e) => setDbTarget(buildTarget(e.target.value, android, iosSimulators))}
       className="max-w-[15rem] rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
     >

@@ -1,7 +1,7 @@
 import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
 
-export default function TrafficEmptyState() {
+export default function TrafficEmptyState({ deviceLabel }: { deviceLabel?: string }) {
   const t = useT();
   const setScreen = useAppStore((s) => s.setScreen);
   return (
@@ -17,13 +17,15 @@ export default function TrafficEmptyState() {
       >
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
       </svg>
-      <p className="text-sm text-zinc-500">{t('traffic.emptyState')}</p>
+      <p className="max-w-md text-center text-[13px] leading-relaxed text-zinc-400">
+        {deviceLabel ? t('traffic.emptyStateForDevice', { device: deviceLabel }) : t('traffic.emptyState')}
+      </p>
       <button
         type="button"
         onClick={() => setScreen('devices')}
         className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[13px] font-medium text-emerald-400 transition hover:bg-emerald-500/15 active:scale-[0.98]"
       >
-        {t('traffic.emptyStateCta')}
+        {deviceLabel ? t('traffic.emptyStateDeviceCta') : t('traffic.emptyStateCta')}
       </button>
     </div>
   );

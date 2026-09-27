@@ -92,6 +92,9 @@ export const client: Bundle = {
     'empty.noWorkspace': 'No workspace yet',
     'empty.noRequestTitle': 'No request selected',
     'empty.noRequestHint': 'Pick a request from the collection, or create a new one.',
+    'empty.recentRequest': 'Continue with: {name}',
+    'empty.openRecent': 'Open request',
+    'empty.createRequest': 'New request',
   },
   pt: {
     title: 'API Client',
@@ -186,5 +189,8 @@ export const client: Bundle = {
     'empty.noWorkspace': 'Nenhum workspace ainda',
     'empty.noRequestTitle': 'Nenhuma requisição selecionada',
     'empty.noRequestHint': 'Escolha uma requisição da coleção, ou crie uma nova.',
+    'empty.recentRequest': 'Continuar com: {name}',
+    'empty.openRecent': 'Abrir requisição',
+    'empty.createRequest': 'Nova requisição',
   },
 };

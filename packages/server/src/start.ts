@@ -14,6 +14,7 @@ import { DeviceWatcher } from './devices/device-watcher.ts';
 import { getLanIp } from './lib/net.ts';
 import {
   apiClientPath,
+  androidProxiesPath,
   ensureFriggDirs,
   logsPath,
   mocksPath,
@@ -36,6 +37,8 @@ import { ProxyCertStore } from './proxy/proxy-cert-store.ts';
 import { TrafficStore } from './proxy/traffic-store.ts';
 import { CertTrustTracker } from './devices/cert-trust-tracker.ts';
 import { teardownAndroidProxiesPointingAt } from './devices/android.ts';
+import { restoreTrackedAndroidProxies } from './devices/android.ts';
+import { AndroidProxyRegistry } from './devices/android-proxy-registry.ts';
 import {
   createFileSecretBox,
   SqlConnectionStore,
@@ -142,6 +145,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const logcat = new LogcatManager();
   const db = new DbInspector();
   const apiClient = await ApiClientStore.load(apiClientPath);
+  const androidProxyRegistry = await AndroidProxyRegistry.load(androidProxiesPath);
   const frida = new FridaManager();
   const deviceWatcher = new DeviceWatcher();
 
@@ -167,6 +171,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     sqlConnections,
     frida,
     certTrust,
+    androidProxyRegistry,
     reloadProxy: () => engine.reload(),
     automation: {
       automations,
@@ -201,8 +206,6 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     const event: AppLogEvent = { type: 'app-log', entry };
     hub.broadcast(event);
   });
-  deviceWatcher.start();
-
   const actualApiPort = await listenWithFallback(httpServer, apiPort);
   deps.apiPort = actualApiPort;
   httpServer.on('error', (error) => {
@@ -211,12 +214,49 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
 
   const lanIp = getLanIp();
   const host = lanIp ?? 'localhost';
-  const friggProxyAddr = lanIp === null ? null : `${lanIp}:${actualProxyPort}`;
+  const friggProxyAddresses = [lanIp === null ? null : `${lanIp}:${actualProxyPort}`, `10.0.2.2:${actualProxyPort}`]
+    .filter((address): address is string => address !== null);
+
+  let proxyCleanupInFlight: Promise<void> | null = null;
+  const reconcileAndroidProxies = (includeLegacy = false, includeActive = false): Promise<void> => {
+    if (proxyCleanupInFlight !== null) return proxyCleanupInFlight;
+    const cleanup = (async () => {
+      const tracked = await restoreTrackedAndroidProxies(androidProxyRegistry, { includeActive });
+      for (const failure of tracked.failures) {
+        loggerService.warn('server', 'android-proxy-cleanup', 'Could not restore the Android proxy setting.', failure);
+      }
+      if (includeLegacy) {
+        const legacyFailures = await teardownAndroidProxiesPointingAt(
+          friggProxyAddresses,
+          'en',
+          new Set(tracked.handledSerials),
+        );
+        for (const failure of legacyFailures) {
+          loggerService.warn('server', 'android-proxy-cleanup', 'Could not remove an untracked Frigg proxy setting.', failure);
+        }
+      }
+    })().catch((error: unknown) => {
+      loggerService.warn('server', 'android-proxy-cleanup', 'Android proxy cleanup could not complete.', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+    proxyCleanupInFlight = cleanup.finally(() => {
+      proxyCleanupInFlight = null;
+    });
+    return proxyCleanupInFlight;
+  };
+
+  deviceWatcher.on('event', (event: ServerEvent) => {
+    if (event.type === 'devices-updated') void reconcileAndroidProxies();
+  });
+  void reconcileAndroidProxies(true);
+  deviceWatcher.start();
 
   const stop = async (): Promise<void> => {
     await automationManager.shutdown();
     deviceWatcher.dispose();
-    loggerService.dispose();
+    await proxyCleanupInFlight;
+    await reconcileAndroidProxies(true, true);
     await Promise.allSettled([
       engine.stop(),
       mocks.flush(),
@@ -228,8 +268,9 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
       sql.disposeAll(),
       frida.stop(),
       disableMacProxyIfEnabledByFrigg(),
-      teardownAndroidProxiesPointingAt(friggProxyAddr, 'en'),
+      androidProxyRegistry.flush(),
     ]);
+    loggerService.dispose();
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   };
 

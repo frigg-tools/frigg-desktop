@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { DEFAULT_PROXY_PORT } from '@frigg/shared';
-import { useAppStore } from '../../store';
+import { useAppStore, type DeviceSetupPlatform } from '../../store';
 import { useT, type TranslateFn } from '../../i18n';
 
 const ONBOARDED_KEY = 'frigg-onboarded';
@@ -64,17 +64,32 @@ function FlowArrow() {
   );
 }
 
-function ConnectCard({ title, badge, copy }: { title: string; badge: string; copy: string }) {
+function ConnectCard({
+  title,
+  badge,
+  copy,
+  selected,
+  onClick,
+}: {
+  title: string;
+  badge: string;
+  copy: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-3">
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={`flex min-h-28 flex-col gap-1.5 rounded-lg border px-3 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 ${selected ? 'border-emerald-500/50 bg-emerald-500/[0.08]' : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-700'}`}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[12px] font-semibold text-zinc-200">{title}</span>
-        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-px text-[8px] font-medium uppercase tracking-widest text-emerald-400">
-          {badge}
-        </span>
+        {selected ? <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-px text-[9px] font-medium text-emerald-300">{badge}</span> : null}
       </div>
-      <p className="text-[11px] leading-relaxed text-zinc-500">{copy}</p>
-    </div>
+      <span className="text-[12px] leading-relaxed text-zinc-400">{copy}</span>
+    </button>
   );
 }
 
@@ -97,25 +112,17 @@ function StepFlow({ proxyPort, t }: { proxyPort: number; t: TranslateFn }) {
   );
 }
 
-function StepConnect({ t }: { t: TranslateFn }) {
+function StepConnect({ t, selected, onSelect }: {
+  t: TranslateFn;
+  selected: DeviceSetupPlatform;
+  onSelect: (platform: DeviceSetupPlatform) => void;
+}) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
-        <ConnectCard
-          title={t('onboarding.connect.android.title')}
-          badge={t('onboarding.connect.android.badge')}
-          copy={t('onboarding.connect.android.copy')}
-        />
-        <ConnectCard
-          title={t('onboarding.connect.iosSimulator.title')}
-          badge={t('onboarding.connect.iosSimulator.badge')}
-          copy={t('onboarding.connect.iosSimulator.copy')}
-        />
-        <ConnectCard
-          title={t('onboarding.connect.anyDevice.title')}
-          badge={t('onboarding.connect.anyDevice.badge')}
-          copy={t('onboarding.connect.anyDevice.copy')}
-        />
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <ConnectCard title={t('onboarding.connect.android.title')} badge={t('onboarding.connect.android.badge')} copy={t('onboarding.connect.android.copy')} selected={selected === 'android'} onClick={() => onSelect('android')} />
+        <ConnectCard title={t('onboarding.connect.iosSimulator.title')} badge={t('onboarding.connect.iosSimulator.badge')} copy={t('onboarding.connect.iosSimulator.copy')} selected={selected === 'ios'} onClick={() => onSelect('ios')} />
+        <ConnectCard title={t('onboarding.connect.anyDevice.title')} badge={t('onboarding.connect.anyDevice.badge')} copy={t('onboarding.connect.anyDevice.copy')} selected={selected === 'manual'} onClick={() => onSelect('manual')} />
       </div>
       <p className="text-[13px] leading-relaxed text-zinc-400">{t('onboarding.connect.body')}</p>
     </div>
@@ -157,9 +164,13 @@ const STEP_TITLE_KEYS = ['onboarding.title.flow', 'onboarding.title.connect', 'o
 export default function OnboardingOverlay() {
   const t = useT();
   const setScreen = useAppStore((s) => s.setScreen);
+  const setDeviceSetupPlatform = useAppStore((s) => s.setDeviceSetupPlatform);
   const status = useAppStore((s) => s.status);
   const [visible, setVisible] = useState(() => !readOnboarded());
   const [step, setStep] = useState(0);
+  const [setupPlatform, setSetupPlatform] = useState<DeviceSetupPlatform>(
+    () => useAppStore.getState().deviceSetupPlatform ?? 'android',
+  );
 
   if (!visible) return null;
 
@@ -172,13 +183,14 @@ export default function OnboardingOverlay() {
   };
 
   const finish = () => {
+    setDeviceSetupPlatform(setupPlatform);
     setScreen('devices');
     dismiss();
   };
 
   let body: ReactNode;
   if (step === 0) body = <StepFlow proxyPort={proxyPort} t={t} />;
-  else if (step === 1) body = <StepConnect t={t} />;
+  else if (step === 1) body = <StepConnect t={t} selected={setupPlatform} onSelect={setSetupPlatform} />;
   else body = <StepTrust t={t} />;
 
   return (
