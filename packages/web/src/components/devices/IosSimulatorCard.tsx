@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import type { IosSimulator } from '@frigg/shared';
 import { installIosCert } from '../../api/client';
+import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
 import Spinner from './Spinner';
 
 export default function IosSimulatorCard({ simulator }: { simulator: IosSimulator }) {
   const t = useT();
+  const activeDevice = useAppStore((s) => s.activeDevice);
+  const setActiveDevice = useAppStore((s) => s.setActiveDevice);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+  const selectedForTools = activeDevice?.platform === 'ios' && activeDevice.id === simulator.udid;
 
   const install = async () => {
     setPending(true);
@@ -36,6 +40,19 @@ export default function IosSimulatorCard({ simulator }: { simulator: IosSimulato
           <p className="font-mono text-[11px] text-zinc-500">{simulator.runtime}</p>
         </div>
         <div className="flex-1" />
+        {selectedForTools ? (
+          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-300">
+            {t('devices.setup.activeForTools')}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setActiveDevice({ platform: 'ios', id: simulator.udid, label: simulator.name })}
+            className="min-h-9 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-emerald-500/30 hover:text-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
+          >
+            {t('devices.setup.selectForTools')}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void install()}

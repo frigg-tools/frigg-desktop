@@ -10,12 +10,16 @@ interface TrafficToolbarProps {
   method: string;
   source: string;
   sources: string[];
+  sourceLabels: Record<string, string>;
+  hideConnectivity: boolean;
+  hiddenConnectivityCount: number;
   paused: boolean;
   bufferedCount: number;
   totalCount: number;
   onFilterChange: (value: string) => void;
   onMethodChange: (value: string) => void;
   onSourceChange: (value: string) => void;
+  onHideConnectivityChange: (value: boolean) => void;
   onTogglePause: () => void;
   onClear: () => void;
   trailing?: ReactNode;
@@ -43,12 +47,16 @@ export default function TrafficToolbar({
   method,
   source,
   sources,
+  sourceLabels,
+  hideConnectivity,
+  hiddenConnectivityCount,
   paused,
   bufferedCount,
   totalCount,
   onFilterChange,
   onMethodChange,
   onSourceChange,
+  onHideConnectivityChange,
   onTogglePause,
   onClear,
   trailing,
@@ -56,8 +64,13 @@ export default function TrafficToolbar({
   const t = useT();
   const sourceLabel = (address: string) =>
     LOCALHOST_ADDRESSES.has(address) ? t('traffic.source.localhost') : address;
+  const displayedSourceLabel = (address: string) => {
+    const normalized = address.replace(/^::ffff:/i, '').toLowerCase();
+    const deviceName = sourceLabels[address] ?? sourceLabels[normalized];
+    return deviceName ? `${deviceName} · ${sourceLabel(address)}` : sourceLabel(address);
+  };
   return (
-    <div className="flex items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
+    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
       <h1 className="font-display text-base font-semibold tracking-wide text-zinc-100">{t('traffic.title')}</h1>
       <span className="rounded border border-zinc-800 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-zinc-500">
         {totalCount}
@@ -67,13 +80,15 @@ export default function TrafficToolbar({
         value={filter}
         onChange={(e) => onFilterChange(e.target.value)}
         placeholder={t('traffic.filterPlaceholder')}
+        aria-label={t('traffic.filterPlaceholder')}
         spellCheck={false}
-        className="w-64 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        className="min-h-9 w-48 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 sm:w-56"
       />
       <select
         value={method}
         onChange={(e) => onMethodChange(e.target.value)}
-        className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        aria-label={t('traffic.method.label')}
+        className="min-h-9 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
       >
         {METHOD_OPTIONS.map((option) => (
           <option key={option} value={option}>
@@ -85,18 +100,35 @@ export default function TrafficToolbar({
         value={source}
         onChange={(e) => onSourceChange(e.target.value)}
         aria-label={t('traffic.source.label')}
-        className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        className="min-h-9 max-w-48 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
       >
         <option value="">{t('traffic.source.all')}</option>
+        {source !== '' && !sources.includes(source) ? (
+          <option value={source}>{displayedSourceLabel(source)}</option>
+        ) : null}
         {sources.map((address) => (
           <option key={address} value={address}>
-            {sourceLabel(address)}
+            {displayedSourceLabel(address)}
           </option>
         ))}
       </select>
       <button
         type="button"
+        aria-pressed={hideConnectivity}
+        onClick={() => onHideConnectivityChange(!hideConnectivity)}
+        className={`min-h-9 rounded-md border px-2.5 py-1.5 text-xs font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 active:scale-[0.98] ${
+          hideConnectivity
+            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+            : 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:text-zinc-200'
+        }`}
+      >
+        {t(hideConnectivity ? 'traffic.connectivity.show' : 'traffic.connectivity.hide')}
+        {hideConnectivity ? ` · ${t('traffic.connectivity.hiddenCount', { count: hiddenConnectivityCount })}` : ''}
+      </button>
+      <button
+        type="button"
         onClick={onTogglePause}
+        aria-pressed={paused}
         className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition active:scale-[0.98] ${
           paused
             ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'

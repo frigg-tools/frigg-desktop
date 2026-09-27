@@ -49,6 +49,7 @@ import { recordSqlHistory } from './components/sql/history';
 
 export type Screen = 'traffic' | 'mocks' | 'automation' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida' | 'logs';
 export type LogLevelFilter = LogLevel | 'ALL';
+export type DeviceSetupPlatform = 'android' | 'ios' | 'manual';
 
 const LOG_BUFFER_LIMIT = 5000;
 
@@ -59,6 +60,40 @@ export interface LogFilters {
 export type Locale = 'en' | 'pt';
 
 const LOCALE_STORAGE_KEY = 'frigg-locale';
+const DEVICE_SETUP_PLATFORM_KEY = 'frigg-device-setup-platform';
+const ACTIVE_DEVICE_KEY = 'frigg-active-device';
+
+function initialDeviceSetupPlatform(): DeviceSetupPlatform | null {
+  try {
+    const stored = localStorage.getItem(DEVICE_SETUP_PLATFORM_KEY);
+    return stored === 'android' || stored === 'ios' || stored === 'manual' ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function initialActiveDevice(): LogTarget | null {
+  try {
+    const stored = JSON.parse(localStorage.getItem(ACTIVE_DEVICE_KEY) ?? 'null') as unknown;
+    if (
+      typeof stored === 'object' && stored !== null &&
+      ('platform' in stored) && (stored.platform === 'android' || stored.platform === 'ios') &&
+      ('id' in stored) && typeof stored.id === 'string' &&
+      ('label' in stored) && typeof stored.label === 'string'
+    ) return stored as LogTarget;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function defaultDeviceTarget(devices: DevicesSnapshot): LogTarget | null {
+  const android = devices.android.find((device) => device.state === 'device');
+  if (android) return { platform: 'android', id: android.serial, label: android.avdName ?? android.model };
+  const simulator = devices.iosSimulators.find((device) => device.state.toLowerCase() === 'booted');
+  if (simulator) return { platform: 'ios', id: simulator.udid, label: simulator.name };
+  return null;
+}
 
 function initialLocale(): Locale {
   try {
@@ -76,6 +111,10 @@ export interface AppState {
   setScreen: (s: Screen) => void;
   locale: Locale;
   setLocale: (locale: Locale) => void;
+  deviceSetupPlatform: DeviceSetupPlatform | null;
+  setDeviceSetupPlatform: (platform: DeviceSetupPlatform) => void;
+  activeDevice: LogTarget | null;
+  setActiveDevice: (target: LogTarget | null) => void;
   status: ProxyStatus | null;
   wsConnected: boolean;
   exchanges: TrafficExchange[];
@@ -430,6 +469,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     set({ locale });
   },
+  deviceSetupPlatform: initialDeviceSetupPlatform(),
+  setDeviceSetupPlatform: (platform) => {
+    try {
+      localStorage.setItem(DEVICE_SETUP_PLATFORM_KEY, platform);
+    } catch {
+      void 0;
+    }
+    set({ deviceSetupPlatform: platform });
+  },
+  activeDevice: initialActiveDevice(),
+  setActiveDevice: (target) => {
+    try {
+      if (target) localStorage.setItem(ACTIVE_DEVICE_KEY, JSON.stringify(target));
+      else localStorage.removeItem(ACTIVE_DEVICE_KEY);
+    } catch {
+      void 0;
+    }
+    set({ activeDevice: target });
+  },
   status: null,
   wsConnected: false,
   exchanges: [],
@@ -460,6 +518,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ appLogs: entries.slice(-5000) });
   },
   setLogTarget: (target) => {
+    get().setActiveDevice(target);
     set({ logTarget: target, logPackage: '', logApps: [] });
     if (target) void get().loadLogApps();
   },
@@ -623,6 +682,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   dbBusy: false,
   dbError: null,
   setDbTarget: (target) => {
+    get().setActiveDevice(target);
     set({
       dbTarget: target,
       dbApps: [],
@@ -1133,12 +1193,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       api.getMocks(),
       api.getDevices(),
     ]);
+    const activeDevice = reconcileLogTarget(get().activeDevice, devices, false) ?? defaultDeviceTarget(devices);
     set({
       status,
       exchanges,
       folders: mocks.folders,
       rules: mocks.rules,
       devices,
+      activeDevice,
       logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming),
       fridaDeviceId: reconcileFridaDevice(get().fridaDeviceId, devices, get().fridaSessionStatus.running),
     });
@@ -1149,8 +1211,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   refreshDevices: async () => {
     const devices = await api.getDevices();
+    const activeDevice = reconcileLogTarget(get().activeDevice, devices, false) ?? defaultDeviceTarget(devices);
     set({
       devices,
+      activeDevice,
       logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming),
       fridaDeviceId: reconcileFridaDevice(get().fridaDeviceId, devices, get().fridaSessionStatus.running),
     });

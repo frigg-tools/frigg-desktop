@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { connectWs } from './api/ws';
 import { useAppStore, type Screen } from './store';
 import { initWebLogger } from './logging/web-logger';
@@ -209,18 +209,40 @@ interface NavItem {
   icon: ReactNode;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { screen: 'traffic', labelKey: 'nav.traffic', icon: <ActivityIcon /> },
-  { screen: 'client', labelKey: 'nav.client', icon: <SendIcon /> },
-  { screen: 'mocks', labelKey: 'nav.mocks', icon: <BoltIcon /> },
-  { screen: 'automation', labelKey: 'nav.automation', icon: <AutomationIcon /> },
-  { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
-  { screen: 'frida', labelKey: 'nav.frida', icon: <FridaIcon /> },
-  { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
-  { screen: 'sql', labelKey: 'nav.sql', icon: <DatabaseServerIcon /> },
-  { screen: 'devices', labelKey: 'nav.devices', icon: <SmartphoneIcon /> },
-  { screen: 'mcp', labelKey: 'nav.mcp', icon: <McpIcon /> },
-  { screen: 'logs', labelKey: 'nav.logs', icon: <LogsIcon /> },
+interface NavGroup {
+  labelKey: string;
+  items: NavItem[];
+  advanced?: boolean;
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    labelKey: 'nav.group.capture',
+    items: [
+      { screen: 'devices', labelKey: 'nav.devices', icon: <SmartphoneIcon /> },
+      { screen: 'traffic', labelKey: 'nav.traffic', icon: <ActivityIcon /> },
+      { screen: 'mocks', labelKey: 'nav.mocks', icon: <BoltIcon /> },
+    ],
+  },
+  {
+    labelKey: 'nav.group.explore',
+    items: [
+      { screen: 'client', labelKey: 'nav.client', icon: <SendIcon /> },
+      { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
+      { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
+    ],
+  },
+  {
+    labelKey: 'nav.group.advanced',
+    advanced: true,
+    items: [
+      { screen: 'automation', labelKey: 'nav.automation', icon: <AutomationIcon /> },
+      { screen: 'frida', labelKey: 'nav.frida', icon: <FridaIcon /> },
+      { screen: 'sql', labelKey: 'nav.sql', icon: <DatabaseServerIcon /> },
+      { screen: 'mcp', labelKey: 'nav.mcp', icon: <McpIcon /> },
+      { screen: 'logs', labelKey: 'nav.logs', icon: <LogsIcon /> },
+    ],
+  },
 ];
 
 function LanguageToggle() {
@@ -251,6 +273,7 @@ export default function App() {
   const wsConnected = useAppStore((s) => s.wsConnected);
   const status = useAppStore((s) => s.status);
   const t = useT();
+  const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
   useEffect(() => {
     initWebLogger();
@@ -309,23 +332,53 @@ export default function App() {
             FRIGG
           </span>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
-          {NAV_ITEMS.map((item) => {
-            const active = item.screen === screen;
+        <nav aria-label={t('nav.label')} className="flex-1 space-y-4 overflow-y-auto p-3">
+          {NAV_GROUPS.map((group) => {
+            const expanded = !group.advanced || advancedExpanded;
             return (
-              <button
-                key={item.screen}
-                type="button"
-                onClick={() => setScreen(item.screen)}
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors active:scale-[0.98] ${
-                  active
-                    ? 'bg-emerald-500/10 text-emerald-400'
-                    : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'
-                }`}
-              >
-                {item.icon}
-                {t(item.labelKey)}
-              </button>
+              <section key={group.labelKey}>
+                {group.advanced ? (
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    onClick={() => setAdvancedExpanded((value) => !value)}
+                    className="mb-1 flex w-full items-center justify-between rounded px-3 py-1 text-left text-[11px] font-medium text-zinc-500 transition hover:text-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
+                  >
+                    <span>{t(group.labelKey)}</span>
+                    <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+                  </button>
+                ) : (
+                  <p className="mb-1 px-3 py-1 text-[11px] font-medium text-zinc-500">
+                    {t(group.labelKey)}
+                  </p>
+                )}
+                {expanded ? (
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const active = item.screen === screen;
+                      return (
+                        <button
+                          key={item.screen}
+                          type="button"
+                          aria-current={active ? 'page' : undefined}
+                          onClick={() => {
+                            if (group.advanced) setAdvancedExpanded(true);
+                            setScreen(item.screen);
+                          }}
+                          className={`flex min-h-9 w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 active:scale-[0.98] ${
+                            active
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'
+                          }`}
+                        >
+                          {item.icon}
+                          {t(item.labelKey)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </section>
             );
           })}
         </nav>

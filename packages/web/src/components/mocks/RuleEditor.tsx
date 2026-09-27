@@ -114,6 +114,18 @@ function formFromExchange(exchange: TrafficExchange, folderId: string | null): R
   };
 }
 
+function hasAdvancedRuleOptions(rule: MockRule): boolean {
+  const headers = Object.entries(rule.response.headers);
+  const hasCustomHeaders = headers.some(([name, value]) => {
+    const normalized = Array.isArray(value) ? value.join(', ') : value;
+    return name.toLowerCase() !== 'content-type' || normalized.toLowerCase() !== 'application/json';
+  });
+  return Boolean(
+    rule.matcher.queryContains || rule.matcher.bodyMatch || rule.response.delayMs ||
+    rule.folderId || rule.priority !== 0 || hasCustomHeaders
+  );
+}
+
 function FieldLabel({ children }: { children: ReactNode }) {
   return (
     <p className="mb-1 text-[10px] uppercase tracking-widest text-zinc-500">{children}</p>
@@ -145,6 +157,7 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
       ? formFromExchange(draftFromExchange, selectedFolderId)
       : blankForm(selectedFolderId);
   });
+  const [advancedOpen, setAdvancedOpen] = useState(() => rule !== 'new' && hasAdvancedRuleOptions(rule));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -333,47 +346,6 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
               className={editorInputClass}
             />
           </div>
-          <div>
-            <FieldLabel>{t('mocks.editor.queryContains')}</FieldLabel>
-            <input
-              value={form.queryContains}
-              onChange={(e) => update('queryContains', e.target.value)}
-              placeholder={t('mocks.editor.queryContainsPlaceholder')}
-              spellCheck={false}
-              className={editorInputClass}
-            />
-          </div>
-          <div className="flex gap-2">
-            <div className="w-28 shrink-0">
-              <FieldLabel>{t('mocks.editor.bodyMatch')}</FieldLabel>
-              <select
-                value={form.bodyMatchMode}
-                onChange={(e) => update('bodyMatchMode', e.target.value as BodyMatchMode)}
-                className={selectClass}
-              >
-                {BODY_MATCH_MODES.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {t(`mocks.editor.bodyMatchMode.${mode}`)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="min-w-0 flex-1">
-              <FieldLabel>{t('mocks.editor.bodyValue')}</FieldLabel>
-              <input
-                value={form.bodyMatchValue}
-                onChange={(e) => update('bodyMatchValue', e.target.value)}
-                placeholder={
-                  form.bodyMatchMode === 'none'
-                    ? t('mocks.editor.bodyValueDisabled')
-                    : t('mocks.editor.bodyValuePlaceholder')
-                }
-                disabled={form.bodyMatchMode === 'none'}
-                spellCheck={false}
-                className={`${editorInputClass} disabled:opacity-40`}
-              />
-            </div>
-          </div>
         </div>
 
         <div className="space-y-3">
@@ -390,21 +362,6 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
                 className={`${editorInputClass} tabular-nums`}
               />
             </div>
-            <div className="w-32 shrink-0">
-              <FieldLabel>{t('mocks.editor.delayMs')}</FieldLabel>
-              <input
-                value={form.delayMs}
-                onChange={(e) => update('delayMs', e.target.value)}
-                inputMode="numeric"
-                placeholder={t('mocks.editor.delayMsPlaceholder')}
-                spellCheck={false}
-                className={`${editorInputClass} tabular-nums`}
-              />
-            </div>
-          </div>
-          <div>
-            <FieldLabel>{t('mocks.editor.headers')}</FieldLabel>
-            <HeadersEditor rows={form.headers} onChange={(rows) => update('headers', rows)} />
           </div>
           <div>
             <div className="mb-1 flex items-center justify-between">
@@ -428,37 +385,97 @@ export default function RuleEditor({ rule }: RuleEditorProps) {
           </div>
         </div>
 
-        <div className="space-y-3">
-          <SectionHeading>{t('mocks.editor.placement')}</SectionHeading>
-          <div className="flex gap-2">
-            <div className="min-w-0 flex-1">
-              <FieldLabel>{t('mocks.editor.folder')}</FieldLabel>
-              <select
-                value={form.folderId}
-                onChange={(e) => update('folderId', e.target.value)}
-                className={selectClass}
-              >
-                <option value="">{t('mocks.editor.noFolder')}</option>
-                {folderOptions.map(({ folder, depth }) => (
-                  <option key={folder.id} value={folder.id}>
-                    {`${'  '.repeat(depth)}${folder.name}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="w-28 shrink-0">
-              <FieldLabel>{t('mocks.editor.priority')}</FieldLabel>
-              <input
-                value={form.priority}
-                onChange={(e) => update('priority', e.target.value)}
-                inputMode="numeric"
-                placeholder={t('mocks.editor.priorityPlaceholder')}
-                spellCheck={false}
-                className={`${editorInputClass} tabular-nums`}
-              />
-            </div>
+        <details
+          open={advancedOpen}
+          onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+          className="rounded-lg border border-zinc-800/80 bg-zinc-950/30 px-3"
+        >
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[13px] font-medium text-zinc-300 marker:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">
+            <span>{t('mocks.editor.moreOptions')}</span>
+            <span className="truncate text-right text-[11px] font-normal text-zinc-500">{t('mocks.editor.moreOptionsHint')}</span>
+          </summary>
+          <div className="space-y-4 border-t border-zinc-800/80 py-3">
+            <section className="space-y-3" aria-label={t('mocks.editor.matcher')}>
+              <div>
+                <FieldLabel>{t('mocks.editor.queryContains')}</FieldLabel>
+                <input
+                  value={form.queryContains}
+                  onChange={(e) => update('queryContains', e.target.value)}
+                  placeholder={t('mocks.editor.queryContainsPlaceholder')}
+                  spellCheck={false}
+                  className={editorInputClass}
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="w-28 shrink-0">
+                  <FieldLabel>{t('mocks.editor.bodyMatch')}</FieldLabel>
+                  <select
+                    value={form.bodyMatchMode}
+                    onChange={(e) => update('bodyMatchMode', e.target.value as BodyMatchMode)}
+                    className={selectClass}
+                  >
+                    {BODY_MATCH_MODES.map((mode) => (
+                      <option key={mode} value={mode}>{t(`mocks.editor.bodyMatchMode.${mode}`)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <FieldLabel>{t('mocks.editor.bodyValue')}</FieldLabel>
+                  <input
+                    value={form.bodyMatchValue}
+                    onChange={(e) => update('bodyMatchValue', e.target.value)}
+                    placeholder={form.bodyMatchMode === 'none' ? t('mocks.editor.bodyValueDisabled') : t('mocks.editor.bodyValuePlaceholder')}
+                    disabled={form.bodyMatchMode === 'none'}
+                    spellCheck={false}
+                    className={`${editorInputClass} disabled:opacity-40`}
+                  />
+                </div>
+              </div>
+            </section>
+            <section className="space-y-3" aria-label={t('mocks.editor.response')}>
+              <div className="w-36">
+                <FieldLabel>{t('mocks.editor.delayMs')}</FieldLabel>
+                <input
+                  value={form.delayMs}
+                  onChange={(e) => update('delayMs', e.target.value)}
+                  inputMode="numeric"
+                  placeholder={t('mocks.editor.delayMsPlaceholder')}
+                  spellCheck={false}
+                  className={`${editorInputClass} tabular-nums`}
+                />
+              </div>
+              <div>
+                <FieldLabel>{t('mocks.editor.headers')}</FieldLabel>
+                <HeadersEditor rows={form.headers} onChange={(rows) => update('headers', rows)} />
+              </div>
+            </section>
+            <section className="space-y-3" aria-label={t('mocks.editor.placement')}>
+              <SectionHeading>{t('mocks.editor.placement')}</SectionHeading>
+              <div className="flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <FieldLabel>{t('mocks.editor.folder')}</FieldLabel>
+                  <select value={form.folderId} onChange={(e) => update('folderId', e.target.value)} className={selectClass}>
+                    <option value="">{t('mocks.editor.noFolder')}</option>
+                    {folderOptions.map(({ folder, depth }) => (
+                      <option key={folder.id} value={folder.id}>{`${'  '.repeat(depth)}${folder.name}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-28 shrink-0">
+                  <FieldLabel>{t('mocks.editor.priority')}</FieldLabel>
+                  <input
+                    value={form.priority}
+                    onChange={(e) => update('priority', e.target.value)}
+                    inputMode="numeric"
+                    placeholder={t('mocks.editor.priorityPlaceholder')}
+                    spellCheck={false}
+                    className={`${editorInputClass} tabular-nums`}
+                  />
+                </div>
+              </div>
+            </section>
           </div>
-        </div>
+        </details>
       </div>
 
       <div className="flex items-center gap-2 border-t border-zinc-800/80 px-4 py-3">

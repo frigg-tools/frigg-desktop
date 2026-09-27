@@ -23,6 +23,7 @@ function stubDeps(loggerService: LoggerService): ApiDeps {
     sqlConnections: {} as ApiDeps['sqlConnections'],
     frida: {} as ApiDeps['frida'],
     certTrust: {} as ApiDeps['certTrust'],
+    androidProxyRegistry: {} as ApiDeps['androidProxyRegistry'],
     reloadProxy: async () => {},
     loggerService,
   };

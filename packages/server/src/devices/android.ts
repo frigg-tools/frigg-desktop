@@ -1,10 +1,11 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deriveProxyState, type AndroidCertMode, type AndroidDevice, type AndroidSetupResult } from '@frigg/shared';
+import type { AndroidCertMode, AndroidDevice, AndroidSetupResult } from '@frigg/shared';
 import { st, type ServerLocale } from '../i18n.ts';
 import { run, type ExecResult } from '../lib/exec.ts';
 import { androidCertName, type CaMaterial } from '../proxy/ca.ts';
+import type { AndroidProxyRegistry } from './android-proxy-registry.ts';
 
 const systemCertDir = '/system/etc/security/cacerts';
 const downloadCertPath = '/sdcard/Download/frigg-ca.crt';
@@ -33,7 +34,8 @@ export async function listAndroidDevices(): Promise<AndroidDevice[]> {
     .filter((device): device is Omit<AndroidDevice, 'proxyConfigured'> => device !== null);
   return Promise.all(
     parsed.map(async (device) => {
-      const proxyValue = await readProxyValue(device.serial);
+      const proxy = await readAndroidProxySetting(device.serial);
+      const proxyValue = proxy.ok ? proxy.value ?? undefined : undefined;
       return {
         ...device,
         proxyValue,
@@ -56,11 +58,18 @@ async function readDeviceIp(serial: string): Promise<string | undefined> {
   return parseWlan0Ip(result.stdout);
 }
 
-async function readProxyValue(serial: string): Promise<string | undefined> {
+export async function readAndroidProxySetting(
+  serial: string,
+): Promise<{ ok: true; value: string | null } | { ok: false; detail: string }> {
   const result = await run('adb', ['-s', serial, 'shell', 'settings', 'get', 'global', 'http_proxy']);
-  if (!result.ok) return undefined;
+  if (!result.ok) return { ok: false, detail: commandFailure(result) };
   const value = result.stdout.trim();
-  return value === '' || value === 'null' ? undefined : value;
+  return { ok: true, value: value === '' || value === 'null' || value === ':0' ? null : value };
+}
+
+export function androidProxyAddress(serial: string, proxyPort: number, lanIp: string | null): string | null {
+  const proxyHost = serial.startsWith('emulator-') ? '10.0.2.2' : lanIp;
+  return proxyHost === null ? null : `${proxyHost}:${proxyPort}`;
 }
 
 export async function setupAndroid(
@@ -89,17 +98,80 @@ export async function setupAndroid(
 }
 
 export async function teardownAndroid(serial: string, _locale: ServerLocale): Promise<void> {
-  await run('adb', ['-s', serial, 'shell', 'settings', 'put', 'global', 'http_proxy', ':0']);
+  await setAndroidProxySetting(serial, null);
 }
 
-export async function teardownAndroidProxiesPointingAt(friggAddr: string | null, locale: ServerLocale): Promise<void> {
-  if (friggAddr === null) return;
+export async function teardownAndroidProxiesPointingAt(
+  friggAddresses: string[],
+  locale: ServerLocale,
+  skipSerials: ReadonlySet<string> = new Set(),
+): Promise<Array<{ serial: string; error: string }>> {
+  const addresses = new Set(friggAddresses);
+  if (addresses.size === 0) return [];
   const devices = await listAndroidDevices();
-  await Promise.allSettled(
-    devices
-      .filter((device) => deriveProxyState(device.proxyValue, friggAddr) === 'frigg')
-      .map((device) => teardownAndroid(device.serial, locale)),
+  const matching = devices.filter(
+    (device) =>
+      device.state === 'device' &&
+      !skipSerials.has(device.serial) &&
+      device.proxyValue !== undefined &&
+      addresses.has(device.proxyValue),
   );
+  const failures: Array<{ serial: string; error: string }> = [];
+  for (const device of matching) {
+    try {
+      await teardownAndroid(device.serial, locale);
+    } catch (error) {
+      failures.push({ serial: device.serial, error: describeError(error) });
+    }
+  }
+  return failures;
+}
+
+export async function restoreTrackedAndroidProxies(
+  registry: AndroidProxyRegistry,
+  options: { includeActive?: boolean } = {},
+): Promise<{ handledSerials: string[]; failures: Array<{ serial: string; error: string }> }> {
+  const failures: Array<{ serial: string; error: string }> = [];
+  const devices = await listAndroidDevices();
+  const connectedSerials = new Set(devices.filter((device) => device.state === 'device').map((device) => device.serial));
+  const handledSerials: string[] = [];
+
+  for (const [serial, lease] of registry.entries()) {
+    if (!connectedSerials.has(serial)) continue;
+    handledSerials.push(serial);
+    if (registry.isActive(serial) && !options.includeActive) continue;
+
+    const current = await readAndroidProxySetting(serial);
+    if (!current.ok) {
+      failures.push({ serial, error: current.detail });
+      continue;
+    }
+    if (current.value !== lease.proxyValue) {
+      // The user or another tool changed the setting. Leave it alone and forget our stale lease.
+      await registry.delete(serial);
+      continue;
+    }
+
+    try {
+      await setAndroidProxySetting(serial, lease.previousProxyValue);
+      await registry.delete(serial);
+    } catch (error) {
+      failures.push({ serial, error: describeError(error) });
+    }
+  }
+  return { handledSerials, failures };
+}
+
+export async function setAndroidProxySetting(serial: string, value: string | null): Promise<void> {
+  const expectedValue = value ?? ':0';
+  const result = await run('adb', ['-s', serial, 'shell', 'settings', 'put', 'global', 'http_proxy', expectedValue]);
+  if (!result.ok) throw new Error(`Could not set Android proxy on ${serial}: ${commandFailure(result)}`);
+
+  const readback = await readAndroidProxySetting(serial);
+  if (!readback.ok) throw new Error(`Could not verify Android proxy on ${serial}: ${readback.detail}`);
+  if (readback.value !== value) {
+    throw new Error(`Android proxy on ${serial} remained ${readback.value ?? 'disabled'} after setting ${expectedValue}.`);
+  }
 }
 
 export async function installAndroidCert(

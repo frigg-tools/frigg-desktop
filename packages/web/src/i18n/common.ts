@@ -2,6 +2,10 @@ import type { Bundle } from './index';
 
 export const common: Bundle = {
   en: {
+    'nav.label': 'Main navigation',
+    'nav.group.capture': 'Capture',
+    'nav.group.explore': 'Explore',
+    'nav.group.advanced': 'Advanced',
     'nav.traffic': 'Traffic',
     'nav.mocks': 'Mocks',
     'nav.automation': 'Automation',
@@ -9,7 +13,7 @@ export const common: Bundle = {
     'nav.logcat': 'Logcat',
     'nav.database': 'Database',
     'nav.sql': 'SQL',
-    'nav.client': 'Client',
+    'nav.client': 'API client',
     'nav.mcp': 'MCP',
     'nav.frida': 'Frida',
     'nav.logs': 'Logs',
@@ -43,6 +47,10 @@ export const common: Bundle = {
     'method.any': 'ANY',
   },
   pt: {
+    'nav.label': 'Navegação principal',
+    'nav.group.capture': 'Capturar',
+    'nav.group.explore': 'Explorar',
+    'nav.group.advanced': 'Avançado',
     'nav.traffic': 'Tráfego',
     'nav.mocks': 'Mocks',
     'nav.automation': 'Automação',
@@ -50,7 +58,7 @@ export const common: Bundle = {
     'nav.logcat': 'Logcat',
     'nav.database': 'Banco de dados',
     'nav.sql': 'SQL',
-    'nav.client': 'Client',
+    'nav.client': 'API Client',
     'nav.mcp': 'MCP',
     'nav.frida': 'Frida',
     'nav.logs': 'Logs',

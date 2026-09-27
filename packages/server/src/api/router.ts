@@ -41,9 +41,13 @@ import {
   installAndroidCert,
   listAndroidDevices,
   openTrustedCredentials,
+  androidProxyAddress,
+  readAndroidProxySetting,
   setupAndroid,
+  setAndroidProxySetting,
   teardownAndroid,
 } from '../devices/android.ts';
+import type { AndroidProxyRegistry } from '../devices/android-proxy-registry.ts';
 import type { CertTrustTracker } from '../devices/cert-trust-tracker.ts';
 import { bootAvd, createRootedAvd, listAvds } from '../devices/avd.ts';
 import { diagnoseInterception } from '../devices/interceptability.ts';
@@ -85,6 +89,7 @@ export interface ApiDeps {
   sqlConnections: SqlConnectionStore;
   frida: FridaManager;
   certTrust: CertTrustTracker;
+  androidProxyRegistry: AndroidProxyRegistry;
   reloadProxy: () => Promise<void>;
   automation?: Omit<AutomationRouterOptions, 'apiPort'>;
 }
@@ -794,13 +799,37 @@ export function buildRouter(deps: ApiDeps): Router {
   router.post(
     '/api/devices/android/:serial/setup',
     asyncHandler(async (req, res) => {
-      const result = await setupAndroid(req.params.serial, {
+      const serial = req.params.serial;
+      const lanIp = getLanIp();
+      const proxyValue = androidProxyAddress(serial, deps.proxyPort, lanIp);
+      if (proxyValue !== null) {
+        const current = await readAndroidProxySetting(serial);
+        if (!current.ok) {
+          throw new Error(`Could not read the current Android proxy on ${serial}: ${current.detail}`);
+        }
+        const oldLease = deps.androidProxyRegistry.get(serial);
+        const previousProxyValue = oldLease?.proxyValue === current.value
+          ? oldLease.previousProxyValue
+          : current.value;
+        // Persist ownership before touching Android so a crash between these steps is recoverable.
+        await deps.androidProxyRegistry.set(serial, { proxyValue, previousProxyValue });
+        deps.androidProxyRegistry.markActive(serial);
+      }
+
+      const result = await setupAndroid(serial, {
         proxyPort: deps.proxyPort,
         apiPort: deps.apiPort,
-        lanIp: getLanIp(),
+        lanIp,
         ca: deps.ca,
         locale: localeFromRequest(req),
       });
+      if (proxyValue !== null && !result.proxySet) {
+        deps.androidProxyRegistry.markInactive(serial);
+        const current = await readAndroidProxySetting(serial);
+        if (current.ok && current.value !== proxyValue) {
+          await deps.androidProxyRegistry.delete(serial);
+        }
+      }
       res.json(result);
     }),
   );
@@ -808,7 +837,20 @@ export function buildRouter(deps: ApiDeps): Router {
   router.post(
     '/api/devices/android/:serial/teardown',
     asyncHandler(async (req, res) => {
-      await teardownAndroid(req.params.serial, localeFromRequest(req));
+      const serial = req.params.serial;
+      deps.androidProxyRegistry.markInactive(serial);
+      const lease = deps.androidProxyRegistry.get(serial);
+      if (lease) {
+        const current = await readAndroidProxySetting(serial);
+        if (!current.ok) throw new Error(`Could not read the current Android proxy on ${serial}: ${current.detail}`);
+        await setAndroidProxySetting(
+          serial,
+          current.value === lease.proxyValue ? lease.previousProxyValue : null,
+        );
+        await deps.androidProxyRegistry.delete(serial);
+      } else {
+        await teardownAndroid(serial, localeFromRequest(req));
+      }
       res.json({ ok: true });
     }),
   );

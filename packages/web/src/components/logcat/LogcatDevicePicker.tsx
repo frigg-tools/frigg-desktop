@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { AndroidDevice, IosSimulator, LogTarget } from '@frigg/shared';
 import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
@@ -42,15 +43,23 @@ interface LogcatDevicePickerProps {
 export default function LogcatDevicePicker({ disabled }: LogcatDevicePickerProps) {
   const t = useT();
   const devices = useAppStore((s) => s.devices);
+  const activeDevice = useAppStore((s) => s.activeDevice);
   const logTarget = useAppStore((s) => s.logTarget);
   const setLogTarget = useAppStore((s) => s.setLogTarget);
 
   const android = devices?.android ?? [];
   const iosSimulators = devices?.iosSimulators ?? [];
 
+  useEffect(() => {
+    if (!activeDevice || targetValue(logTarget) === targetValue(activeDevice)) return;
+    const next = buildTarget(targetValue(activeDevice), android, iosSimulators);
+    if (next) setLogTarget(next);
+  }, [activeDevice, logTarget, setLogTarget, devices]);
+
   return (
     <select
       value={targetValue(logTarget)}
+      aria-label={t('logcat.device.placeholder')}
       disabled={disabled}
       onChange={(e) => setLogTarget(buildTarget(e.target.value, android, iosSimulators))}
       className="max-w-[16rem] rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"

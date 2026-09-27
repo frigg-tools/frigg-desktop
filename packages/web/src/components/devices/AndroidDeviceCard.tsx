@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { deriveProxyState, type AndroidCertMode, type AndroidDevice, type AndroidSetupResult, type ProxyState } from '@frigg/shared';
+import { deriveProxyState, type AndroidCertMode, type AndroidDevice, type AndroidSetupResult } from '@frigg/shared';
 import { installCertAndroid, openTrustedCreds, setupAndroid, teardownAndroid } from '../../api/client';
 import { useAppStore } from '../../store';
 import { useT, type TranslateFn } from '../../i18n';
-import CopyButton from './CopyButton';
 import Spinner from './Spinner';
 
 const WARN_HINTS = ['fail', 'error', 'unable', 'cannot', 'could not', 'manual', 'denied', 'fallback', 'not set', 'only trust'];
@@ -23,12 +22,6 @@ const CERT_MODE_LABEL_KEYS: Record<AndroidCertMode, string> = {
   system: 'devices.android.certSystem',
   'user-manual': 'devices.android.certUserManual',
   none: 'devices.android.certNone',
-};
-
-const PROXY_PILL_STYLES: Record<ProxyState, string> = {
-  frigg: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-  other: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-  off: 'border-zinc-700 bg-zinc-800/60 text-zinc-500',
 };
 
 function decryptedAgo(t: TranslateFn, at: number | undefined): string | null {
@@ -111,17 +104,62 @@ function RemoveSteps({ serial, t }: { serial: string; t: TranslateFn }) {
 export default function AndroidDeviceCard({ device }: { device: AndroidDevice }) {
   const t = useT();
   const status = useAppStore((s) => s.status);
+  const activeDevice = useAppStore((s) => s.activeDevice);
+  const setActiveDevice = useAppStore((s) => s.setActiveDevice);
+  const setScreen = useAppStore((s) => s.setScreen);
   const refreshDevices = useAppStore((s) => s.refreshDevices);
   const [pending, setPending] = useState<'setup' | 'teardown' | 'install' | null>(null);
   const [result, setResult] = useState<AndroidSetupResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showRemove, setShowRemove] = useState(false);
 
   const ready = device.state === 'device';
-  const friggAddr = status !== null && status.lanIp !== null ? `${status.lanIp}:${status.proxyPort}` : null;
+  const friggAddr =
+    status === null
+      ? null
+      : device.isEmulator
+        ? `10.0.2.2:${status.proxyPort}`
+        : status.lanIp === null
+          ? null
+          : `${status.lanIp}:${status.proxyPort}`;
   const proxyState = deriveProxyState(device.proxyValue, friggAddr);
-  const fingerprint = status?.certFingerprint ?? '';
   const ago = decryptedAgo(t, device.lastDecryptedAt);
+  const selectedForTools = activeDevice?.platform === 'android' && activeDevice.id === device.serial;
+  const httpsObserved = ago !== null;
+  const currentStep = !ready ? 'device' : proxyState !== 'frigg' ? 'proxy' : !httpsObserved ? 'https' : null;
+  const certStatusKey = device.isEmulator
+    ? 'certUnknown'
+    : device.certTrusted
+      ? 'certTrusted'
+      : 'certUnverified';
+  const nextStep = !ready
+    ? 'nextDevice'
+    : proxyState === 'other'
+      ? 'nextOtherProxy'
+      : proxyState === 'off'
+        ? 'nextProxy'
+        : httpsObserved
+          ? 'nextVerified'
+          : 'nextHttps';
+  const steps = [
+    {
+      id: 'device',
+      label: t('devices.setup.step.device'),
+      status: t(ready ? 'devices.setup.deviceReady' : 'devices.setup.deviceUnavailable'),
+      done: ready,
+    },
+    {
+      id: 'proxy',
+      label: t('devices.setup.step.proxy'),
+      status: t(proxyState === 'frigg' ? 'devices.setup.proxyReady' : proxyState === 'other' ? 'devices.setup.proxyOther' : 'devices.setup.proxyPending'),
+      done: proxyState === 'frigg',
+    },
+    {
+      id: 'https',
+      label: t('devices.setup.step.https'),
+      status: t(httpsObserved ? 'devices.setup.httpsObserved' : 'devices.setup.httpsPending'),
+      done: httpsObserved,
+    },
+  ];
 
   const run = async (kind: 'setup' | 'teardown' | 'install', fn: () => Promise<AndroidSetupResult | void>, failKey: string) => {
     setPending(kind);
@@ -149,6 +187,11 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
     );
 
   const dotClass = proxyState === 'frigg' ? 'pulse-dot bg-emerald-400' : proxyState === 'other' ? 'bg-amber-400' : 'bg-zinc-600';
+  const configure = () => void run('setup', () => setupAndroid(device.serial), 'devices.android.setupFailed');
+  const openTraffic = () => {
+    setActiveDevice({ platform: 'android', id: device.serial, label: device.avdName ?? device.model });
+    setScreen('traffic');
+  };
 
   return (
     <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/60">
@@ -173,93 +216,117 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
             {device.ipAddress ? ` · ${device.ipAddress}` : ''}
           </p>
         </div>
-      </div>
-
-      <div className="space-y-2.5 border-t border-zinc-800/80 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-12 shrink-0 text-[10px] uppercase tracking-widest text-zinc-500">{t('devices.android.proxyLabel')}</span>
-          <span className={`rounded-full border px-2 py-px text-[9px] font-medium uppercase tracking-widest ${PROXY_PILL_STYLES[proxyState]}`}>
-            {proxyState === 'off' ? t('devices.android.proxyOff') : proxyState === 'frigg' ? t('devices.android.proxyPointsFrigg') : t('devices.android.proxyPointsOther')}
+        <div className="flex-1" />
+        {selectedForTools ? (
+          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-300">
+            {t('devices.setup.activeForTools')}
           </span>
-          {device.proxyValue && proxyState !== 'off' ? <span className="font-mono text-[11px] text-zinc-400">{device.proxyValue}</span> : null}
-          <div className="flex-1" />
-          {proxyState === 'off' ? (
-            <button
-              type="button"
-              onClick={() => void run('setup', () => setupAndroid(device.serial), 'devices.android.setupFailed')}
-              disabled={pending !== null || !ready}
-              className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/15 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {pending === 'setup' ? <Spinner /> : null}
-              {t('devices.android.setUpInterception')}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() =>
-                void run(
-                  'teardown',
-                  async () => {
-                    await teardownAndroid(device.serial);
-                  },
-                  'devices.android.teardownFailed',
-                )
-              }
-              disabled={pending !== null || !ready}
-              className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-rose-500/30 hover:text-rose-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {pending === 'teardown' ? <Spinner /> : null}
-              {t('devices.android.disableProxy')}
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-12 shrink-0 text-[10px] uppercase tracking-widest text-zinc-500">{t('devices.android.caLabel')}</span>
-          {device.isEmulator ? (
-            <span className="text-[11px] text-zinc-500">—</span>
-          ) : device.certTrusted ? (
-            <>
-              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-px text-[9px] font-medium uppercase tracking-widest text-emerald-400">
-                {t('devices.android.certTrusted')}
-              </span>
-              {ago ? <span className="text-[11px] text-zinc-500">{t('devices.android.decrypted')} · {ago}</span> : null}
-            </>
-          ) : (
-            <>
-              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-px text-[9px] font-medium uppercase tracking-widest text-zinc-400">
-                {t('devices.android.certUnverified')}
-              </span>
-              <span className="text-[11px] text-zinc-500">{t('devices.android.certUnverifiedHint')}</span>
-            </>
-          )}
-          <div className="flex-1" />
+        ) : ready ? (
           <button
             type="button"
-            onClick={() => void runInstall()}
-            disabled={pending !== null || !ready}
-            className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-emerald-500/30 hover:text-emerald-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => setActiveDevice({ platform: 'android', id: device.serial, label: device.avdName ?? device.model })}
+            className="min-h-9 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-emerald-500/30 hover:text-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
           >
-            {pending === 'install' ? <Spinner /> : null}
-            {device.certTrusted ? t('devices.android.reinstallCa') : t('devices.android.installCa')}
+            {t('devices.setup.selectForTools')}
           </button>
-        </div>
-
-        {fingerprint.length > 0 ? (
-          <div className="flex items-center gap-2 pl-14">
-            <span className="text-[10px] uppercase tracking-widest text-zinc-600">{t('devices.android.caFingerprint')}</span>
-            <span className="font-mono text-[11px] text-zinc-500">{fingerprint.slice(0, 20)}…</span>
-            <CopyButton value={fingerprint} label={t('devices.strip.copyFullFingerprint')} />
-          </div>
         ) : null}
-
-        <div className="pl-14">
-          <button type="button" onClick={() => setShowRemove((v) => !v)} className="text-[11px] font-medium text-zinc-500 transition hover:text-zinc-300">
-            {t('devices.android.howToRemove')} {showRemove ? '▾' : '▸'}
-          </button>
-          {showRemove ? <RemoveSteps serial={device.serial} t={t} /> : null}
-        </div>
       </div>
+
+      <ol className="grid grid-cols-3 gap-4 border-t border-zinc-800/80 px-4 py-3" aria-label={t('devices.setup.readiness')}>
+        {steps.map((step, index) => {
+          const active = currentStep === step.id;
+          return (
+            <li key={step.id} aria-current={active ? 'step' : undefined} className="min-w-0 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold ${step.done ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : active ? 'border-amber-500/50 bg-amber-500/10 text-amber-300' : 'border-zinc-700 bg-zinc-900 text-zinc-500'}`}>
+                  {step.done ? '✓' : index + 1}
+                </span>
+                <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">{step.label}</span>
+              </div>
+              <p className={`pl-7 text-xs leading-relaxed ${step.done ? 'text-emerald-300' : active ? 'text-amber-200' : 'text-zinc-500'}`}>
+                {step.status}
+              </p>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-800/80 bg-zinc-950/30 px-4 py-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{t('devices.setup.nextStep')}</p>
+          <p className="mt-1 text-[13px] font-medium text-zinc-200">{t(`devices.android.${nextStep}Title`)}</p>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">{t(`devices.android.${nextStep}Hint`, { device: device.avdName ?? device.model, ago: ago ?? '' })}</p>
+        </div>
+        {ready && proxyState !== 'frigg' ? (
+          <button
+            type="button"
+            onClick={configure}
+            disabled={pending !== null}
+            className="flex min-h-10 shrink-0 items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {pending === 'setup' ? <Spinner /> : null}
+            {t(proxyState === 'other' ? 'devices.android.switchToFrigg' : 'devices.android.connectProxyToFrigg')}
+          </button>
+        ) : proxyState === 'frigg' ? (
+          <button
+            type="button"
+            onClick={openTraffic}
+            className="min-h-10 shrink-0 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
+          >
+            {t('devices.android.openTraffic')}
+          </button>
+        ) : null}
+      </div>
+
+      <details className="border-t border-zinc-800/80 px-4">
+        <summary className="min-h-11 cursor-pointer py-3 text-xs font-medium text-zinc-400 outline-none hover:text-zinc-200 focus-visible:ring-2 focus-visible:ring-emerald-400">
+          {t('devices.android.advancedOptions')}
+        </summary>
+        <div className="space-y-4 border-t border-zinc-800/80 pb-4 pt-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-zinc-300">{t('devices.android.caLabel')} · {t(`devices.android.${certStatusKey}`)}</p>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-500">
+                {t(device.isEmulator ? 'devices.android.certUnknownHint' : device.certTrusted ? 'devices.android.certTrustedHint' : 'devices.android.certUnverifiedHint')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void runInstall()}
+              disabled={pending !== null || !ready}
+              className="flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-emerald-500/30 hover:text-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending === 'install' ? <Spinner /> : null}
+              {t(device.certTrusted ? 'devices.android.reinstallCa' : 'devices.android.installCa')}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/80 pt-3">
+            <div>
+              <p className="text-xs font-medium text-zinc-300">{t('devices.android.proxyLabel')}</p>
+              <p className="mt-1 font-mono text-[11px] text-zinc-500">
+                {device.proxyValue ?? t(proxyState === 'off' ? 'devices.android.proxyOff' : 'devices.android.proxyPointsOther')}
+              </p>
+            </div>
+            {proxyState !== 'off' ? (
+              <button
+                type="button"
+                onClick={() => void run('teardown', async () => { await teardownAndroid(device.serial); }, 'devices.android.teardownFailed')}
+                disabled={pending !== null || !ready}
+                className="min-h-9 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-rose-500/30 hover:text-rose-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {pending === 'teardown' ? <Spinner /> : null}
+                {t('devices.android.disableProxy')}
+              </button>
+            ) : null}
+          </div>
+          <details className="border-t border-zinc-800/80 pt-3">
+            <summary className="cursor-pointer text-xs font-medium text-zinc-500 outline-none hover:text-zinc-300 focus-visible:ring-2 focus-visible:ring-emerald-400">
+              {t('devices.android.howToRemove')}
+            </summary>
+            <RemoveSteps serial={device.serial} t={t} />
+          </details>
+        </div>
+      </details>
 
       {error !== null ? <p className="border-t border-zinc-800/80 px-4 py-2.5 text-xs text-rose-400">{error}</p> : null}
       {result !== null ? <SetupResultBlock result={result} t={t} /> : null}

@@ -10,11 +10,34 @@ import TrafficDetail from '../components/traffic/TrafficDetail';
 import TrafficEmptyState from '../components/traffic/TrafficEmptyState';
 
 const RENDER_LIMIT = 500;
+const CONNECTIVITY_HOSTS = new Set([
+  'connectivitycheck.gstatic.com',
+  'clients3.google.com',
+  'connectivitycheck.android.com',
+  'captive.apple.com',
+  'msftconnecttest.com',
+  'www.msftconnecttest.com',
+  'www.google.com',
+  'play.googleapis.com',
+]);
+
+function isConnectivityCheck(exchange: TrafficExchange): boolean {
+  const host = exchange.request.host.toLowerCase().replace(/:\d+$/, '');
+  const path = exchange.request.path.toLowerCase().split('?')[0];
+  return CONNECTIVITY_HOSTS.has(host) && (
+    path === '/generate_204' || path === '/gen_204' || path === '/hotspot-detect.html' ||
+    path === '/connecttest.txt' || path === '/success.txt'
+  );
+}
+
+function normalizeClientAddress(address: string): string {
+  return address.replace(/^::ffff:/i, '').toLowerCase();
+}
 
 function ListHeader() {
   const t = useT();
   return (
-    <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-800/80 bg-zinc-950/90 px-3 py-1.5 text-[10px] uppercase tracking-widest text-zinc-600 backdrop-blur">
+    <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-800/80 bg-zinc-950/90 px-3 py-1.5 text-[10px] uppercase tracking-widest text-zinc-400 backdrop-blur">
       <span className="w-14 shrink-0 text-center">{t('traffic.column.method')}</span>
       <span className="w-14 shrink-0 text-center">{t('traffic.column.status')}</span>
       <span className="min-w-0 flex-1">{t('traffic.column.url')}</span>
@@ -31,10 +54,13 @@ export default function TrafficScreen() {
   const selectExchange = useAppStore((s) => s.selectExchange);
   const clearTraffic = useAppStore((s) => s.clearTraffic);
   const createMockFromExchange = useAppStore((s) => s.createMockFromExchange);
+  const devices = useAppStore((s) => s.devices);
+  const activeDevice = useAppStore((s) => s.activeDevice);
 
   const [filter, setFilter] = useState('');
   const [method, setMethod] = useState('ALL');
   const [source, setSource] = useState('');
+  const [hideConnectivity, setHideConnectivity] = useState(false);
   const [frozen, setFrozen] = useState<TrafficExchange[] | null>(null);
 
   const sources = useMemo(() => {
@@ -46,9 +72,30 @@ export default function TrafficScreen() {
     return Array.from(distinct).sort((a, b) => a.localeCompare(b));
   }, [exchanges]);
 
+  const sourceLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    for (const device of devices?.android ?? []) {
+      if (device.ipAddress) {
+        const label = device.avdName ?? device.model;
+        labels[device.ipAddress] = label;
+        labels[normalizeClientAddress(device.ipAddress)] = label;
+      }
+    }
+    return labels;
+  }, [devices]);
+
+  const activeSource = useMemo(() => {
+    if (activeDevice?.platform !== 'android') return '';
+    return devices?.android.find((item) => item.serial === activeDevice.id)?.ipAddress ?? '';
+  }, [activeDevice, devices]);
+
   useEffect(() => {
-    if (source !== '' && !sources.includes(source)) setSource('');
-  }, [source, sources]);
+    setSource(activeSource);
+  }, [activeSource]);
+
+  useEffect(() => {
+    if (source !== '' && !sources.includes(source) && source !== activeSource) setSource('');
+  }, [source, sources, activeSource]);
 
   const initialIdsRef = useRef<ReadonlySet<string> | null>(null);
   if (initialIdsRef.current === null) {
@@ -61,7 +108,8 @@ export default function TrafficScreen() {
     const query = filter.trim().toLowerCase();
     const matched = base.filter((e) => {
       if (method !== 'ALL' && e.request.method.toUpperCase() !== method) return false;
-      if (source !== '' && e.request.clientAddress !== source) return false;
+      if (source !== '' && normalizeClientAddress(e.request.clientAddress ?? '') !== normalizeClientAddress(source)) return false;
+      if (hideConnectivity && isConnectivityCheck(e)) return false;
       if (query.length > 0) {
         const url = e.request.url.toLowerCase();
         const host = e.request.host.toLowerCase();
@@ -70,6 +118,18 @@ export default function TrafficScreen() {
       return true;
     });
     return matched.slice(-RENDER_LIMIT).reverse();
+  }, [exchanges, frozen, filter, method, source, hideConnectivity]);
+
+  const hiddenConnectivityCount = useMemo(() => {
+    const base = frozen ?? exchanges;
+    const query = filter.trim().toLowerCase();
+    return base.filter((e) => {
+      if (!isConnectivityCheck(e)) return false;
+      if (method !== 'ALL' && e.request.method.toUpperCase() !== method) return false;
+      if (source !== '' && normalizeClientAddress(e.request.clientAddress ?? '') !== normalizeClientAddress(source)) return false;
+      if (query.length > 0 && !e.request.url.toLowerCase().includes(query) && !e.request.host.toLowerCase().includes(query)) return false;
+      return true;
+    }).length;
   }, [exchanges, frozen, filter, method, source]);
 
   const bufferedCount = useMemo(() => {
@@ -87,7 +147,7 @@ export default function TrafficScreen() {
     return exchanges.find((e) => e.id === selectedExchangeId) ?? null;
   }, [selectedExchangeId, frozen, exchanges]);
 
-  const detail = useResizable('traffic.detail', 560, { axis: 'x', min: 360, max: 1100, invert: true });
+  const detail = useResizable('traffic.detail', 480, { axis: 'x', min: 340, max: 1000, invert: true });
 
   const togglePause = () => {
     setFrozen((current) => (current === null ? exchanges.slice() : null));
@@ -105,12 +165,16 @@ export default function TrafficScreen() {
         method={method}
         source={source}
         sources={sources}
+        sourceLabels={sourceLabels}
+        hideConnectivity={hideConnectivity}
+        hiddenConnectivityCount={hiddenConnectivityCount}
         paused={frozen !== null}
         bufferedCount={bufferedCount}
         totalCount={exchanges.length}
         onFilterChange={setFilter}
         onMethodChange={setMethod}
         onSourceChange={setSource}
+        onHideConnectivityChange={setHideConnectivity}
         onTogglePause={togglePause}
         onClear={handleClear}
         trailing={<BreakpointsControl />}
@@ -118,10 +182,14 @@ export default function TrafficScreen() {
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto">
           {exchanges.length === 0 ? (
-            <TrafficEmptyState />
+            <TrafficEmptyState deviceLabel={activeDevice?.label} />
           ) : visible.length === 0 ? (
             <div className="flex h-full items-center justify-center">
-              <p className="text-[13px] text-zinc-600">{t('traffic.noMatch')}</p>
+              <p className="max-w-lg px-6 text-center text-[13px] leading-relaxed text-zinc-400">
+                {source === activeSource && activeDevice
+                  ? t('traffic.waitingForDevice', { device: activeDevice.label })
+                  : t('traffic.noMatch')}
+              </p>
             </div>
           ) : (
             <>

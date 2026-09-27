@@ -16,7 +16,7 @@ function StripItem({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-export default function ProxyStatusStrip() {
+export default function ProxyStatusStrip({ showFingerprint = true }: { showFingerprint?: boolean }) {
   const t = useT();
   const status = useAppStore((s) => s.status);
 
@@ -33,10 +33,10 @@ export default function ProxyStatusStrip() {
             <CopyButton value={proxyAddress} label={t('devices.strip.copyProxyAddress')} />
           </>
         ) : (
-          <span className="font-mono text-[13px] text-zinc-600">—</span>
+          <span className="font-mono text-[13px] text-zinc-500">{t('devices.strip.unavailable')}</span>
         )}
       </StripItem>
-      <StripItem label={t('devices.strip.caFingerprint')}>
+      {showFingerprint ? <StripItem label={t('devices.strip.caFingerprint')}>
         {status !== null && status.certFingerprint.length > 0 ? (
           <>
             <span className="truncate font-mono text-[13px] text-zinc-400">
@@ -45,9 +45,9 @@ export default function ProxyStatusStrip() {
             <CopyButton value={status.certFingerprint} label={t('devices.strip.copyFullFingerprint')} />
           </>
         ) : (
-          <span className="font-mono text-[13px] text-zinc-600">—</span>
+          <span className="font-mono text-[13px] text-zinc-500">{t('devices.strip.unavailable')}</span>
         )}
-      </StripItem>
+      </StripItem> : null}
       <div className="flex-1" />
       {setupUrl !== null ? (
         <a
