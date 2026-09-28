@@ -1,11 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { AUTOMATION_RUN_STATUS, type AutomationDefinition, type AutomationNode } from '@frigg/shared';
 import { AutomationStore } from './store.ts';
 import { AutomationRunStore } from './run-store.ts';
 import { AutomationManager } from './manager.ts';
+import type { AutomationDevice } from './runner.ts';
 
 const definition: AutomationDefinition = {
   name: 'Smoke test', description: '', schemaVersion: 1 as const,
@@ -30,7 +31,7 @@ describe('AutomationManager', () => {
   let directory: string;
   let automations: AutomationStore;
   let runs: AutomationRunStore;
-  let perform: ReturnType<typeof vi.fn>;
+  let perform: Mock<AutomationDevice['perform']>;
   let manager: AutomationManager;
   let releaseFor: (serial: string) => void;
   let waitForPerform: (serial: string) => Promise<void>;
@@ -41,7 +42,7 @@ describe('AutomationManager', () => {
     automations = await AutomationStore.load(join(directory, 'automations.json'));
     const started = new Map<string, ReturnType<typeof deferred>>();
     const gates = new Map<string, ReturnType<typeof deferred>>();
-    perform = vi.fn(async (serial: string, _node: AutomationNode) => {
+    perform = vi.fn<AutomationDevice['perform']>(async (serial: string, _node: AutomationNode) => {
       let gate = started.get(serial);
       if (!gate) { gate = deferred(); started.set(serial, gate); }
       gate.resolve();
@@ -50,8 +51,8 @@ describe('AutomationManager', () => {
       await release.promise;
     });
     const device = {
-      assertReady: vi.fn(async () => undefined),
-      screenshot: vi.fn(async () => ({ png: Buffer.from([137, 80, 78, 71, 1]), width: 400, height: 800, rotation: 0 as const })),
+      assertReady: vi.fn<AutomationDevice['assertReady']>(async () => undefined),
+      screenshot: vi.fn<AutomationDevice['screenshot']>(async () => ({ png: Buffer.from([137, 80, 78, 71, 1]), width: 400, height: 800, rotation: 0 as const })),
       perform,
     };
     manager = new AutomationManager({ automations, runs, device });
