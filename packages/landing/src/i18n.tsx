@@ -11,28 +11,44 @@ export type ToolId =
   | 'mocks'
   | 'logcat'
   | 'database'
+  | 'sql'
+  | 'frida'
   | 'devices'
   | 'mcp';
 
 const en = {
   nav: { tools: 'Tools', how: 'How it works', download: 'Download', github: 'GitHub' },
   hero: {
-    eyebrow: 'The mobile-app debugging toolkit',
-    title: 'Every tool you need to debug a mobile app.',
+    eyebrow: 'Mobile app development toolkit',
+    title: 'Debug mobile apps from network to device.',
     subtitle:
-      'Inspect traffic, mock responses, pause requests at a breakpoint, fire off API calls, stream device logs and browse the on-device database — Android & iOS, in one native app. Free and open source.',
+      'Inspect live traffic, run API requests, mock or pause exchanges, stream device logs, query app data, and instrument rooted Android emulators — from one desktop workspace for Android and iOS. Free and open source.',
     download: 'Download for Mac',
     downloadGeneric: 'Download',
     viewGithub: 'View on GitHub',
     freeNote: 'Free & open source · macOS · Windows & Linux from source',
-    cycleHint: 'One app, every tool — click a tab',
+    cycleHint: 'Network, device and runtime tools — click a tab',
   },
   stream: { label: 'Live traffic' },
   tools: {
     eyebrow: 'The toolkit',
-    title: 'Seven tools, one window.',
+    title: 'One toolkit for the whole debugging loop.',
     subtitle:
-      'Each one is built for a real moment in mobile development — seeing what your app sends, faking what the server returns, and reading what the device knows.',
+      'Move from a failing request to the logs or data behind it, then test a change without leaving Frigg.',
+    groups: {
+      network: {
+        title: 'Network debugging',
+        desc: 'See what the app sends, shape what the API returns, and repeat requests while you investigate.',
+      },
+      device: {
+        title: 'Device diagnostics',
+        desc: 'Connect Android and iOS devices, then inspect their logs and the data stored by your app.',
+      },
+      advanced: {
+        title: 'Advanced tools',
+        desc: 'Connect external databases, instrument rooted Android emulators, or let an agent drive Frigg.',
+      },
+    },
     items: {
       traffic: {
         name: 'Traffic',
@@ -65,22 +81,34 @@ const en = {
         bullets: ['Android logcat + iOS logs', 'Filter by package / level / text', 'Color-coded severity'],
       },
       database: {
-        name: 'Database',
-        tagline: 'Query the database on the device.',
-        desc: "Open the local databases — Android Room, iOS — of the apps installed on a connected device and run SQL against them. Browse tables, inspect rows and check exactly what your app persisted.",
-        bullets: ['Android Room & iOS stores', 'Run SQL, browse tables', 'Inspect what the app saved'],
+        name: 'App database',
+        tagline: 'See what your app persisted on device.',
+        desc: 'Open local Android Room and iOS app databases from a connected device. Browse tables, inspect rows, and run SQL to check what the app saved.',
+        bullets: ['Android Room & iOS stores', 'Browse tables and rows', 'Run SQL on device data'],
+      },
+      sql: {
+        name: 'SQL',
+        tagline: 'Query your other databases in Frigg.',
+        desc: 'Connect to MySQL, MariaDB, PostgreSQL, or SQLite databases. Browse and edit tables, run queries with schema-aware autocomplete, and keep saved credentials encrypted at rest.',
+        bullets: ['MySQL · MariaDB · PostgreSQL · SQLite', 'Browse, edit & query', 'Encrypted saved credentials'],
+      },
+      frida: {
+        name: 'Frida',
+        tagline: 'Instrument Android apps at runtime.',
+        desc: 'Install and run frida-server on a rooted Android emulator, attach to an app or spawn it, and stream script output in Frigg. Built-in examples and rooted AVD controls help you get started.',
+        bullets: ['Attach or spawn an app', 'Built-in scripts · live output', 'Manage rooted Android emulators'],
       },
       devices: {
         name: 'Devices',
-        tagline: 'Intercept any device in one click.',
-        desc: 'Set the proxy and install the Frigg CA on Android emulators and iOS simulators automatically — system cert when adb root is available. Any physical phone connects through a QR setup page.',
-        bullets: ['One-click Android / iOS setup', 'Auto proxy + CA install', 'QR page for real devices'],
+        tagline: 'Connect Android and iOS devices quickly.',
+        desc: 'Set the proxy and install the Frigg CA on Android emulators and iOS simulators automatically. Physical phones connect through a QR setup page with manual proxy and certificate steps.',
+        bullets: ['One-click emulator / simulator setup', 'Proxy + CA status', 'QR setup for physical phones'],
       },
       mcp: {
         name: 'MCP & Claude',
-        tagline: 'Let an agent drive Frigg for you.',
-        desc: 'A Model Context Protocol server plus a Claude Code plugin expose traffic, mocks and the API client as tools. Ask an agent to find a failing call and mock it — it reads the traffic and writes the rule.',
-        bullets: ['MCP server · 18 tools', 'Claude Code plugin', 'Agents read traffic & write mocks'],
+        tagline: 'Let an agent inspect and operate Frigg.',
+        desc: 'The MCP server and Claude Code plugin expose Frigg traffic, mocks, API requests, devices, and automation workflows. Ask an agent to investigate a failed call and create a mock from the captured exchange.',
+        bullets: ['MCP server · 51 tools', 'Claude Code plugin', 'Inspect traffic & create mocks'],
       },
     } satisfies Record<ToolId, { name: string; tagline: string; desc: string; bullets: string[] }>,
   },
@@ -89,7 +117,9 @@ const en = {
     api: { title: 'API client', env: 'env' },
     mocks: { title: 'mocks', hint: 'Higher priority wins · upstream never hit' },
     breakpoints: { paused: 'Paused', respond: 'Respond', continue: 'Continue', abort: 'Abort' },
-    database: { title: 'database', rows: '3 rows · 1.2 ms' },
+    database: { title: 'app database', rows: '3 rows · 1.2 ms' },
+    sql: { title: 'SQL workspace', schema: 'SCHEMA', engines: 'MySQL · MariaDB · PostgreSQL · SQLite', rows: '3 rows returned' },
+    frida: { title: 'Frida', rooted: 'rooted', server: 'server running', target: 'TARGET APP', run: 'Run script', output: 'LIVE OUTPUT', attached: 'script attached to app', waiting: 'waiting for hook…' },
     devices: {
       title: 'devices',
       setup: 'Set up',
@@ -106,17 +136,15 @@ const en = {
   },
   how: {
     eyebrow: 'How it works',
-    title: 'A proxy between your app and the internet.',
+    title: 'From app behavior to a verified fix.',
     subtitle:
-      'Frigg runs a TLS-intercepting proxy. Point a device at it once, trust the CA, and every request flows through — visible, mockable, pausable.',
-    device: 'Device / emulator',
-    deviceSub: 'Android · iOS · any device',
-    proxy: 'Frigg proxy',
-    proxySub: 'TLS interception · :8888',
-    internet: 'Internet',
-    internetSub: 'Upstream servers',
-    ui: 'Frigg UI · :4848',
-    uiSub: 'Live feed · mocks · breakpoints',
+      'Connect a device, inspect its live traffic and state, then change a response and retry the flow in the same workspace.',
+    connect: 'Connect the app',
+    connectSub: 'Android · iOS · emulator · phone',
+    inspect: 'Inspect & intervene',
+    inspectSub: 'Traffic · API · mocks · breakpoints',
+    verify: 'Verify the change',
+    verifySub: 'Logs · app data · retry',
   },
   download: {
     eyebrow: 'Get Frigg',
@@ -138,7 +166,7 @@ const en = {
     otherOs: 'Windows & Linux: build from source on the matching OS — see the README.',
   },
   footer: {
-    tagline: 'The toolkit for debugging mobile apps.',
+    tagline: 'Debug mobile apps from network to device.',
     madeWith: 'Open source under the project license.',
     docs: 'Docs',
     readme: 'README',
@@ -150,22 +178,36 @@ const en = {
 const pt: Dict = {
   nav: { tools: 'Ferramentas', how: 'Como funciona', download: 'Download', github: 'GitHub' },
   hero: {
-    eyebrow: 'O toolkit pra debugar apps mobile',
-    title: 'Todas as ferramentas pra debugar um app mobile.',
+    eyebrow: 'Kit de desenvolvimento mobile',
+    title: 'Depure apps mobile da rede ao device.',
     subtitle:
-      'Inspecione o tráfego, mocke respostas, pause requests num breakpoint, dispare chamadas de API, faça stream dos logs do device e consulte o banco do app — Android & iOS, num app nativo só. Grátis e open source.',
+      'Inspecione tráfego ao vivo, rode requests de API, crie mocks ou pause chamadas, acompanhe logs, consulte dados do app e instrumente emuladores Android com root — tudo num workspace desktop para Android e iOS. Grátis e open source.',
     download: 'Baixar para Mac',
     downloadGeneric: 'Baixar',
     viewGithub: 'Ver no GitHub',
     freeNote: 'Grátis & open source · macOS · Windows & Linux via código',
-    cycleHint: 'Um app, todas as ferramentas — clique numa aba',
+    cycleHint: 'Rede, device e runtime — clique numa aba',
   },
   stream: { label: 'Tráfego ao vivo' },
   tools: {
     eyebrow: 'O toolkit',
-    title: 'Sete ferramentas, uma janela.',
+    title: 'Um toolkit para todo o ciclo de debugging.',
     subtitle:
-      'Cada uma feita pra um momento real do dev mobile — ver o que seu app manda, fingir o que o servidor responde e ler o que o device sabe.',
+      'Saia de um request com falha para os logs ou dados por trás dele e teste uma mudança sem sair do Frigg.',
+    groups: {
+      network: {
+        title: 'Debugging de rede',
+        desc: 'Veja o que o app envia, controle a resposta da API e repita requests durante a investigação.',
+      },
+      device: {
+        title: 'Diagnóstico de devices',
+        desc: 'Conecte Android e iOS para inspecionar logs e os dados que o app salvou no aparelho.',
+      },
+      advanced: {
+        title: 'Ferramentas avançadas',
+        desc: 'Conecte bancos externos, instrumente emuladores Android com root ou deixe um agente operar o Frigg.',
+      },
+    },
     items: {
       traffic: {
         name: 'Tráfego',
@@ -198,22 +240,34 @@ const pt: Dict = {
         bullets: ['logcat Android + logs iOS', 'Filtro por pacote / nível / texto', 'Cor por severidade'],
       },
       database: {
-        name: 'Banco de dados',
-        tagline: 'Consulte o banco direto no device.',
-        desc: 'Abra os bancos locais — Android Room, iOS — dos apps instalados num device conectado e rode SQL neles. Navegue tabelas, inspecione linhas e veja exatamente o que seu app persistiu.',
-        bullets: ['Room (Android) & stores iOS', 'Rode SQL, navegue tabelas', 'Veja o que o app salvou'],
+        name: 'Banco do app',
+        tagline: 'Veja o que seu app salvou no device.',
+        desc: 'Abra bancos locais Android Room e iOS a partir de um device conectado. Navegue tabelas, inspecione linhas e rode SQL para conferir o que o app persistiu.',
+        bullets: ['Android Room & stores iOS', 'Navegue tabelas e linhas', 'SQL nos dados do device'],
+      },
+      sql: {
+        name: 'SQL',
+        tagline: 'Consulte outros bancos pelo Frigg.',
+        desc: 'Conecte a bancos MySQL, MariaDB, PostgreSQL ou SQLite. Navegue e edite tabelas, rode queries com autocomplete baseado no schema e salve credenciais criptografadas em repouso.',
+        bullets: ['MySQL · MariaDB · PostgreSQL · SQLite', 'Navegue, edite e consulte', 'Credenciais salvas criptografadas'],
+      },
+      frida: {
+        name: 'Frida',
+        tagline: 'Instrumente apps Android em runtime.',
+        desc: 'Instale e rode frida-server num emulador Android com root, conecte a um app aberto ou inicie o app e acompanhe a saída dos scripts no Frigg. Exemplos integrados e controles de AVD com root ajudam a começar.',
+        bullets: ['Attach ou spawn de app', 'Scripts integrados · saída ao vivo', 'Gerencie emuladores Android com root'],
       },
       devices: {
         name: 'Devices',
-        tagline: 'Intercepte qualquer device num clique.',
-        desc: 'Define o proxy e instala a CA do Frigg em emuladores Android e simuladores iOS sozinho — cert de sistema quando tem adb root. Qualquer aparelho físico conecta por uma página de setup com QR.',
-        bullets: ['Setup Android / iOS num clique', 'Proxy + CA automáticos', 'Página com QR pra device real'],
+        tagline: 'Conecte Android e iOS com poucos passos.',
+        desc: 'Configure o proxy e instale a CA do Frigg automaticamente em emuladores Android e simuladores iOS. Celulares físicos conectam por uma página com QR e passos manuais de proxy e certificado.',
+        bullets: ['Setup de emulador / simulador', 'Status do proxy e da CA', 'Setup por QR em aparelhos físicos'],
       },
       mcp: {
         name: 'MCP & Claude',
-        tagline: 'Deixe um agente dirigir o Frigg.',
-        desc: 'Um servidor Model Context Protocol e um plugin pro Claude Code expõem tráfego, mocks e o API client como tools. Peça pro agente achar a chamada que falha e mockar — ele lê o tráfego e escreve a regra.',
-        bullets: ['Servidor MCP · 18 tools', 'Plugin do Claude Code', 'Agente lê tráfego & escreve mock'],
+        tagline: 'Deixe um agente inspecionar e operar o Frigg.',
+        desc: 'O servidor MCP e o plugin do Claude Code expõem tráfego, mocks, requests de API, devices e automações. Peça ao agente para investigar uma chamada com falha e criar um mock a partir da troca capturada.',
+        bullets: ['Servidor MCP · 51 ferramentas', 'Plugin do Claude Code', 'Inspecione tráfego e crie mocks'],
       },
     },
   },
@@ -222,7 +276,9 @@ const pt: Dict = {
     api: { title: 'API client', env: 'env' },
     mocks: { title: 'mocks', hint: 'Maior prioridade vence · upstream nunca é atingido' },
     breakpoints: { paused: 'Pausado', respond: 'Responder', continue: 'Continuar', abort: 'Abortar' },
-    database: { title: 'banco de dados', rows: '3 linhas · 1.2 ms' },
+    database: { title: 'banco do app', rows: '3 linhas · 1.2 ms' },
+    sql: { title: 'workspace SQL', schema: 'SCHEMA', engines: 'MySQL · MariaDB · PostgreSQL · SQLite', rows: '3 linhas retornadas' },
+    frida: { title: 'Frida', rooted: 'com root', server: 'servidor ativo', target: 'APP ALVO', run: 'Rodar script', output: 'SAÍDA AO VIVO', attached: 'script conectado ao app', waiting: 'aguardando hook…' },
     devices: {
       title: 'devices',
       setup: 'Configurar',
@@ -239,17 +295,15 @@ const pt: Dict = {
   },
   how: {
     eyebrow: 'Como funciona',
-    title: 'Um proxy entre seu app e a internet.',
+    title: 'Do comportamento do app à correção verificada.',
     subtitle:
-      'O Frigg roda um proxy que intercepta TLS. Aponte o device pra ele uma vez, confie na CA, e todo request passa por ali — visível, mockável, pausável.',
-    device: 'Device / emulador',
-    deviceSub: 'Android · iOS · qualquer device',
-    proxy: 'Proxy Frigg',
-    proxySub: 'Interceptação TLS · :8888',
-    internet: 'Internet',
-    internetSub: 'Servidores upstream',
-    ui: 'UI do Frigg · :4848',
-    uiSub: 'Feed ao vivo · mocks · breakpoints',
+      'Conecte um device, inspecione o tráfego e o estado do app, altere uma resposta e repita o fluxo no mesmo workspace.',
+    connect: 'Conecte o app',
+    connectSub: 'Android · iOS · emulador · celular',
+    inspect: 'Inspecione e intervenha',
+    inspectSub: 'Tráfego · API · mocks · breakpoints',
+    verify: 'Verifique a mudança',
+    verifySub: 'Logs · dados do app · repetir',
   },
   download: {
     eyebrow: 'Pegar o Frigg',
@@ -271,7 +325,7 @@ const pt: Dict = {
     otherOs: 'Windows & Linux: gere o build no SO correspondente — veja o README.',
   },
   footer: {
-    tagline: 'O toolkit pra debugar apps mobile.',
+    tagline: 'Depure apps mobile da rede ao device.',
     madeWith: 'Open source sob a licença do projeto.',
     docs: 'Docs',
     readme: 'README',

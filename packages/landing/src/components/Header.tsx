@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react';
 import { useT, type Lang } from '../i18n';
 import { REPO_URL } from '../useRelease';
 import { IconGithub } from '../icons';
+import FriggMark from './FriggMark';
 
 function Logo() {
   return (
-    <a href="#top" className="flex items-center gap-2.5 group">
-      <span className="relative flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/15 ring-1 ring-emerald-500/40">
-        <span className="h-2 w-2 rounded-full bg-emerald-400 pulse-dot" />
-        <span className="absolute inset-0 rounded-md bg-emerald-400/20 blur-md group-hover:bg-emerald-400/30 transition-colors" />
+    <a href="#top" className="flex items-center gap-2.5">
+      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 ring-1 ring-emerald-500/30">
+        <FriggMark className="h-6 w-6" />
       </span>
-      <span className="font-display text-lg font-bold tracking-wide text-zinc-100">frigg</span>
+      <span className="font-display text-lg font-bold tracking-wide text-zinc-100">Frigg</span>
     </a>
   );
 }
