@@ -1,128 +1,139 @@
 # Frigg
 
-Intercept, inspect and **mock** HTTP(S) traffic from Android/iOS devices, emulators and simulators — HTTP Toolkit style, with one-click device setup. Plus a built-in **API client**, **Logcat** streaming, a **database** browser and in-flight **breakpoints**. Runs in the browser or as a native **desktop app**. Bilingual UI (English / pt-BR).
+<p align="center"><img src="packages/desktop/build/icon.png" width="112" alt="Frigg app icon" /></p>
 
-```
-┌──────────────┐    HTTP(S)     ┌─────────────────────┐
-│ Android / iOS │ ────────────▶ │  Frigg proxy :8888  │ ──▶ internet
-│ device / emu  │               │  (TLS interception) │
-└──────────────┘               └──────────┬──────────┘
-                                          │ live feed + mocks + breakpoints
-                                ┌─────────▼──────────┐
-                                │  Frigg UI  :4848   │
-                                └────────────────────┘
-```
+**A mobile app debugging toolkit for Android and iOS.**
+
+Debug from network traffic to device state: inspect requests, run API calls, mock or pause exchanges, stream logs, browse on-device databases, and use advanced tools from one desktop workspace.
+
+Frigg is free and open source, with an English and Brazilian Portuguese interface.
+
+[Download the desktop app](https://github.com/frigg-tools/frigg-desktop/releases/latest) · [What Frigg does](#what-frigg-does) · [Português (Brasil)](./README.pt-BR.md)
+
+## What Frigg does
+
+### Network debugging
+
+- **Traffic** — inspect HTTP(S) requests live, filter by host, path, or device, and open headers and bodies.
+- **API client** — manage requests in workspaces, folders, and environments; use variables, tabs, pre-request scripts, and tests.
+- **Breakpoints** — pause matching requests or responses, edit them in flight, then continue, replace the response, or abort.
+- **Mocks** — match rules by method, URL, query, and body; return custom status, headers, content, and delay.
+
+### Device diagnostics
+
+- **Device setup** — configure Android emulators and iOS simulators in a few clicks. Physical phones can connect through a QR setup page.
+- **Logs** — stream Android logcat and iOS logs, filtered by app, level, and text.
+- **On-device databases** — browse and query Android Room and iOS app databases from a connected device.
+
+### Advanced tools
+
+- **SQL** — connect to MySQL, MariaDB, PostgreSQL, or SQLite; browse and edit tables, and run queries with schema-aware autocomplete.
+- **Frida** — install frida-server, run scripts against apps on rooted Android emulators, and stream output. Frigg can list, boot, and create rooted AVDs.
+- **MCP and Claude Code** — connect agents to Frigg through 51 MCP tools and the Frigg Claude Code plugin.
+
+## Platform support
+
+| Target | Setup | Notes |
+| --- | --- | --- |
+| Android emulator or USB device | One-click proxy and CA setup in **Devices** | Uses a system CA when `adb root` is available; otherwise install the user CA manually. |
+| iOS Simulator | Install the CA in **Devices** and enable the macOS proxy toggle | The simulator uses the Mac's proxy settings. |
+| Physical Android or iPhone | Open the QR setup page and configure the Wi-Fi proxy and certificate | The phone and Frigg host must be on the same Wi-Fi network. |
+| Rooted Android emulator | Select an AVD in **Frida** | Attach to a running app or spawn it and run Frida scripts. |
 
 ## Download
 
-Grab the latest desktop build from the [**Releases**](https://github.com/frigg-tools/frigg-desktop/releases/latest) page — `arm64` for Apple Silicon, `x64` for Intel Macs. Open the `.dmg` and drag Frigg to Applications.
+Download the latest desktop build from [GitHub Releases](https://github.com/frigg-tools/frigg-desktop/releases/latest). Choose <code>arm64</code> for Apple Silicon or <code>x64</code> for Intel Macs, open the <code>.dmg</code>, and drag Frigg to Applications.
 
-> The build is unsigned, so on first launch macOS Gatekeeper blocks it. Right-click the app → **Open** (once), or run `xattr -dr com.apple.quarantine /Applications/Frigg.app`.
+The macOS build is unsigned, so Gatekeeper blocks the first launch. Right-click the app and choose **Open**, or run:
 
-Each tagged release (`vX.Y.Z`) is built and published automatically by CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)).
+~~~bash
+xattr -dr com.apple.quarantine /Applications/Frigg.app
+~~~
 
-## Quick start (from source)
+Tagged releases (<code>vX.Y.Z</code>) are built and published automatically by [CI](.github/workflows/release.yml). Windows and Linux packages can be built on their matching operating systems; see [Desktop app](#desktop-app).
 
-```bash
+## Quick start from source
+
+~~~bash
 npm install
-npm run dev        # server (API :4848, proxy :8888) + web UI (:5173)
-```
+npm run dev
+~~~
 
-Open <http://localhost:5173>. First run shows a short onboarding; then head to **Devices**.
+This starts the server (API <code>:4848</code>, proxy <code>:8888</code>) and web UI (<code>:5173</code>). Open <http://localhost:5173>, finish the first-run onboarding, and connect a device from **Devices**.
 
-Production-ish run (UI served by the server at :4848):
+For a production build served by the server:
 
-```bash
+~~~bash
 npm run build
 npm start
-```
+~~~
 
 ## Desktop app
 
-```bash
-npm run desktop        # boots server + web and opens a native window
-npm run desktop:dist   # builds the installer → packages/desktop/release/ (.dmg / .exe / AppImage)
-```
+~~~bash
+npm run desktop        # start Frigg in a native window
+npm run desktop:dist   # build a package in packages/desktop/release/
+~~~
 
-The packaged app boots the server in-process and serves the bundled UI — no terminal needed. Targets: macOS → `.dmg`, Windows → `.exe` (nsis), Linux → AppImage (build on the matching OS).
+The desktop app starts the server in-process and serves the bundled UI. Packaging targets are macOS <code>.dmg</code>, Windows <code>.exe</code> (NSIS), and Linux AppImage; build each package on its matching operating system.
 
-## What's inside
+## Connect a device
 
-- **Traffic** — every request flows live; filter by host/path and by device. Click one → **⚡ Create mock** prefills a rule from the real exchange.
-- **API client** — Postman-style: workspaces, nested folders, environments and variables. `{{variables}}` are highlighted and autocompleted everywhere; the JSON body is colorized with error hints. Open several requests at once as **tabs**. Pre-request and test **scripts** run in a sandbox with a Postman-like `pm` API (`pm.environment.get/set`, `pm.response.json`, `pm.test`, `pm.expect`). Adding a variable can seed it across every environment; creating an environment can copy the keys from the others.
-- **Breakpoints** — pause a matching request or response in-flight, edit method/URL/headers/body (or status), then continue, answer with a custom response, or abort. Match rules by method + URL, for the request side, the response side, or both.
-- **Mocks** — rules in nested folders, matched on method, host/path globs (`*`, `?`), query substring and body; answer with your status/headers/body and optional delay. Higher priority wins; matched requests never reach upstream and show a ⚡ MOCK chip.
-- **Logcat** — stream Android `logcat` / iOS `log`, filtered by app package, level and text.
-- **Database** — open and query the local databases (Android Room / iOS) of installed apps.
-- **SQL** — connect to your own **MySQL, MariaDB, PostgreSQL or SQLite** servers with saved credentials (passwords encrypted at rest), browse and edit tables, and run queries with schema-aware autocomplete. Destructive statements ask for confirmation.
-- **Frida** — install and run [frida-server](https://frida.re) on a rooted Android emulator, inject scripts into an app (attach or spawn) and stream their output live, with built-in example scripts. List, boot and create rooted (`google_apis`) AVDs from the UI.
-- **Devices** — one-click interception setup (see below).
-- **MCP** — exposes Frigg over a Model Context Protocol server so agents can drive traffic, mocks and the API client.
+### Android emulator or USB device
 
-## Claude Code plugin
+Install ADB (<code>brew install --cask android-platform-tools</code>). In **Devices → Android**, choose **Set up interception**. Frigg sets the device's global HTTP proxy and installs its CA as a system certificate when <code>adb root</code> is available. Otherwise it places the certificate in Downloads and opens Android's security settings for a manual user-certificate install.
 
-Drive Frigg straight from Claude Code. The plugin bundles the Frigg MCP server (31 tools) plus `/frigg:*` slash commands and a debugging skill:
+Apps targeting Android API 24 and later only trust user-installed CAs when their debug build opts in through <code>networkSecurityConfig</code>:
 
-```text
+~~~xml
+<network-security-config>
+  <base-config>
+    <trust-anchors>
+      <certificates src="user" />
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+</network-security-config>
+~~~
+
+Use **Remove** in Frigg to clear the proxy setting.
+
+### iOS Simulator
+
+Boot a simulator, then use **Devices → iOS Simulator → Install CA cert**. Simulators inherit the Mac's proxy; enable the macOS proxy toggle on the same screen to route traffic through Frigg.
+
+### Physical devices
+
+Open the setup page at <code>http://&lt;your-lan-ip&gt;:4848/setup</code> on the phone. Keep the phone and Mac on the same Wi-Fi network, set the phone's Wi-Fi proxy to <code>&lt;your-lan-ip&gt;:8888</code>, download the Frigg CA from the page, and trust it in the device's security settings. On iOS, install the profile and enable full trust under **Certificate Trust Settings**.
+
+## Claude Code and MCP
+
+Install the Frigg plugin in Claude Code:
+
+~~~text
 /plugin marketplace add frigg-tools/frigg-desktop
 /plugin install frigg@frigg-tools
-```
+~~~
 
-With a Frigg server running (the desktop app or `npm run dev`, API on `:4848`):
+With Frigg running on port <code>:4848</code>, the plugin can check status, inspect captured traffic, create mocks, run saved API-client requests, and guide setup. Set <code>FRIGG_API_URL</code> when Frigg uses a custom port. After changing MCP source, rebuild the bundled server with <code>npm run build:plugin</code>.
 
-- `/frigg:status` — proxy status + connected devices
-- `/frigg:traffic [filter]` — recently captured traffic
-- `/frigg:mock <spec>` — create a mock rule (from a description or a captured request)
-- `/frigg:run <request>` — run a saved API-client request
-- `/frigg:setup` — check the connection and how to start Frigg
-- the **frigg-debug** skill guides inspect-and-mock debugging
+## Data and local files
 
-The MCP talks to the server's HTTP API; set `FRIGG_API_URL` if Frigg runs on a custom port. After changing the MCP source, rebuild the bundled server with `npm run build:plugin`.
+Frigg stores its CA keypair, mock rules, and API-client data in <code>~/.frigg/</code>. Saved credentials for external SQL connections are encrypted at rest.
 
-## Connecting a device
+## Development
 
-### Android (emulator or USB device) — one click
-Requires `adb` (`brew install --cask android-platform-tools`). In **Devices → Android**, hit **Set up interception**:
+Frigg is an npm workspaces monorepo:
 
-1. Sets the device's global HTTP proxy to Frigg.
-2. Installs the Frigg CA: as a **system** cert when `adb root` is available (most emulators without Google Play), otherwise drops `frigg-ca.crt` in Downloads and opens Security settings for a manual **user** install.
+- <code>packages/shared</code> — shared domain types
+- <code>packages/server</code> — Node.js and TypeScript server, proxy, HTTP/WebSocket API, and device connectors
+- <code>packages/web</code> — React UI
+- <code>packages/desktop</code> — Electron shell
+- <code>packages/mcp</code> — MCP server and Claude Code plugin
 
-> Apps targeting API 24+ only trust **user** CAs if their `networkSecurityConfig` opts in — add this to your debug build:
-> ```xml
-> <network-security-config>
->   <base-config>
->     <trust-anchors><certificates src="user" /><certificates src="system" /></trust-anchors>
->   </base-config>
-> </network-security-config>
-> ```
+Architecture and module contracts are in [DESIGN.md](./DESIGN.md).
 
-**Remove** undoes the proxy (`http_proxy :0`).
-
-### iOS Simulator — one click
-In **Devices → iOS Simulator**, hit **Install CA cert** on a booted sim (`xcrun simctl keychain … add-root-cert`). Simulators inherit the **Mac's** proxy — use the macOS proxy toggle on the same screen (it routes all Mac traffic through Frigg while enabled).
-
-### Any physical device (iPhone, Android, anything) — manual + QR
-Open the **setup page** (`http://<your-lan-ip>:4848/setup`, linked + QR'd from the Devices screen) on the device:
-
-1. Same Wi-Fi network; set the Wi-Fi proxy manually to `<your-lan-ip>:8888`.
-2. Download the CA cert from the page.
-3. Trust it — iOS: install the profile (Settings → General → VPN & Device Management), then enable full trust in Settings → General → About → Certificate Trust Settings. Android: Settings → Security → Install CA certificate.
-
-Everything persists in `~/.frigg/` (CA keypair, `mocks.json`, API-client data).
-
-## Stack
-
-npm workspaces monorepo:
-
-- **`packages/shared`** — domain types.
-- **`packages/server`** — Node + TypeScript, [mockttp](https://github.com/httptoolkit/mockttp) TLS-intercepting proxy, Express + WebSocket API, device connectors (adb / simctl / networksetup), Logcat streaming.
-- **`packages/web`** — React 19, Vite, Tailwind v4, zustand.
-- **`packages/desktop`** — Electron shell (esbuild-bundled main).
-- **`packages/mcp`** — Model Context Protocol server bridging to the Frigg HTTP API.
-
-Architecture and module contracts: [DESIGN.md](./DESIGN.md).
-
-```bash
-npm test           # server unit tests (matcher, mock store, traffic, logcat, api-client, frida, avd)
-FRIGG_PROXY_PORT=9999 FRIGG_API_PORT=4040 npm start   # custom ports
-```
+~~~bash
+npm test
+FRIGG_PROXY_PORT=9999 FRIGG_API_PORT=4040 npm start
+~~~

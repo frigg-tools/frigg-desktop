@@ -1,6 +1,7 @@
 import { useT } from '../i18n';
 import { REPO_URL } from '../useRelease';
 import { IconGithub } from '../icons';
+import FriggMark from './FriggMark';
 
 export default function Footer() {
   const { t } = useT();
@@ -9,10 +10,10 @@ export default function Footer() {
       <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 sm:flex-row sm:items-center">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/15 ring-1 ring-emerald-500/40">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-900 ring-1 ring-emerald-500/30">
+              <FriggMark className="h-5 w-5" />
             </span>
-            <span className="font-display text-base font-bold tracking-wide text-zinc-100">frigg</span>
+            <span className="font-display text-base font-bold tracking-wide text-zinc-100">Frigg</span>
           </div>
           <p className="mt-3 max-w-xs text-[13px] text-zinc-500">{t.footer.tagline}</p>
           <p className="mt-1 text-[12px] text-zinc-600">{t.footer.madeWith}</p>

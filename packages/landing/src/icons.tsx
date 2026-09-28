@@ -59,6 +59,21 @@ export const IconDatabase = (p: IconProps) => (
   </Base>
 );
 
+export const IconSql = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 5.5h16v13H4z" />
+    <path d="m8 10-2 2 2 2M16 10l2 2-2 2M13 9l-2 6" />
+  </Base>
+);
+
+export const IconFrida = (p: IconProps) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="7.5" />
+    <circle cx="12" cy="12" r="2.2" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+  </Base>
+);
+
 export const IconDevices = (p: IconProps) => (
   <Base {...p}>
     <rect x="7" y="3" width="10" height="18" rx="2" />

@@ -1,6 +1,6 @@
 import { useT } from '../i18n';
 import { useReveal } from '../useReveal';
-import { tools, type Tool } from '../tools';
+import { toolGroups, type Tool } from '../tools';
 
 function Row({ tool, index }: { tool: Tool; index: number }) {
   const { t } = useT();
@@ -59,8 +59,20 @@ export default function ToolShowcase() {
         </div>
 
         <div className="mt-16 space-y-20 sm:space-y-24">
-          {tools.map((tool, i) => (
-            <Row key={tool.id} tool={tool} index={i} />
+          {toolGroups.map((group) => (
+            <div key={group.id}>
+              <div className="mb-10 border-t border-zinc-900 pt-6">
+                <h3 className="font-display text-xl font-semibold tracking-tight text-zinc-200">
+                  {t.tools.groups[group.id].title}
+                </h3>
+                <p className="mt-2 max-w-2xl text-sm text-zinc-500">{t.tools.groups[group.id].desc}</p>
+              </div>
+              <div className="space-y-16 sm:space-y-20">
+                {group.tools.map((tool, i) => (
+                  <Row key={tool.id} tool={tool} index={i} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
