@@ -21,7 +21,7 @@
     "landing:build": "npm run build -w @frigg/landing"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.2.4"
   },
   "engines": {
     "node": ">=20"
@@ -31,6 +31,6 @@
     "zod": "^4.4.3"
   },
   "overrides": {
-    "fast-uri": "^3.1.4"
+    "fast-uri": "^3.1.7"
   }
 }

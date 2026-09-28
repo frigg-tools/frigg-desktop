@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   AUTOMATION_RUN_STATUS,
   AUTOMATION_STEP_STATUS,
@@ -12,6 +12,7 @@ import {
 import { DeviceAutomationError, type DeviceScreenshot } from './adb.ts';
 import { AutomationRunStore } from './run-store.ts';
 import { AutomationRunner } from './runner.ts';
+import type { AutomationDevice } from './runner.ts';
 
 const screen: DeviceScreenshot = {
   png: Buffer.from([137, 80, 78, 71, 1]),
@@ -67,18 +68,18 @@ describe('AutomationRunner', () => {
   let directory: string;
   let runs: AutomationRunStore;
   let device: {
-    assertReady: ReturnType<typeof vi.fn>;
-    screenshot: ReturnType<typeof vi.fn>;
-    perform: ReturnType<typeof vi.fn>;
+    assertReady: Mock<AutomationDevice['assertReady']>;
+    screenshot: Mock<AutomationDevice['screenshot']>;
+    perform: Mock<AutomationDevice['perform']>;
   };
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'frigg-runner-'));
     runs = await AutomationRunStore.load(join(directory, 'runs'));
     device = {
-      assertReady: vi.fn(async () => undefined),
-      screenshot: vi.fn(async () => structuredClone(screen)),
-      perform: vi.fn(async () => undefined),
+      assertReady: vi.fn<AutomationDevice['assertReady']>(async () => undefined),
+      screenshot: vi.fn<AutomationDevice['screenshot']>(async () => structuredClone(screen)),
+      perform: vi.fn<AutomationDevice['perform']>(async () => undefined),
     };
   });
 
