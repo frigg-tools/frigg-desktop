@@ -16,16 +16,16 @@
   "devDependencies": {
     "@frigg/server": "*",
     "cross-env": "^7.0.3",
-    "electron": "^33.2.0",
+    "electron": "^43.7.5",
     "electron-builder": "^26.15.3",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.28.2",
     "wait-on": "^8.0.1"
   },
   "build": {
     "appId": "com.frigg.app",
     "productName": "Frigg",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
-    "electronVersion": "33.4.11",
+    "electronVersion": "43.7.5",
     "npmRebuild": false,
     "beforePack": "scripts/before-pack.cjs",
     "directories": {

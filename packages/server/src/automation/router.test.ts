@@ -3,7 +3,7 @@ import request from 'supertest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { AutomationDefinition, AutomationNode, AndroidDevice } from '@frigg/shared';
 import type { DeviceScreenshot } from './adb.ts';
 import { AutomationStore } from './store.ts';
@@ -11,6 +11,8 @@ import { AutomationRunStore } from './run-store.ts';
 import { AutomationReferenceStore } from './reference-store.ts';
 import { AutomationManager } from './manager.ts';
 import { buildAutomationRouter } from './router.ts';
+import type { AutomationRouterOptions } from './router.ts';
+import type { AutomationDevice } from './runner.ts';
 
 const screenshotBytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
 const definition: AutomationDefinition = {
@@ -34,11 +36,11 @@ describe('automation REST router', () => {
   let manager: AutomationManager;
   let app: express.Express;
   let device: {
-    assertReady: ReturnType<typeof vi.fn>;
-    screenshot: ReturnType<typeof vi.fn>;
-    perform: ReturnType<typeof vi.fn>;
+    assertReady: Mock<AutomationDevice['assertReady']>;
+    screenshot: Mock<AutomationDevice['screenshot']>;
+    perform: Mock<AutomationDevice['perform']>;
   };
-  let listDevices: ReturnType<typeof vi.fn>;
+  let listDevices: Mock<NonNullable<AutomationRouterOptions['listDevices']>>;
   const android: AndroidDevice = {
     serial: 'emulator-5554', model: 'Pixel', avdName: 'Pixel', state: 'device', isEmulator: true, proxyConfigured: false,
   };
@@ -49,13 +51,13 @@ describe('automation REST router', () => {
     runs = await AutomationRunStore.load(join(directory, 'runs'));
     references = await AutomationReferenceStore.load(join(directory, 'references'));
     device = {
-      assertReady: vi.fn(async () => undefined),
-      screenshot: vi.fn(async (): Promise<DeviceScreenshot> => ({ png: screenshotBytes, width: 400, height: 800, rotation: 0 })),
-      perform: vi.fn(async (_serial: string, _node: AutomationNode) => undefined),
+      assertReady: vi.fn<AutomationDevice['assertReady']>(async () => undefined),
+      screenshot: vi.fn<AutomationDevice['screenshot']>(async (): Promise<DeviceScreenshot> => ({ png: screenshotBytes, width: 400, height: 800, rotation: 0 })),
+      perform: vi.fn<AutomationDevice['perform']>(async (_serial: string, _node: AutomationNode) => undefined),
     };
     manager = new AutomationManager({ automations, runs, device });
     await manager.initialize();
-    listDevices = vi.fn(async () => [android]);
+    listDevices = vi.fn<NonNullable<AutomationRouterOptions['listDevices']>>(async () => [android]);
     app = express();
     app.use(express.json());
     app.use(buildAutomationRouter({

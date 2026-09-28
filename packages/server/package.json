@@ -17,12 +17,12 @@
   "dependencies": {
     "@frigg/shared": "*",
     "better-sqlite3": "^12.11.1",
-    "express": "^4.21.2",
+    "express": "^4.22.3",
     "mockttp": "^4.0.0",
-    "mysql2": "^3.22.5",
+    "mysql2": "^3.24.4",
     "pg": "^8.22.0",
     "qrcode": "^1.5.4",
-    "undici": "^6.27.0",
+    "undici": "^6.29.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -36,6 +36,6 @@
     "supertest": "^7.2.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.11"
   }
 }
