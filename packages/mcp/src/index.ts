@@ -335,33 +335,27 @@ server.tool(
   },
   async ({ workspaceId, folderId, name, method, url, query, headers, body, preScript, testScript }) => {
     try {
-      const created = await post<{ snapshot: ApiClientSnapshot; id: string }>('/api/client/requests', {
-        workspaceId,
-        folderId: folderId ?? null,
-      });
-
-      const patch: Record<string, unknown> = {};
-      if (name !== undefined) patch.name = name;
-      if (method !== undefined) patch.method = method;
-      if (url !== undefined) patch.url = url;
-      if (query !== undefined) patch.query = query.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
-      if (headers !== undefined) patch.headers = headers.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
+      const fields: Record<string, unknown> = {};
+      if (name !== undefined) fields.name = name;
+      if (method !== undefined) fields.method = method;
+      if (url !== undefined) fields.url = url;
+      if (query !== undefined) fields.query = query.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
+      if (headers !== undefined) fields.headers = headers.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
       if (body !== undefined) {
-        patch.body = {
+        fields.body = {
           mode: body.mode ?? 'none',
           raw: body.raw ?? '',
           form: (body.form ?? []).map((kv) => ({ ...kv, enabled: kv.enabled ?? true })),
         };
       }
-      if (preScript !== undefined) patch.preScript = preScript;
-      if (testScript !== undefined) patch.testScript = testScript;
+      if (preScript !== undefined) fields.preScript = preScript;
+      if (testScript !== undefined) fields.testScript = testScript;
 
-      if (Object.keys(patch).length > 0) {
-        const snapshot = await put<ApiClientSnapshot>(`/api/client/requests/${created.id}`, patch);
-        const request = snapshot.requests.find((r: ApiRequest) => r.id === created.id);
-        return ok(request);
-      }
-
+      const created = await post<{ snapshot: ApiClientSnapshot; id: string }>('/api/client/requests', {
+        workspaceId,
+        folderId: folderId ?? null,
+        ...fields,
+      });
       const request = created.snapshot.requests.find((r: ApiRequest) => r.id === created.id);
       return ok(request);
     } catch (e) {

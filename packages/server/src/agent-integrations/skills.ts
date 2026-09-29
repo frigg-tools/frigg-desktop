@@ -397,16 +397,36 @@ export async function installSkills(
 
     const staged = new Map<string, string>();
     const promoted: Array<{ target: string; backup?: string; didPromote: boolean }> = [];
+    let changedTarget: string | undefined;
     try {
       for (const check of toInstall) {
         await mkdir(path.dirname(check.target), { recursive: true, mode: 0o700 });
         staged.set(check.target, await stageSkill(check.skill.sourcePath, check.target));
       }
       for (const check of toInstall) {
+        const latestHash = await hashTree(check.target);
+        let targetExists = true;
+        try {
+          await lstat(check.target);
+        } catch (error) {
+          if (isMissing(error)) targetExists = false;
+          else throw error;
+        }
+        if ((check.currentExists && latestHash !== check.currentHash) || (!check.currentExists && targetExists)) {
+          changedTarget = check.target;
+          throw new Error('A Frigg skill changed during installation.');
+        }
         const backup = check.currentExists ? `${check.target}.frigg-${randomUUID()}.bak` : undefined;
         const transaction = { target: check.target, ...(backup ? { backup } : {}), didPromote: false };
         promoted.push(transaction);
-        if (backup) await rename(check.target, backup);
+        if (backup) {
+          await rename(check.target, backup);
+          if (check.currentHash !== null && await hashTree(backup) !== check.currentHash) {
+            await rename(backup, check.target);
+            changedTarget = check.target;
+            throw new Error('A Frigg skill changed during installation.');
+          }
+        }
         await rename(staged.get(check.target)!, check.target);
         transaction.didPromote = true;
         managedPaths.push(check.target);
@@ -418,6 +438,16 @@ export async function installSkills(
         if (transaction.backup) await rename(transaction.backup, transaction.target).catch(() => undefined);
       }
       for (const temporary of staged.values()) await rm(temporary, { recursive: true, force: true }).catch(() => undefined);
+      if (changedTarget) {
+        return {
+          status: resourceStatus(
+            AGENT_RESOURCE_STATE.conflict,
+            false,
+            [changedTarget],
+            'A Frigg skill changed while the update was being prepared. Review that skill and retry the installation.',
+          ),
+        };
+      }
       throw new Error('Unable to promote Frigg skill directories.');
     }
     const installedNames = new Set(managedPaths.map((installedPath) => path.basename(installedPath)));

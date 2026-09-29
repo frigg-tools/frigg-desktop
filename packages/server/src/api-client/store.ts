@@ -295,24 +295,30 @@ export class ApiClientStore extends EventEmitter {
     this.commit();
   }
 
-  createRequest(workspaceId: string, folderId: string | null): ApiRequest {
+  createRequest(
+    workspaceId: string,
+    folderId: string | null,
+    fields: Partial<Omit<ApiRequestInput, 'workspaceId' | 'folderId'>> = {},
+  ): ApiRequest {
     this.requireWorkspace(workspaceId);
     if (folderId !== null) {
       this.requireFolderInWorkspace(folderId, workspaceId);
     }
     const now = Date.now();
+    const clonedFields = structuredClone(fields);
     const request: ApiRequest = {
+      ...clonedFields,
       id: randomUUID(),
       workspaceId,
       folderId,
-      name: 'New request',
-      method: 'GET',
-      url: '',
-      query: [],
-      headers: [],
-      body: emptyBody(),
-      preScript: '',
-      testScript: '',
+      name: clonedFields.name ?? 'New request',
+      method: clonedFields.method ?? 'GET',
+      url: clonedFields.url ?? '',
+      query: clonedFields.query ?? [],
+      headers: clonedFields.headers ?? [],
+      body: clonedFields.body ?? emptyBody(),
+      preScript: clonedFields.preScript ?? '',
+      testScript: clonedFields.testScript ?? '',
       createdAt: now,
       updatedAt: now,
     };

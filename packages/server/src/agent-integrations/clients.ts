@@ -460,60 +460,6 @@ async function writeCursorEntry(
   }
 }
 
-interface ConfigFileSnapshot {
-  bytes: Buffer | null;
-  mode: number | null;
-}
-
-async function captureConfigFile(file: string): Promise<ConfigFileSnapshot> {
-  try {
-    const metadata = await lstat(file);
-    if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('Unsupported client config file.');
-    return { bytes: await readFile(file), mode: metadata.mode & 0o777 };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { bytes: null, mode: null };
-    throw new Error('Unable to snapshot the client MCP configuration.');
-  }
-}
-
-function sameConfigSnapshot(left: ConfigFileSnapshot, right: ConfigFileSnapshot): boolean {
-  if (left.mode !== right.mode) return false;
-  if (left.bytes === null || right.bytes === null) return left.bytes === right.bytes;
-  return left.bytes.equals(right.bytes);
-}
-
-async function restoreConfigFileIfUnchanged(
-  file: string,
-  afterRemoval: ConfigFileSnapshot,
-  original: ConfigFileSnapshot,
-): Promise<boolean> {
-  const current = await captureConfigFile(file);
-  if (!sameConfigSnapshot(current, afterRemoval)) return false;
-  if (original.bytes === null) {
-    return current.bytes === null;
-  }
-
-  const directory = path.dirname(file);
-  const mode = original.mode ?? 0o600;
-  const temporary = `${file}.${process.pid}.${randomUUID()}.restore`;
-  let handle: Awaited<ReturnType<typeof open>> | undefined;
-  try {
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    handle = await open(temporary, 'wx', mode);
-    await handle.chmod(mode);
-    await handle.writeFile(original.bytes);
-    await handle.sync();
-    await handle.close();
-    handle = undefined;
-    await rename(temporary, file);
-    return true;
-  } catch {
-    await handle?.close().catch(() => undefined);
-    await rm(temporary, { force: true }).catch(() => undefined);
-    return false;
-  }
-}
-
 async function runClientInstall(
   client: typeof AGENT_CLIENT.codex | typeof AGENT_CLIENT.claudeCode,
   homeDir: string,
@@ -546,64 +492,25 @@ async function runClientInstall(
         '--', input.command, ...input.args,
       ];
 
-  let originalConfig: ConfigFileSnapshot | undefined;
-  let afterRemoval: ConfigFileSnapshot | undefined;
   if (current.state === AGENT_RESOURCE_STATE.installed || observed.entry) {
-    const configPath = current.paths[0] ?? pathsForMcp(client, homeDir)[0];
-    try {
-      originalConfig = await captureConfigFile(configPath);
-    } catch {
-      return resourceStatus(AGENT_RESOURCE_STATE.error, false, [configPath], 'Unable to safely snapshot the existing MCP configuration before update.');
-    }
-
     const removed = await run(cli.command, [...cli.prefixArgs, ...removeArgs]);
     if (!removed.ok) {
-      return resourceStatus(AGENT_RESOURCE_STATE.error, current.managed, current.paths, `Unable to update the ${client} Frigg MCP entry.`);
-    }
-    try {
-      afterRemoval = await captureConfigFile(configPath);
-    } catch {
-      let restoredMissingFile = false;
-      if (originalConfig.bytes !== null) {
-        try {
-          restoredMissingFile = await restoreConfigFileIfUnchanged(
-            configPath,
-            { bytes: null, mode: null },
-            originalConfig,
-          );
-        } catch {
-          restoredMissingFile = false;
-        }
-      }
       return resourceStatus(
         AGENT_RESOURCE_STATE.error,
-        false,
-        [configPath],
-        restoredMissingFile
-          ? 'The previous configuration was restored after the config file disappeared. Check the client configuration before retrying.'
-          : 'The existing MCP entry was removed, but Frigg could not verify the client configuration before adding the replacement. Check the client configuration before retrying.',
+        current.managed,
+        current.paths,
+        `Unable to remove the existing Frigg MCP entry from ${client}. Check the client's MCP configuration before retrying.`,
       );
     }
   }
 
   const added = await run(cli.command, [...cli.prefixArgs, ...addArgs]);
   if (!added.ok) {
-    const configPath = current.paths[0] ?? pathsForMcp(client, homeDir)[0];
-    let restored = false;
-    if (originalConfig && afterRemoval) {
-      try {
-        restored = await restoreConfigFileIfUnchanged(configPath, afterRemoval, originalConfig);
-      } catch {
-        restored = false;
-      }
-    }
     return resourceStatus(
       AGENT_RESOURCE_STATE.error,
       false,
       current.paths,
-      restored
-        ? `Unable to install Frigg MCP in ${client}; the previous configuration was restored.`
-        : `Unable to install Frigg MCP in ${client}. Check the client's MCP configuration before retrying.`,
+      `Unable to install Frigg MCP in ${client}. Check the client's MCP configuration and run setup again if the Frigg entry is missing.`,
     );
   }
   return resourceStatus(AGENT_RESOURCE_STATE.installed, true, current.paths);

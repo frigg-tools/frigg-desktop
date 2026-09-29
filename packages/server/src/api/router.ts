@@ -1257,7 +1257,9 @@ export function buildRouter(deps: ApiDeps): Router {
     const record = asRecord(req.body, 'request');
     const workspaceId = parseNonEmpty(record.workspaceId, 'workspaceId');
     const folderId = parseParentId(record.folderId);
-    const request = deps.apiClient.createRequest(workspaceId, folderId);
+    const fields = parseRequestPatch(record);
+    delete fields.folderId;
+    const request = deps.apiClient.createRequest(workspaceId, folderId, fields);
     res.json({ snapshot: deps.apiClient.snapshot(), id: request.id });
   });
 

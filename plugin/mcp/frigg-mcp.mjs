@@ -31908,30 +31908,26 @@ server.tool(
   },
   async ({ workspaceId, folderId, name, method, url: url2, query, headers, body, preScript, testScript }) => {
     try {
-      const created = await post("/api/client/requests", {
-        workspaceId,
-        folderId: folderId ?? null
-      });
-      const patch = {};
-      if (name !== void 0) patch.name = name;
-      if (method !== void 0) patch.method = method;
-      if (url2 !== void 0) patch.url = url2;
-      if (query !== void 0) patch.query = query.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
-      if (headers !== void 0) patch.headers = headers.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
+      const fields = {};
+      if (name !== void 0) fields.name = name;
+      if (method !== void 0) fields.method = method;
+      if (url2 !== void 0) fields.url = url2;
+      if (query !== void 0) fields.query = query.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
+      if (headers !== void 0) fields.headers = headers.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
       if (body !== void 0) {
-        patch.body = {
+        fields.body = {
           mode: body.mode ?? "none",
           raw: body.raw ?? "",
           form: (body.form ?? []).map((kv) => ({ ...kv, enabled: kv.enabled ?? true }))
         };
       }
-      if (preScript !== void 0) patch.preScript = preScript;
-      if (testScript !== void 0) patch.testScript = testScript;
-      if (Object.keys(patch).length > 0) {
-        const snapshot = await put(`/api/client/requests/${created.id}`, patch);
-        const request3 = snapshot.requests.find((r) => r.id === created.id);
-        return ok2(request3);
-      }
+      if (preScript !== void 0) fields.preScript = preScript;
+      if (testScript !== void 0) fields.testScript = testScript;
+      const created = await post("/api/client/requests", {
+        workspaceId,
+        folderId: folderId ?? null,
+        ...fields
+      });
       const request2 = created.snapshot.requests.find((r) => r.id === created.id);
       return ok2(request2);
     } catch (e) {
