@@ -29,7 +29,7 @@ Frigg is free and open source, with an English and Brazilian Portuguese interfac
 
 - **SQL** — connect to MySQL, MariaDB, PostgreSQL, or SQLite; browse and edit tables, and run queries with schema-aware autocomplete.
 - **Frida** — install frida-server, run scripts against apps on rooted Android emulators, and stream output. Frigg can list, boot, and create rooted AVDs.
-- **MCP and Claude Code** — connect agents to Frigg through 51 MCP tools and the Frigg Claude Code plugin.
+- **MCP and AI skills** — connect Codex, Claude Code, and Cursor to Frigg through 52 MCP tools and reusable API Client and traffic inspection skills.
 
 ## Platform support
 
@@ -106,7 +106,15 @@ Boot a simulator, then use **Devices → iOS Simulator → Install CA cert**. Si
 
 Open the setup page at <code>http://&lt;your-lan-ip&gt;:4848/setup</code> on the phone. Keep the phone and Mac on the same Wi-Fi network, set the phone's Wi-Fi proxy to <code>&lt;your-lan-ip&gt;:8888</code>, download the Frigg CA from the page, and trust it in the device's security settings. On iOS, install the profile and enable full trust under **Certificate Trust Settings**.
 
-## Claude Code and MCP
+## AI clients, MCP, and skills
+
+Open **MCP** in Frigg to install the local MCP server and Frigg skills globally for your user account in Codex, Claude Code, and Cursor. The screen shows each resource separately, detects existing configuration conflicts, and provides an explicit replace action. Reload or restart the AI client after setup.
+
+The `frigg-api-client` skill guides the assistant through creating workspaces, collections, requests, and environments. The `frigg-traffic-inspector` skill explains how to find an exchange and retrieve its bounded request/response details. The skills are portable across the three clients; the Claude Code plugin remains available for its additional Claude-specific workflows.
+
+The MCP screen also keeps manual setup details for other clients. Frigg stores its per-user integration ownership record in <code>~/.frigg/agent-integrations.json</code>.
+
+### Claude Code plugin
 
 Install the Frigg plugin in Claude Code:
 
@@ -115,7 +123,7 @@ Install the Frigg plugin in Claude Code:
 /plugin install frigg@frigg-tools
 ~~~
 
-With Frigg running on port <code>:4848</code>, the plugin can check status, inspect captured traffic, create mocks, run saved API-client requests, and guide setup. Set <code>FRIGG_API_URL</code> when Frigg uses a custom port. After changing MCP source, rebuild the bundled server with <code>npm run build:plugin</code>.
+With Frigg running, the plugin can check status, inspect captured traffic, create mocks, run saved API-client requests, and guide setup. The MCP installed from Frigg uses the active API port automatically. After changing MCP source, rebuild the bundled server with <code>npm run build:plugin</code>.
 
 ## Data and local files
 

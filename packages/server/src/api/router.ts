@@ -58,7 +58,6 @@ import {
   xcrunStatus,
 } from '../devices/ios.ts';
 import { getMacProxyState, setMacProxy } from '../devices/macos-proxy.ts';
-import { run } from '../lib/exec.ts';
 import { mcpServerInfo } from './mcp-info.ts';
 import type { DbInspector } from '../db/index.ts';
 import type { FridaManager } from '../frida/index.ts';
@@ -72,6 +71,8 @@ import type { ProxyCertStore } from '../proxy/proxy-cert-store.ts';
 import type { TrafficStore } from '../proxy/traffic-store.ts';
 import { setupPageHtml } from './setup-page.ts';
 import { buildAutomationRouter, type AutomationRouterOptions } from '../automation/router.ts';
+import { buildAgentIntegrationRouter } from '../agent-integrations/router.ts';
+import type { AgentIntegrationService } from '../agent-integrations/service.ts';
 
 export interface ApiDeps {
   traffic: TrafficStore;
@@ -91,6 +92,8 @@ export interface ApiDeps {
   certTrust: CertTrustTracker;
   androidProxyRegistry: AndroidProxyRegistry;
   reloadProxy: () => Promise<void>;
+  agentIntegrations?: AgentIntegrationService;
+  configuredUiPort?: number;
   automation?: Omit<AutomationRouterOptions, 'apiPort'>;
 }
 
@@ -665,6 +668,13 @@ export function buildRouter(deps: ApiDeps): Router {
 
   if (deps.automation) {
     router.use(buildAutomationRouter({ ...deps.automation, apiPort: () => deps.apiPort }));
+  }
+  if (deps.agentIntegrations) {
+    router.use(buildAgentIntegrationRouter({
+      service: deps.agentIntegrations,
+      apiPort: () => deps.apiPort,
+      configuredUiPort: deps.configuredUiPort ?? 5173,
+    }));
   }
 
   router.get('/api/status', (_req, res) => {
@@ -1338,39 +1348,6 @@ export function buildRouter(deps: ApiDeps): Router {
   router.get('/api/mcp/info', (_req, res) => {
     res.json(mcpServerInfo(deps.apiPort));
   });
-
-  router.post(
-    '/api/mcp/install/claude-code',
-    asyncHandler(async (_req, res) => {
-      const info = mcpServerInfo(deps.apiPort);
-      if (!info.available) {
-        res.json({ ok: false, message: 'The Frigg MCP server entry could not be located.' });
-        return;
-      }
-      const envArgs = Object.entries(info.env).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
-      const result = await run('claude', [
-        'mcp',
-        'add',
-        'frigg',
-        ...envArgs,
-        '--',
-        info.command,
-        ...info.args,
-      ]);
-      if (result.ok) {
-        res.json({ ok: true, message: 'Added the Frigg MCP server to Claude Code.' });
-        return;
-      }
-      const detail = result.stderr.trim() || result.stdout.trim();
-      res.json({
-        ok: false,
-        message:
-          result.code === null
-            ? 'The Claude Code CLI (claude) was not found on PATH.'
-            : detail || `claude mcp add failed (exit ${result.code}).`,
-      });
-    }),
-  );
 
   router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const status = statusForError(error);

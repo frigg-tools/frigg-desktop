@@ -1,7 +1,7 @@
 # Instalação de MCP e skills em agentes de IA — proposta de design
 
 - Data: 2026-09-28
-- Status: aguardando revisão da especificação
+- Status: aprovado pelo usuário em 2026-09-28 para elaboração do plano de implementação
 - Branch: `codex/frigg-ai-skills`
 - Base: `origin/main` em `9549302880776bcd7662528fcfd31dc84fcef3a6`.
 
@@ -31,7 +31,8 @@ A primeira abordagem atende o resultado pedido e reutiliza o instalador Claude C
 ## 3. Experiência na tela MCP
 
 - Mostrar cartões para **Codex**, **Claude Code** e **Cursor**, cada um com o estado do MCP e das skills.
-- Disponibilizar ações independentes para instalar/atualizar o MCP e as skills do Frigg. Isso permite corrigir uma instalação sem alterar a outra.
+- Listar cada skill em cada cliente, com a versão instalada, a versão disponível e ações individuais para instalar ou atualizar.
+- Disponibilizar ações independentes para instalar/atualizar o MCP e cada skill do Frigg. Isso permite corrigir uma instalação sem alterar a outra.
 - Mostrar resultado por recurso: instalado, já atualizado, atualizado, cliente ausente, configuração inválida ou erro recuperável com orientação.
 - Instalação global é explícita e limitada ao usuário atual. A tela informa quando o cliente precisa reiniciar ou recarregar para descobrir as alterações.
 - O status deve considerar arquivos que já configuram o Frigg; não presumir ausência só porque foram instalados fora do Frigg.
@@ -41,7 +42,7 @@ No estado atual, a tela tem instalação de MCP com um clique apenas para Claude
 
 ## 4. Distribuição e instalação das skills
 
-As skills serão diretórios portáteis com `SKILL.md`, nome, descrição e instruções de fluxo. Uma fonte canônica no repositório abastece o plugin Claude existente e os arquivos enviados aos diretórios globais dos clientes. As skills não devem conter caminhos locais fixos nem assumir que o Frigg usa a porta padrão; devem usar o MCP conectado e consultar `frigg_status` quando precisarem validar disponibilidade.
+As skills serão diretórios portáteis com `SKILL.md`, nome, descrição, instruções de fluxo e `VERSION` em formato `MAJOR.MINOR.PATCH`. Cada capacidade MCP nova precisa de uma skill dedicada, conforme [`docs/development/mcp-skills.md`](../../development/mcp-skills.md). Uma fonte canônica no repositório abastece o plugin Claude existente e os arquivos enviados aos diretórios globais dos clientes. As skills não devem conter caminhos locais fixos nem assumir que o Frigg usa a porta padrão; devem usar o MCP conectado e consultar `frigg_status` quando precisarem validar disponibilidade.
 
 Os diretórios globais documentados são:
 

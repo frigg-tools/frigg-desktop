@@ -1,6 +1,9 @@
 import type {
   AndroidCertMode,
   AndroidSetupResult,
+  AgentClientId,
+  AgentIntegrationActionResult,
+  AgentIntegrationSnapshot,
   AppLogEntry,
   Avd,
   AvdCreateResult,
@@ -58,6 +61,17 @@ async function readError(res: Response): Promise<string> {
   return fallback;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isAgentIntegrationActionResult(value: unknown): value is AgentIntegrationActionResult {
+  if (!isRecord(value) || typeof value.ok !== 'boolean' || typeof value.client !== 'string' ||
+      (value.resource !== 'mcp' && value.resource !== 'skills') || typeof value.message !== 'string' ||
+      !isRecord(value.status)) return false;
+  return value.status.client === value.client && isRecord(value.status.mcp) && isRecord(value.status.skills);
+}
+
 function currentLocale(): string {
   try {
     const stored = localStorage.getItem('frigg-locale');
@@ -76,6 +90,29 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(await readError(res));
   }
   return (await res.json()) as T;
+}
+
+async function requestAgentAction(path: string, client: AgentClientId, replaceConflict: boolean): Promise<AgentIntegrationActionResult> {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  headers.set('X-Frigg-Locale', currentLocale());
+  const res = await fetch(path, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ replaceConflict }),
+  });
+  const fallback = `${res.status} ${res.statusText}`.trim();
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    if (!res.ok) throw new Error(fallback);
+    throw new Error('Invalid AI client setup response.');
+  }
+  if (isAgentIntegrationActionResult(data)) return data;
+  if (!res.ok) {
+    throw new Error(isRecord(data) && typeof data.error === 'string' ? data.error : fallback);
+  }
+  throw new Error('Invalid AI client setup response.');
 }
 
 export async function requestBlob(path: string): Promise<{ blob: Blob; headers: Headers }> {
@@ -349,6 +386,38 @@ export function getMcpInfo(): Promise<McpServerInfo> {
   return request('/api/mcp/info');
 }
 
+export function getAgentIntegrations(): Promise<AgentIntegrationSnapshot> {
+  return request('/api/agent-integrations');
+}
+
+export function installAgentMcp(client: AgentClientId, replaceConflict = false): Promise<AgentIntegrationActionResult> {
+  return requestAgentAction(
+    `/api/agent-integrations/${encodeURIComponent(client)}/mcp/install`,
+    client,
+    replaceConflict,
+  );
+}
+
+export function installAgentSkills(client: AgentClientId, replaceConflict = false): Promise<AgentIntegrationActionResult> {
+  return requestAgentAction(
+    `/api/agent-integrations/${encodeURIComponent(client)}/skills/install`,
+    client,
+    replaceConflict,
+  );
+}
+
+export function installAgentSkill(
+  client: AgentClientId,
+  skillName: string,
+  replaceConflict = false,
+): Promise<AgentIntegrationActionResult> {
+  return requestAgentAction(
+    `/api/agent-integrations/${encodeURIComponent(client)}/skills/${encodeURIComponent(skillName)}/install`,
+    client,
+    replaceConflict,
+  );
+}
+
 export function getBreakpoints(): Promise<BreakpointsSnapshot> {
   return request('/api/breakpoints');
 }
@@ -376,10 +445,6 @@ export function deleteBreakpointRule(id: string): Promise<BreakpointsSnapshot> {
 
 export function resumeBreakpoint(id: string, resume: BreakpointResume): Promise<{ ok: true }> {
   return request(`/api/breakpoints/${encodeURIComponent(id)}/resume`, jsonInit('POST', resume));
-}
-
-export function installMcpClaudeCode(): Promise<{ ok: boolean; message: string }> {
-  return request('/api/mcp/install/claude-code', { method: 'POST' });
 }
 
 export function getProxyCerts(): Promise<ProxyCertsSnapshot> {

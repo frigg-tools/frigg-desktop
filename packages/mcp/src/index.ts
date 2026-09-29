@@ -8,10 +8,10 @@ import type {
   MockRule,
   MocksSnapshot,
   ProxyStatus,
-  TrafficExchange,
 } from '@frigg/shared';
 import { del, get, post, put } from './frigg-api.ts';
 import { registerAutomationTools } from './automation.ts';
+import { registerTrafficTools } from './traffic.ts';
 
 function ok(value: unknown): { content: [{ type: 'text'; text: string }] } {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
@@ -25,6 +25,7 @@ function err(e: unknown): { content: [{ type: 'text'; text: string }]; isError: 
 const server = new McpServer({ name: 'frigg', version: '0.1.0' });
 
 registerAutomationTools(server);
+registerTrafficTools(server);
 
 server.tool('frigg_status', 'Get Frigg proxy status (ports, LAN IP, cert fingerprint, exchange count)', async () => {
   try {
@@ -33,37 +34,6 @@ server.tool('frigg_status', 'Get Frigg proxy status (ports, LAN IP, cert fingerp
     return err(e);
   }
 });
-
-server.tool(
-  'frigg_list_traffic',
-  'List captured HTTP traffic exchanges. Optionally filter by limit and/or a substring of the host.',
-  {
-    limit: z.number().int().positive().optional().describe('Maximum number of most-recent exchanges to return'),
-    hostContains: z.string().optional().describe('Return only exchanges whose host contains this substring'),
-  },
-  async ({ limit, hostContains }) => {
-    try {
-      let exchanges = await get<TrafficExchange[]>('/api/traffic');
-      if (hostContains) {
-        exchanges = exchanges.filter((ex) => ex.request.host.includes(hostContains));
-      }
-      if (limit !== undefined) {
-        exchanges = exchanges.slice(-limit);
-      }
-      const summary = exchanges.map((ex) => ({
-        id: ex.id,
-        method: ex.request.method,
-        url: ex.request.url,
-        status: ex.response?.statusCode ?? null,
-        durationMs: ex.response?.durationMs ?? null,
-        mocked: ex.response?.mockRuleId !== undefined,
-      }));
-      return ok(summary);
-    } catch (e) {
-      return err(e);
-    }
-  },
-);
 
 server.tool('frigg_clear_traffic', 'Delete all captured traffic exchanges', async () => {
   try {

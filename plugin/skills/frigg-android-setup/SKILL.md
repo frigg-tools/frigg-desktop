@@ -11,7 +11,7 @@ Work top-to-bottom. Don't skip the variant question or the scoping — leaking d
 
 ## 1. Confirm Frigg is running and locate the project
 
-- Verify Frigg is reachable: `frigg_status` (MCP) or `curl -fsS http://localhost:4848/api/status`. If it fails, tell the user to start the Frigg app / `npm run dev` and stop.
+- Verify Frigg is reachable with `frigg_status`. Use the `apiPort` it returns if a direct HTTP call is needed; never assume a default port. If it fails, tell the user to start Frigg and stop.
 - Find the Android app module: the `build.gradle`/`build.gradle.kts` with an `android { }` block (usually `app/`). iOS-only repo → jump to the **iOS** section.
 
 ## 2. Detect the variants
@@ -25,16 +25,16 @@ Read the app module's gradle file and collect `buildTypes` (always at least `deb
 
 ## 3. Ask the user where interception should be active
 
-Use AskUserQuestion (multi-select). Offer the detected variants, `debug` pre-selected and recommended. State plainly: only the chosen variants trust the Frigg CA; release/production stays untouched. Map the answer to the most specific source-set name they mean (e.g. "QA debug only" → `qaDebug`).
+Ask the user which detected variants should trust the Frigg CA, recommending `debug` and offering multi-select when available. State plainly: only the chosen variants trust the Frigg CA; release/production stays untouched. Map the answer to the most specific source-set name they mean (e.g. "QA debug only" → `qaDebug`). Do not edit files until the user chooses the variants.
 
 ## 4. Pull the Frigg CA into each chosen source set
 
 For every chosen source-set `<name>`:
 ```bash
 mkdir -p app/src/<name>/res/raw
-curl -fsS http://localhost:4848/cert.crt -o app/src/<name>/res/raw/frigg_ca.crt || { echo "could not fetch Frigg CA — is Frigg running?"; exit 1; }
+curl -fsS "http://127.0.0.1:${API_PORT}/cert.crt" -o app/src/<name>/res/raw/frigg_ca.crt || { echo "could not fetch Frigg CA — is Frigg running?"; exit 1; }
 ```
-(Use the actual API port if Frigg runs on a custom one.) Notes:
+(Set `API_PORT` to the `apiPort` returned by `frigg_status` before running the command.) Notes:
 - The raw resource id is the filename without extension → `@raw/frigg_ca`. `.crt` is fine.
 - It must be a **single** CA certificate (PEM or DER), not a chain/bundle — `/cert.crt` serves exactly the Frigg root, which is what you want.
 - **Gitignore it.** The CA is per-machine and is regenerated if `~/.frigg` is reset; a committed cert makes teammates' apps trust the wrong CA and interception fails silently. Add the paths (e.g. `app/src/debug/res/raw/frigg_ca.crt`) to `.gitignore`.
