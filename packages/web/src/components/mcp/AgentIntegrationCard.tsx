@@ -47,10 +47,7 @@ export function integrationActionFeedback(
     };
   }
   const failed = result.status[result.resource];
-  if (/previous configuration was restored/i.test(result.message)) {
-    return { ok: false, message: t('mcp.integrations.updateFailedRestored') };
-  }
-  if (/existing MCP entry was removed|check the client's MCP configuration/i.test(result.message)) {
+  if (/check the client's MCP configuration/i.test(result.message)) {
     return { ok: false, message: t('mcp.integrations.updateFailedCheckConfig') };
   }
   return { ok: false, message: integrationStatusMessage(failed, t) ?? t('mcp.integrations.actionError') };
