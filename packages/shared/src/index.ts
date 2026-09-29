@@ -568,3 +568,4 @@ export const TRAFFIC_BUFFER_LIMIT = 1000;
 export const BODY_CAPTURE_LIMIT = 262144;
 export const FRIDA_MESSAGE_BUFFER_LIMIT = 2000;
 export * from './automation.ts';
+export * from './agent-integrations.ts';

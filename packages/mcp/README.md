@@ -13,17 +13,34 @@ Override with the `FRIGG_API_URL` environment variable.
 npm start
 ```
 
-## Adding to Claude
+## Setup from Frigg
 
-### Option 1 — `claude mcp add`
+In the desktop app, open **MCP** and install the server and skills for Codex, Claude Code, or Cursor. Setup is user-global, uses Frigg's active API port and bundled MCP entrypoint, and asks before replacing an existing `frigg` entry or skill folder. Reload the client after installation.
+
+Frigg installs two portable skills alongside the MCP server:
+
+- `frigg-api-client`: create workspaces, collections, requests, and environments, then run saved or inline requests.
+- `frigg-traffic-inspector`: find a captured exchange and retrieve its bounded request/response details.
+
+## Manual setup
+
+Build the packaged MCP entry from the repository root with `npm run build:plugin`. Replace `<path-to-frigg-mcp.mjs>` below with its absolute path. Keep the `FRIGG_API_URL` port aligned with the running Frigg API.
+
+### Codex
 
 ```bash
-claude mcp add frigg -e FRIGG_API_URL=http://localhost:4848 -- npx tsx /Users/guilherme/Desktop/Projetos/frigg-tools/packages/mcp/src/index.ts
+codex mcp add frigg --env FRIGG_API_URL=http://localhost:4848 -- node <path-to-frigg-mcp.mjs>
 ```
 
-### Option 2 — JSON config snippet
+### Claude Code
 
-Add to your Claude MCP config (`~/.claude/mcp.json` or equivalent):
+```bash
+claude mcp add --env FRIGG_API_URL=http://localhost:4848 --transport stdio --scope user frigg -- node <path-to-frigg-mcp.mjs>
+```
+
+### Cursor
+
+Merge this server into `~/.cursor/mcp.json` without removing other entries:
 
 ```json
 {
@@ -32,7 +49,7 @@ Add to your Claude MCP config (`~/.claude/mcp.json` or equivalent):
       "command": "npx",
       "args": [
         "tsx",
-        "/Users/guilherme/Desktop/Projetos/frigg-tools/packages/mcp/src/index.ts"
+        "<path-to-frigg-mcp.mjs>"
       ],
       "env": {
         "FRIGG_API_URL": "http://localhost:4848"
@@ -42,6 +59,18 @@ Add to your Claude MCP config (`~/.claude/mcp.json` or equivalent):
 }
 ```
 
+### Skills
+
+Copy the desired skill directories from `plugin/skills/` into the client-specific user skills directory:
+
+| Client | User skills directory |
+| --- | --- |
+| Codex | `~/.agents/skills/` |
+| Claude Code | `~/.claude/skills/` |
+| Cursor | `~/.cursor/skills/` |
+
+Restart or reload the client to discover newly installed skills.
+
 ## Tools
 
 ### Traffic
@@ -50,7 +79,10 @@ Add to your Claude MCP config (`~/.claude/mcp.json` or equivalent):
 |------|-------------|
 | `frigg_status` | Proxy status: ports, LAN IP, cert fingerprint, exchange count |
 | `frigg_list_traffic` | List captured HTTP exchanges (optional `limit`, `hostContains` filter) |
+| `frigg_get_traffic_detail` | Read one exchange by ID, returning full metadata and request/response bodies capped independently at 65,536 bytes by default (262,144 maximum); preserves original size, encoding, and truncation state |
 | `frigg_clear_traffic` | Delete all captured traffic |
+
+`frigg_get_traffic_detail` is read-only. It accepts only an ID from the traffic list and an optional `maxBodyBytes`; it does not return other exchanges or clear traffic. Bodies shortened by the response cap are marked `truncated` while retaining their original byte size and encoding.
 
 ### Mocks
 

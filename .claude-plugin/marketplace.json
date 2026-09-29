@@ -8,7 +8,7 @@
     {
       "name": "frigg",
       "source": "./plugin",
-      "description": "Intercept, inspect and mock mobile HTTP(S) traffic from Claude via the Frigg MCP server, with /frigg slash commands and a debugging skill. Requires a running Frigg server on http://localhost:4848."
+      "description": "Use Frigg MCP and reusable Agent Skills for API Client workspaces and requests, captured traffic inspection, mobile debugging, and Android/iOS interception setup. Requires a running Frigg server with its API URL configured in the client."
     }
   ]
 }

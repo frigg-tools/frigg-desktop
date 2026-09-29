@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpServerInfo } from '@frigg/shared';
 
-const MCP_TOOL_COUNT = 21;
+const MCP_TOOL_COUNT = 52;
 
 function packagedEntry(): string | null {
   const resources = (process as { resourcesPath?: string }).resourcesPath;
@@ -16,6 +16,20 @@ function devEntry(): string | null {
   try {
     const candidate = fileURLToPath(new URL('../../../mcp/src/index.ts', import.meta.url));
     return existsSync(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+export function agentSkillsSource(): string | null {
+  const resources = (process as { resourcesPath?: string }).resourcesPath;
+  if (resources) {
+    const packaged = path.join(resources, 'skills');
+    if (existsSync(packaged)) return packaged;
+  }
+  try {
+    const development = fileURLToPath(new URL('../../../../plugin/skills', import.meta.url));
+    return existsSync(development) ? development : null;
   } catch {
     return null;
   }

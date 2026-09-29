@@ -1,12 +1,32 @@
 import { useEffect, useState } from 'react';
-import type { McpServerInfo } from '@frigg/shared';
+import {
+  AGENT_CLIENT,
+  AGENT_RESOURCE,
+  AGENT_RESOURCE_STATE,
+  type AgentClientId,
+  type AgentIntegrationActionResult,
+  type AgentIntegrationSnapshot,
+  type AgentResourceId,
+  type McpServerInfo,
+} from '@frigg/shared';
 import { useT } from '../i18n';
 import * as api from '../api/client';
 import CopyButton from '../components/devices/CopyButton';
+import AgentIntegrationCard, {
+  integrationActionFeedback,
+  type AgentActionFeedback,
+} from '../components/mcp/AgentIntegrationCard';
+
+const CLIENT_ORDER: AgentClientId[] = [AGENT_CLIENT.codex, AGENT_CLIENT.claudeCode, AGENT_CLIENT.cursor];
 
 function claudeCodeCommand(info: McpServerInfo): string {
-  const envFlags = Object.entries(info.env).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
-  return ['claude mcp add frigg', ...envFlags, '--', info.command, ...info.args].join(' ');
+  const envFlags = Object.entries(info.env).flatMap(([key, value]) => ['--env', `${key}=${value}`]);
+  return ['claude mcp add', ...envFlags, '--transport', 'stdio', '--scope', 'user', 'frigg', '--', info.command, ...info.args].join(' ');
+}
+
+function needsInstall(state: string, updateAvailable = false, message?: string): boolean {
+  return state === AGENT_RESOURCE_STATE.missing
+    || (state === AGENT_RESOURCE_STATE.installed && (updateAvailable || Boolean(message?.toLowerCase().includes('update'))));
 }
 
 function jsonConfig(info: McpServerInfo): string {
@@ -51,27 +71,150 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 export default function McpScreen() {
   const t = useT();
   const [info, setInfo] = useState<McpServerInfo | null>(null);
-  const [installing, setInstalling] = useState(false);
-  const [installResult, setInstallResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [integrations, setIntegrations] = useState<AgentIntegrationSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ client: AgentClientId; resource: AgentResourceId | 'all'; skillName?: string } | null>(null);
+  const [feedback, setFeedback] = useState<Partial<Record<AgentClientId, Partial<Record<AgentResourceId, AgentActionFeedback>>>>>({});
+
+  const refreshIntegrations = async () => {
+    try {
+      setIntegrations(await api.getAgentIntegrations());
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : t('mcp.integrations.loadError'));
+    }
+  };
 
   useEffect(() => {
-    void api
-      .getMcpInfo()
-      .then(setInfo)
-      .catch(() => setInfo(null));
-  }, []);
+    let active = true;
+    setLoading(true);
+    void Promise.allSettled([api.getMcpInfo(), api.getAgentIntegrations()]).then(([mcpResult, integrationResult]) => {
+      if (!active) return;
+      if (mcpResult.status === 'fulfilled') setInfo(mcpResult.value);
+      else setLoadError(mcpResult.reason instanceof Error ? mcpResult.reason.message : t('mcp.integrations.loadError'));
+      if (integrationResult.status === 'fulfilled') setIntegrations(integrationResult.value);
+      else setLoadError(integrationResult.reason instanceof Error ? integrationResult.reason.message : t('mcp.integrations.loadError'));
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [t]);
 
-  const install = () => {
-    setInstalling(true);
-    setInstallResult(null);
-    void api
-      .installMcpClaudeCode()
-      .then(setInstallResult)
-      .catch((error: unknown) =>
-        setInstallResult({ ok: false, message: error instanceof Error ? error.message : 'Failed' }),
-      )
-      .finally(() => setInstalling(false));
+  const install = async (
+    client: AgentClientId,
+    resource: AgentResourceId,
+    replaceConflict: boolean,
+    skillName?: string,
+  ) => {
+    setPending({ client, resource, ...(skillName ? { skillName } : {}) });
+    setFeedback((previous) => ({
+      ...previous,
+      [client]: { ...previous[client], [resource]: undefined },
+    }));
+    try {
+      const result = resource === AGENT_RESOURCE.mcp
+        ? await api.installAgentMcp(client, replaceConflict)
+        : skillName
+          ? await api.installAgentSkill(client, skillName, replaceConflict)
+          : await api.installAgentSkills(client, replaceConflict);
+      setFeedback((previous) => ({
+        ...previous,
+        [client]: { ...previous[client], [resource]: integrationActionFeedback(result, t) },
+      }));
+      await refreshIntegrations();
+    } catch {
+      setFeedback((previous) => ({
+        ...previous,
+        [client]: {
+          ...previous[client],
+          [resource]: { ok: false, message: t('mcp.integrations.actionError') },
+        },
+      }));
+      await refreshIntegrations();
+    } finally {
+      setPending(null);
+    }
   };
+
+  const installAll = async (client: AgentClientId) => {
+    const clientStatus = integrations?.clients.find((item) => item.client === client);
+    if (!clientStatus) return;
+
+    const installMcp = needsInstall(clientStatus.mcp.state, clientStatus.mcp.updateAvailable, clientStatus.mcp.message);
+    const skillsToInstall = clientStatus.skillDetails.filter((skill) => needsInstall(skill.state, skill.updateAvailable, skill.message));
+    if (!installMcp && skillsToInstall.length === 0) return;
+
+    setPending({ client, resource: 'all' });
+    setFeedback((previous) => ({
+      ...previous,
+      [client]: { ...previous[client], [AGENT_RESOURCE.mcp]: undefined, [AGENT_RESOURCE.skills]: undefined },
+    }));
+
+    let mcpFeedback: AgentActionFeedback | undefined;
+    let successfulSkills = 0;
+    let failedSkills = 0;
+    let firstSkillFailure: AgentIntegrationActionResult | null = null;
+    let skillRequestFailed = false;
+
+    if (installMcp) {
+      try {
+        const result = await api.installAgentMcp(client, false);
+        mcpFeedback = integrationActionFeedback(result, t);
+      } catch {
+        mcpFeedback = { ok: false, message: t('mcp.integrations.actionError') };
+      }
+    }
+
+    for (const skill of skillsToInstall) {
+      try {
+        const result = await api.installAgentSkill(client, skill.name, false);
+        if (result.ok) successfulSkills += 1;
+        else {
+          failedSkills += 1;
+          firstSkillFailure ??= result;
+        }
+      } catch {
+        failedSkills += 1;
+        skillRequestFailed = true;
+      }
+    }
+
+    let skillsFeedback: AgentActionFeedback | undefined;
+    if (skillsToInstall.length > 0) {
+      if (failedSkills === 0) {
+        skillsFeedback = { ok: true, message: t('mcp.integrations.skillsSuccess') };
+      } else if (successfulSkills > 0 || failedSkills > 1) {
+        skillsFeedback = {
+          ok: false,
+          message: t('mcp.integrations.bulkPartial', { installed: successfulSkills, failed: failedSkills }),
+        };
+      } else if (firstSkillFailure) {
+        skillsFeedback = integrationActionFeedback(firstSkillFailure, t);
+      } else if (skillRequestFailed) {
+        skillsFeedback = { ok: false, message: t('mcp.integrations.actionError') };
+      }
+    }
+
+    setFeedback((previous) => ({
+      ...previous,
+      [client]: {
+        ...previous[client],
+        ...(mcpFeedback ? { [AGENT_RESOURCE.mcp]: mcpFeedback } : {}),
+        ...(skillsFeedback ? { [AGENT_RESOURCE.skills]: skillsFeedback } : {}),
+      },
+    }));
+
+    try {
+      await refreshIntegrations();
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const orderedIntegrations = CLIENT_ORDER.flatMap((client) => {
+    const clientStatus = integrations?.clients.find((item) => item.client === client);
+    return clientStatus ? [clientStatus] : [];
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -83,9 +226,14 @@ export default function McpScreen() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5">
-          {info === null ? (
-            <p className="text-[13px] text-zinc-500">{t('mcp.loading')}</p>
-          ) : (
+          {loading ? <p className="text-[13px] text-zinc-500">{t('mcp.loading')}</p> : null}
+          {loadError ? (
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+              {loadError}
+            </p>
+          ) : null}
+
+          {info ? (
             <>
               <p className="text-[13px] leading-relaxed text-zinc-400">{t('mcp.intro')}</p>
 
@@ -95,6 +243,7 @@ export default function McpScreen() {
                   <CapabilityRow>{t('mcp.cap.mocks')}</CapabilityRow>
                   <CapabilityRow>{t('mcp.cap.devices')}</CapabilityRow>
                   <CapabilityRow>{t('mcp.cap.client')}</CapabilityRow>
+                  <CapabilityRow>{t('mcp.cap.skills')}</CapabilityRow>
                 </ul>
                 <p className="mt-3 text-[11px] text-zinc-600">
                   {t('mcp.requirement')}{' '}
@@ -107,59 +256,63 @@ export default function McpScreen() {
                 <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
                   {t('mcp.unavailable')}
                 </p>
-              ) : (
-                <>
-                  <Card title={t('mcp.claudeCode.title')}>
-                    <p className="mt-1 text-[12px] text-zinc-500">{t('mcp.claudeCode.desc')}</p>
-                    <div className="mt-3 flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={install}
-                        disabled={installing}
-                        className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/15 active:scale-[0.98] disabled:opacity-50"
-                      >
-                        {installing ? t('mcp.claudeCode.installing') : t('mcp.claudeCode.install')}
-                      </button>
-                      {installResult ? (
-                        <span
-                          className={`text-[12px] ${installResult.ok ? 'text-emerald-400' : 'text-rose-400'}`}
-                        >
-                          {installResult.message}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-3 text-[11px] text-zinc-600">{t('mcp.claudeCode.command')}</p>
-                    <div className="mt-1.5">
-                      <CodeBlock value={claudeCodeCommand(info)} />
-                    </div>
-                  </Card>
-
-                  <Card title={t('mcp.manual.title')}>
-                    <p className="mt-1 text-[12px] text-zinc-500">{t('mcp.manual.desc')}</p>
-                    <div className="mt-3">
-                      <CodeBlock value={jsonConfig(info)} />
-                    </div>
-                    <p className="mt-3 text-[11px] uppercase tracking-widest text-zinc-600">
-                      {t('mcp.manual.paths')}
-                    </p>
-                    <ul className="mt-1.5 space-y-1 font-mono text-[11px] text-zinc-500">
-                      <li>
-                        <span className="text-zinc-400">{t('mcp.path.claudeDesktop')}:</span>{' '}
-                        ~/Library/Application Support/Claude/claude_desktop_config.json
-                      </li>
-                      <li>
-                        <span className="text-zinc-400">{t('mcp.path.cursor')}:</span> ~/.cursor/mcp.json
-                      </li>
-                      <li>
-                        <span className="text-zinc-400">{t('mcp.path.windsurf')}:</span>{' '}
-                        ~/.codeium/windsurf/mcp_config.json
-                      </li>
-                    </ul>
-                  </Card>
-                </>
-              )}
+              ) : null}
             </>
-          )}
+          ) : null}
+
+          {orderedIntegrations.length > 0 ? (
+            <>
+              <div>
+                <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
+                  {t('mcp.integrations.title')}
+                </h2>
+                <div className="space-y-3">
+                  {orderedIntegrations.map((clientStatus) => (
+                    <AgentIntegrationCard
+                      key={clientStatus.client}
+                      status={clientStatus}
+                      pending={pending?.client === clientStatus.client ? pending : null}
+                      busy={pending !== null}
+                      feedback={feedback[clientStatus.client]}
+                      onInstall={install}
+                      onInstallAll={installAll}
+                    />
+                  ))}
+                </div>
+              </div>
+              <p className="text-[11px] leading-relaxed text-zinc-600">{t('mcp.integrations.reloadHint')}</p>
+            </>
+          ) : null}
+
+          {info ? (
+            <Card title={t('mcp.manual.title')}>
+              <p className="mt-1 text-[12px] text-zinc-500">{t('mcp.manual.desc')}</p>
+              <div className="mt-3">
+                <CodeBlock value={jsonConfig(info)} />
+              </div>
+              <p className="mt-3 text-[11px] uppercase tracking-widest text-zinc-600">
+                {t('mcp.manual.paths')}
+              </p>
+              <ul className="mt-1.5 space-y-1 font-mono text-[11px] text-zinc-500">
+                <li>
+                  <span className="text-zinc-400">{t('mcp.path.claudeDesktop')}:</span>{' '}
+                  ~/Library/Application Support/Claude/claude_desktop_config.json
+                </li>
+                <li>
+                  <span className="text-zinc-400">{t('mcp.path.cursor')}:</span> ~/.cursor/mcp.json
+                </li>
+                <li>
+                  <span className="text-zinc-400">{t('mcp.path.codex')}:</span> ~/.codex/config.toml
+                </li>
+                <li>
+                  <span className="text-zinc-400">{t('mcp.path.windsurf')}:</span>{' '}
+                  ~/.codeium/windsurf/mcp_config.json
+                </li>
+              </ul>
+              <p className="mt-3 text-[11px] text-zinc-600">{t('mcp.claudeCode.command')}</p>
+              <div className="mt-1.5"><CodeBlock value={claudeCodeCommand(info)} /></div>
+            </Card>
+          ) : null}
         </div>
       </div>
     </div>

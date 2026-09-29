@@ -45,6 +45,10 @@
       {
         "from": "dist/mcp",
         "to": "mcp"
+      },
+      {
+        "from": "../../plugin/skills",
+        "to": "skills"
       }
     ],
     "mac": {

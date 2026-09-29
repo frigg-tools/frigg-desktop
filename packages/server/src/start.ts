@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
@@ -25,7 +26,9 @@ import {
   sqlConnectionsPath,
   sqlSecretKeyPath,
   sqlSecretsPath,
+  friggDir,
 } from './lib/paths.ts';
+import { agentSkillsSource, mcpServerInfo } from './api/mcp-info.ts';
 import { LoggerService } from './logging/logger-service.ts';
 import { FridaManager } from './frida/index.ts';
 import { LogcatManager } from './logcat/index.ts';
@@ -51,6 +54,7 @@ import { AutomationRunStore } from './automation/run-store.ts';
 import { AutomationReferenceStore } from './automation/reference-store.ts';
 import { AutomationManager } from './automation/manager.ts';
 import { AndroidAutomationDevice } from './automation/adb.ts';
+import { createAgentIntegrationService } from './agent-integrations/service.ts';
 
 export interface StartFriggOptions {
   proxyPort?: number;
@@ -155,7 +159,8 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   sqlConnections.setHasPassword((id) => sqlSecrets.has(id));
   const sql = new SqlManager(sqlConnections, sqlSecrets);
 
-  const deps: ApiDeps = {
+  let deps!: ApiDeps;
+  deps = {
     traffic,
     mocks,
     ca,
@@ -173,6 +178,13 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     certTrust,
     androidProxyRegistry,
     reloadProxy: () => engine.reload(),
+    agentIntegrations: createAgentIntegrationService({
+      homeDir: os.homedir(),
+      dataDir: friggDir,
+      mcpServer: () => mcpServerInfo(deps.apiPort),
+      skillsSource: agentSkillsSource(),
+    }),
+    configuredUiPort: options.uiPort ?? 5173,
     automation: {
       automations,
       runs: automationRuns,

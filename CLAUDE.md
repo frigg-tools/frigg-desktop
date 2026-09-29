@@ -52,6 +52,10 @@ Full module contracts and the v0.2 feature designs (i18n, Logcat, desktop) live 
 - **Server never crashes on device-tool failures** — degrade into result messages / status errors.
 - **i18n:** every user-visible string goes through `useT()` (`packages/web/src/i18n`). Shared strings live in the `common` namespace (called bare, e.g. `t('action.save')`); per-screen strings live in their own namespace (e.g. `t('logcat.start')`). Add both `en` and `pt` for every key. Server-facing messages (device setup, `/setup` page) are localized via the `X-Frigg-Locale` header / `?lang`.
 
+## MCP skills
+
+Every new capability exposed through MCP needs a dedicated skill under `plugin/skills/`. Follow [`docs/development/mcp-skills.md`](./docs/development/mcp-skills.md) for skill content, versioning, and the feature checklist.
+
 ## Devices
 
 - **Android** (`adb`): Devices → Set up interception sets the proxy and installs the CA (system cert via `adb root`, else a guided user-cert install). Logcat: Logcat tab → pick the device → Start. Filter by package (resolved to `--pid` via `pidof`), level and text.

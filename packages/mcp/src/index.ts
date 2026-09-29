@@ -8,10 +8,10 @@ import type {
   MockRule,
   MocksSnapshot,
   ProxyStatus,
-  TrafficExchange,
 } from '@frigg/shared';
 import { del, get, post, put } from './frigg-api.ts';
 import { registerAutomationTools } from './automation.ts';
+import { registerTrafficTools } from './traffic.ts';
 
 function ok(value: unknown): { content: [{ type: 'text'; text: string }] } {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
@@ -25,6 +25,7 @@ function err(e: unknown): { content: [{ type: 'text'; text: string }]; isError: 
 const server = new McpServer({ name: 'frigg', version: '0.1.0' });
 
 registerAutomationTools(server);
+registerTrafficTools(server);
 
 server.tool('frigg_status', 'Get Frigg proxy status (ports, LAN IP, cert fingerprint, exchange count)', async () => {
   try {
@@ -33,37 +34,6 @@ server.tool('frigg_status', 'Get Frigg proxy status (ports, LAN IP, cert fingerp
     return err(e);
   }
 });
-
-server.tool(
-  'frigg_list_traffic',
-  'List captured HTTP traffic exchanges. Optionally filter by limit and/or a substring of the host.',
-  {
-    limit: z.number().int().positive().optional().describe('Maximum number of most-recent exchanges to return'),
-    hostContains: z.string().optional().describe('Return only exchanges whose host contains this substring'),
-  },
-  async ({ limit, hostContains }) => {
-    try {
-      let exchanges = await get<TrafficExchange[]>('/api/traffic');
-      if (hostContains) {
-        exchanges = exchanges.filter((ex) => ex.request.host.includes(hostContains));
-      }
-      if (limit !== undefined) {
-        exchanges = exchanges.slice(-limit);
-      }
-      const summary = exchanges.map((ex) => ({
-        id: ex.id,
-        method: ex.request.method,
-        url: ex.request.url,
-        status: ex.response?.statusCode ?? null,
-        durationMs: ex.response?.durationMs ?? null,
-        mocked: ex.response?.mockRuleId !== undefined,
-      }));
-      return ok(summary);
-    } catch (e) {
-      return err(e);
-    }
-  },
-);
 
 server.tool('frigg_clear_traffic', 'Delete all captured traffic exchanges', async () => {
   try {
@@ -365,33 +335,27 @@ server.tool(
   },
   async ({ workspaceId, folderId, name, method, url, query, headers, body, preScript, testScript }) => {
     try {
-      const created = await post<{ snapshot: ApiClientSnapshot; id: string }>('/api/client/requests', {
-        workspaceId,
-        folderId: folderId ?? null,
-      });
-
-      const patch: Record<string, unknown> = {};
-      if (name !== undefined) patch.name = name;
-      if (method !== undefined) patch.method = method;
-      if (url !== undefined) patch.url = url;
-      if (query !== undefined) patch.query = query.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
-      if (headers !== undefined) patch.headers = headers.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
+      const fields: Record<string, unknown> = {};
+      if (name !== undefined) fields.name = name;
+      if (method !== undefined) fields.method = method;
+      if (url !== undefined) fields.url = url;
+      if (query !== undefined) fields.query = query.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
+      if (headers !== undefined) fields.headers = headers.map((kv) => ({ ...kv, enabled: kv.enabled ?? true }));
       if (body !== undefined) {
-        patch.body = {
+        fields.body = {
           mode: body.mode ?? 'none',
           raw: body.raw ?? '',
           form: (body.form ?? []).map((kv) => ({ ...kv, enabled: kv.enabled ?? true })),
         };
       }
-      if (preScript !== undefined) patch.preScript = preScript;
-      if (testScript !== undefined) patch.testScript = testScript;
+      if (preScript !== undefined) fields.preScript = preScript;
+      if (testScript !== undefined) fields.testScript = testScript;
 
-      if (Object.keys(patch).length > 0) {
-        const snapshot = await put<ApiClientSnapshot>(`/api/client/requests/${created.id}`, patch);
-        const request = snapshot.requests.find((r: ApiRequest) => r.id === created.id);
-        return ok(request);
-      }
-
+      const created = await post<{ snapshot: ApiClientSnapshot; id: string }>('/api/client/requests', {
+        workspaceId,
+        folderId: folderId ?? null,
+        ...fields,
+      });
       const request = created.snapshot.requests.find((r: ApiRequest) => r.id === created.id);
       return ok(request);
     } catch (e) {
