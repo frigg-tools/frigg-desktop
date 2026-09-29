@@ -12,6 +12,7 @@ import type {
 import { del, get, post, put } from './frigg-api.ts';
 import { registerAutomationTools } from './automation.ts';
 import { registerTrafficTools } from './traffic.ts';
+import { registerApkStoreTools } from './apk-store.ts';
 
 function ok(value: unknown): { content: [{ type: 'text'; text: string }] } {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
@@ -26,6 +27,7 @@ const server = new McpServer({ name: 'frigg', version: '0.1.0' });
 
 registerAutomationTools(server);
 registerTrafficTools(server);
+registerApkStoreTools(server);
 
 server.tool('frigg_status', 'Get Frigg proxy status (ports, LAN IP, cert fingerprint, exchange count)', async () => {
   try {

@@ -15,6 +15,8 @@ export const automationReferencesPath = path.join(friggDir, 'automation-referenc
 export const sqlConnectionsPath = path.join(friggDir, 'sql-connections.json');
 export const sqlSecretsPath = path.join(friggDir, 'sql-secrets.json');
 export const sqlSecretKeyPath = path.join(friggDir, 'sql-secret.key');
+export const apkStoreDir = path.join(friggDir, 'apk-store');
+export const apkStorePath = path.join(friggDir, 'apk-store.json');
 
 export function logsPath(): string {
   return path.join(friggDir, 'logs');

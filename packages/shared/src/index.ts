@@ -184,11 +184,20 @@ export type MockRuleInput = Omit<MockRule, 'id' | 'createdAt' | 'updatedAt' | 'h
 
 export type AndroidCertMode = 'system' | 'user-manual' | 'none';
 
+export const ANDROID_DEVICE_STATE = {
+  connected: 'device',
+  offline: 'offline',
+  unauthorized: 'unauthorized',
+  unknown: 'unknown',
+} as const;
+
+export type AndroidDeviceState = (typeof ANDROID_DEVICE_STATE)[keyof typeof ANDROID_DEVICE_STATE];
+
 export interface AndroidDevice {
   serial: string;
   model: string;
   avdName?: string;
-  state: 'device' | 'offline' | 'unauthorized' | 'unknown';
+  state: AndroidDeviceState;
   isEmulator: boolean;
   proxyConfigured: boolean;
   ipAddress?: string;
@@ -569,3 +578,4 @@ export const BODY_CAPTURE_LIMIT = 262144;
 export const FRIDA_MESSAGE_BUFFER_LIMIT = 2000;
 export * from './automation.ts';
 export * from './agent-integrations.ts';
+export * from './apk-store.ts';

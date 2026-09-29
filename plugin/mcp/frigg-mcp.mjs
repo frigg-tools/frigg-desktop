@@ -1301,21 +1301,21 @@ var require_errors = __commonJS({
     function extendErrors({ gen, keyword, schemaValue, data, errsCount, it }) {
       if (errsCount === void 0)
         throw new Error("ajv implementation error");
-      const err3 = gen.name("err");
+      const err4 = gen.name("err");
       gen.forRange("i", errsCount, names_1.default.errors, (i) => {
-        gen.const(err3, (0, codegen_1._)`${names_1.default.vErrors}[${i}]`);
-        gen.if((0, codegen_1._)`${err3}.instancePath === undefined`, () => gen.assign((0, codegen_1._)`${err3}.instancePath`, (0, codegen_1.strConcat)(names_1.default.instancePath, it.errorPath)));
-        gen.assign((0, codegen_1._)`${err3}.schemaPath`, (0, codegen_1.str)`${it.errSchemaPath}/${keyword}`);
+        gen.const(err4, (0, codegen_1._)`${names_1.default.vErrors}[${i}]`);
+        gen.if((0, codegen_1._)`${err4}.instancePath === undefined`, () => gen.assign((0, codegen_1._)`${err4}.instancePath`, (0, codegen_1.strConcat)(names_1.default.instancePath, it.errorPath)));
+        gen.assign((0, codegen_1._)`${err4}.schemaPath`, (0, codegen_1.str)`${it.errSchemaPath}/${keyword}`);
         if (it.opts.verbose) {
-          gen.assign((0, codegen_1._)`${err3}.schema`, schemaValue);
-          gen.assign((0, codegen_1._)`${err3}.data`, data);
+          gen.assign((0, codegen_1._)`${err4}.schema`, schemaValue);
+          gen.assign((0, codegen_1._)`${err4}.data`, data);
         }
       });
     }
     exports.extendErrors = extendErrors;
     function addError(gen, errObj) {
-      const err3 = gen.const("err", errObj);
-      gen.if((0, codegen_1._)`${names_1.default.vErrors} === null`, () => gen.assign(names_1.default.vErrors, (0, codegen_1._)`[${err3}]`), (0, codegen_1._)`${names_1.default.vErrors}.push(${err3})`);
+      const err4 = gen.const("err", errObj);
+      gen.if((0, codegen_1._)`${names_1.default.vErrors} === null`, () => gen.assign(names_1.default.vErrors, (0, codegen_1._)`[${err4}]`), (0, codegen_1._)`${names_1.default.vErrors}.push(${err4})`);
       gen.code((0, codegen_1._)`${names_1.default.errors}++`);
     }
     function returnErrors(it, errs) {
@@ -3261,8 +3261,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path) {
-      let input = path;
+    function removeDotSegments(path2) {
+      let input = path2;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3671,8 +3671,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path && path !== "/" ? path : void 0;
+        const path2 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path2 && path2 !== "/" ? path2 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -7557,8 +7557,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path, errorMaps, issueData } = params;
-  const fullPath = [...path, ...issueData.path || []];
+  const { data, path: path2, errorMaps, issueData } = params;
+  const fullPath = [...path2, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -7673,11 +7673,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path, key) {
+  constructor(parent, value, path2, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path;
+    this._path = path2;
     this._key = key;
   }
   get path() {
@@ -7816,8 +7816,8 @@ var ZodType = class {
         } : {
           issues: ctx.common.issues
         };
-      } catch (err3) {
-        if (err3?.message?.toLowerCase()?.includes("encountered")) {
+      } catch (err4) {
+        if (err4?.message?.toLowerCase()?.includes("encountered")) {
           this["~standard"].async = true;
         }
         ctx.common = {
@@ -11597,10 +11597,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path) {
-  if (!path)
+function getElementAtPath(obj, path2) {
+  if (!path2)
     return obj;
-  return path.reduce((acc, key) => acc?.[key], obj);
+  return path2.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12009,11 +12009,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path, issues) {
+function prefixIssues(path2, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path);
+    iss.path.unshift(path2);
     return iss;
   });
 }
@@ -12160,16 +12160,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path = []) => {
+  const processError = (error52, path2 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else {
-        const fullpath = [...path, ...issue2.path];
+        const fullpath = [...path2, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -12196,17 +12196,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path = []) => {
+  const processError = (error52, path2 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else {
-        const fullpath = [...path, ...issue2.path];
+        const fullpath = [...path2, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -12238,8 +12238,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path) {
+  const path2 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path2) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -25364,13 +25364,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path = ref.slice(1).split("/").filter(Boolean);
-  if (path.length === 0) {
+  const path2 = ref.slice(1).split("/").filter(Boolean);
+  if (path2.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path[0] === defsKey) {
-    const key = path[1];
+  if (path2[0] === defsKey) {
+    const key = path2[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -31263,8 +31263,8 @@ var StdioServerTransport = class {
 
 // packages/mcp/src/frigg-api.ts
 var baseUrl = (process.env.FRIGG_API_URL ?? "http://localhost:4848").replace(/\/$/, "");
-async function request(method, path, body) {
-  const url2 = `${baseUrl}${path}`;
+async function request(method, path2, body) {
+  const url2 = `${baseUrl}${path2}`;
   const init = {
     method,
     headers: { "Content-Type": "application/json" }
@@ -31280,20 +31280,39 @@ async function request(method, path, body) {
   }
   return json2;
 }
-function get(path) {
-  return request("GET", path);
+function get(path2) {
+  return request("GET", path2);
 }
-function post(path, body) {
-  return request("POST", path, body);
+function post(path2, body) {
+  return request("POST", path2, body);
 }
-function put(path, body) {
-  return request("PUT", path, body);
+async function postBlob(path2, blob) {
+  const res = await fetch(`${baseUrl}${path2}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: blob
+  });
+  let json2;
+  try {
+    json2 = await res.json();
+  } catch {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    throw new Error("Frigg returned an invalid APK Store response.");
+  }
+  if (!res.ok) {
+    const message = typeof json2 === "object" && json2 !== null && "error" in json2 && typeof json2.error === "string" ? json2.error : `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  return json2;
 }
-function del(path) {
-  return request("DELETE", path);
+function put(path2, body) {
+  return request("PUT", path2, body);
 }
-async function getImage(path) {
-  const res = await fetch(`${baseUrl}${path}`);
+function del(path2) {
+  return request("DELETE", path2);
+}
+async function getImage(path2) {
+  const res = await fetch(`${baseUrl}${path2}`);
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     try {
@@ -31334,6 +31353,9 @@ var AUTOMATION_RUN_STATUS = {
   cancelled: "cancelled",
   interrupted: "interrupted"
 };
+
+// packages/shared/src/apk-store.ts
+var APK_STORE_MAX_FILE_BYTES = 1073741824;
 
 // packages/mcp/src/automation.ts
 var defaultApi = { get, post, put, del, image: getImage };
@@ -31623,36 +31645,121 @@ function registerTrafficTools(server2) {
   );
 }
 
-// packages/mcp/src/index.ts
+// packages/mcp/src/apk-store.ts
+import { openAsBlob } from "node:fs";
+import { stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 function ok2(value) {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
 }
-function err2(e) {
+function err2(error51) {
+  return { content: [{ type: "text", text: error51 instanceof Error ? error51.message : String(error51) }], isError: true };
+}
+function registerApkStoreTools(server2) {
+  server2.tool(
+    "frigg_apk_store_list",
+    "List APKs saved in Frigg, with their descriptions, original/stored sizes, compression, and opaque IDs.",
+    async () => {
+      try {
+        return ok2(await get("/api/apk-store"));
+      } catch (error51) {
+        return err2(error51);
+      }
+    }
+  );
+  server2.tool(
+    "frigg_apk_store_import",
+    "Import one user-provided local .apk file into Frigg. Ask for the exact file path; do not scan directories for APKs.",
+    {
+      filePath: external_exports.string().trim().min(1).describe("Path to the .apk file explicitly provided by the user"),
+      name: external_exports.string().trim().min(1).max(120).optional().describe("Display name (defaults to the file name)"),
+      description: external_exports.string().max(2e3).optional().describe("Short context describing what this APK is for")
+    },
+    async ({ filePath, name, description }) => {
+      try {
+        const localPath = filePath.startsWith("~/") ? path.join(os.homedir(), filePath.slice(2)) : filePath;
+        if (path.extname(localPath).toLowerCase() !== ".apk") {
+          return err2(new Error("Choose a file whose name ends in .apk."));
+        }
+        const fileStat = await stat(localPath);
+        if (!fileStat.isFile()) return err2(new Error("The supplied path is not a regular file."));
+        if (fileStat.size <= 0) return err2(new Error("The selected APK file is empty."));
+        if (fileStat.size > APK_STORE_MAX_FILE_BYTES) return err2(new Error("APK files must be 1 GiB or smaller."));
+        const query = new URLSearchParams({ fileName: path.basename(localPath) });
+        if (name !== void 0) query.set("name", name);
+        if (description !== void 0) query.set("description", description);
+        const blob = await openAsBlob(localPath, { type: "application/octet-stream" });
+        const entry = await postBlob(`/api/apk-store?${query}`, blob);
+        return ok2(entry);
+      } catch (error51) {
+        return err2(error51);
+      }
+    }
+  );
+  server2.tool(
+    "frigg_apk_store_install",
+    "Install one saved APK on exactly one authorized, online Android device. This can update the app already on that device.",
+    {
+      apkId: external_exports.string().uuid().describe("Opaque APK ID returned by frigg_apk_store_list or import"),
+      serial: external_exports.string().trim().min(1).describe("Serial of the one connected Android device to install on")
+    },
+    async ({ apkId, serial }) => {
+      try {
+        return ok2(await post("/api/apk-store/" + encodeURIComponent(apkId) + "/install", { serial }));
+      } catch (error51) {
+        return err2(error51);
+      }
+    }
+  );
+  server2.tool(
+    "frigg_apk_store_delete",
+    "Delete one APK stored in Frigg. Confirm this exact deletion with the user before calling the tool.",
+    {
+      apkId: external_exports.string().uuid().describe("Opaque APK ID returned by frigg_apk_store_list"),
+      confirmedByUser: external_exports.literal(true).describe("Set true only after the user explicitly confirmed deleting this APK")
+    },
+    async ({ apkId }) => {
+      try {
+        return ok2(await del(`/api/apk-store/${encodeURIComponent(apkId)}`));
+      } catch (error51) {
+        return err2(error51);
+      }
+    }
+  );
+}
+
+// packages/mcp/src/index.ts
+function ok3(value) {
+  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+}
+function err3(e) {
   const msg = e instanceof Error ? e.message : String(e);
   return { content: [{ type: "text", text: msg }], isError: true };
 }
 var server = new McpServer({ name: "frigg", version: "0.1.0" });
 registerAutomationTools(server);
 registerTrafficTools(server);
+registerApkStoreTools(server);
 server.tool("frigg_status", "Get Frigg proxy status (ports, LAN IP, cert fingerprint, exchange count)", async () => {
   try {
-    return ok2(await get("/api/status"));
+    return ok3(await get("/api/status"));
   } catch (e) {
-    return err2(e);
+    return err3(e);
   }
 });
 server.tool("frigg_clear_traffic", "Delete all captured traffic exchanges", async () => {
   try {
-    return ok2(await del("/api/traffic"));
+    return ok3(await del("/api/traffic"));
   } catch (e) {
-    return err2(e);
+    return err3(e);
   }
 });
 server.tool("frigg_list_mocks", "List all mock folders and rules", async () => {
   try {
-    return ok2(await get("/api/mocks"));
+    return ok3(await get("/api/mocks"));
   } catch (e) {
-    return err2(e);
+    return err3(e);
   }
 });
 server.tool(
@@ -31664,9 +31771,9 @@ server.tool(
   },
   async ({ name, parentId }) => {
     try {
-      return ok2(await post("/api/mocks/folders", { name, parentId: parentId ?? null }));
+      return ok3(await post("/api/mocks/folders", { name, parentId: parentId ?? null }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31707,9 +31814,9 @@ server.tool(
         folderId: folderId ?? null
       };
       if (name) payload.name = name;
-      return ok2(await post("/api/mocks/rules", payload));
+      return ok3(await post("/api/mocks/rules", payload));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31754,9 +31861,9 @@ server.tool(
         if (delayMs !== void 0) response.delayMs = delayMs;
         patch.response = response;
       }
-      return ok2(await put(`/api/mocks/rules/${id}`, patch));
+      return ok3(await put(`/api/mocks/rules/${id}`, patch));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31766,17 +31873,17 @@ server.tool(
   { id: external_exports.string().describe("Rule ID") },
   async ({ id }) => {
     try {
-      return ok2(await del(`/api/mocks/rules/${id}`));
+      return ok3(await del(`/api/mocks/rules/${id}`));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
 server.tool("frigg_list_devices", "List connected Android and iOS devices and their proxy/tooling status", async () => {
   try {
-    return ok2(await get("/api/devices"));
+    return ok3(await get("/api/devices"));
   } catch (e) {
-    return err2(e);
+    return err3(e);
   }
 });
 server.tool(
@@ -31788,21 +31895,21 @@ server.tool(
   },
   async ({ serial, app }) => {
     try {
-      return ok2(
+      return ok3(
         await get(
           `/api/devices/android/${encodeURIComponent(serial)}/interception?app=${encodeURIComponent(app)}`
         )
       );
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
 server.tool("frigg_client_snapshot", "Get the full API client snapshot (workspaces, folders, requests, environments)", async () => {
   try {
-    return ok2(await get("/api/client"));
+    return ok3(await get("/api/client"));
   } catch (e) {
-    return err2(e);
+    return err3(e);
   }
 });
 server.tool(
@@ -31811,9 +31918,9 @@ server.tool(
   { name: external_exports.string().min(1).describe("Workspace name") },
   async ({ name }) => {
     try {
-      return ok2(await post("/api/client/workspaces", { name }));
+      return ok3(await post("/api/client/workspaces", { name }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31834,9 +31941,9 @@ server.tool(
   },
   async ({ workspaceId, clientCerts }) => {
     try {
-      return ok2(await put(`/api/client/workspaces/${encodeURIComponent(workspaceId)}`, { clientCerts }));
+      return ok3(await put(`/api/client/workspaces/${encodeURIComponent(workspaceId)}`, { clientCerts }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31845,9 +31952,9 @@ server.tool(
   "List the proxy upstream mTLS client certificates \u2014 the PKCS#12 certs the intercepting proxy presents to upstream hosts that require mutual TLS",
   async () => {
     try {
-      return ok2(await get("/api/proxy-certs"));
+      return ok3(await get("/api/proxy-certs"));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31865,9 +31972,9 @@ server.tool(
   },
   async ({ certs }) => {
     try {
-      return ok2(await put("/api/proxy-certs", { certs }));
+      return ok3(await put("/api/proxy-certs", { certs }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31881,9 +31988,9 @@ server.tool(
   },
   async ({ workspaceId, name, parentId }) => {
     try {
-      return ok2(await post("/api/client/folders", { workspaceId, name, parentId: parentId ?? null }));
+      return ok3(await post("/api/client/folders", { workspaceId, name, parentId: parentId ?? null }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31929,9 +32036,9 @@ server.tool(
         ...fields
       });
       const request2 = created.snapshot.requests.find((r) => r.id === created.id);
-      return ok2(request2);
+      return ok3(request2);
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31972,9 +32079,9 @@ server.tool(
       }
       if (preScript !== void 0) patch.preScript = preScript;
       if (testScript !== void 0) patch.testScript = testScript;
-      return ok2(await put(`/api/client/requests/${id}`, patch));
+      return ok3(await put(`/api/client/requests/${id}`, patch));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -31984,9 +32091,9 @@ server.tool(
   { id: external_exports.string().describe("Request ID") },
   async ({ id }) => {
     try {
-      return ok2(await del(`/api/client/requests/${id}`));
+      return ok3(await del(`/api/client/requests/${id}`));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32019,7 +32126,7 @@ server.tool(
         const snapshot = await get("/api/client");
         const found = snapshot.requests.find((r) => r.id === requestId);
         if (!found) {
-          return err2(new Error(`Request not found: ${requestId}`));
+          return err3(new Error(`Request not found: ${requestId}`));
         }
         req = found;
       } else if (inlineRequest !== void 0) {
@@ -32043,11 +32150,11 @@ server.tool(
           updatedAt: 0
         };
       } else {
-        return err2(new Error("Provide either requestId or request"));
+        return err3(new Error("Provide either requestId or request"));
       }
-      return ok2(await post("/api/client/run", { request: req }));
+      return ok3(await post("/api/client/run", { request: req }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32060,9 +32167,9 @@ server.tool(
   },
   async ({ workspaceId, name }) => {
     try {
-      return ok2(await post("/api/client/environments", { workspaceId, name }));
+      return ok3(await post("/api/client/environments", { workspaceId, name }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32079,7 +32186,7 @@ server.tool(
       const snapshot = await get("/api/client");
       const env = snapshot.environments.find((e) => e.id === environmentId);
       if (!env) {
-        return err2(new Error(`Environment not found: ${environmentId}`));
+        return err3(new Error(`Environment not found: ${environmentId}`));
       }
       const existing = env.variables.findIndex((v) => v.key === key);
       const variables = [...env.variables];
@@ -32088,9 +32195,9 @@ server.tool(
       } else {
         variables.push({ key, value, enabled: true });
       }
-      return ok2(await put(`/api/client/environments/${environmentId}`, { variables }));
+      return ok3(await put(`/api/client/environments/${environmentId}`, { variables }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32099,9 +32206,9 @@ server.tool(
   "Get the Frida toolkit snapshot: on-device frida-server status, the running script session, the built-in example scripts, and the host frida-tools version (null if not installed).",
   async () => {
     try {
-      return ok2(await get("/api/frida/snapshot"));
+      return ok3(await get("/api/frida/snapshot"));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32111,9 +32218,9 @@ server.tool(
   { deviceId: external_exports.string().describe("adb serial of the Android device/emulator") },
   async ({ deviceId }) => {
     try {
-      return ok2(await get(`/api/frida/status?deviceId=${encodeURIComponent(deviceId)}`));
+      return ok3(await get(`/api/frida/status?deviceId=${encodeURIComponent(deviceId)}`));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32123,9 +32230,9 @@ server.tool(
   { deviceId: external_exports.string().describe("adb serial of the Android device/emulator") },
   async ({ deviceId }) => {
     try {
-      return ok2(await post("/api/frida/install", { deviceId }));
+      return ok3(await post("/api/frida/install", { deviceId }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32135,9 +32242,9 @@ server.tool(
   { deviceId: external_exports.string().describe("adb serial of the Android device/emulator") },
   async ({ deviceId }) => {
     try {
-      return ok2(await post("/api/frida/server/start", { deviceId }));
+      return ok3(await post("/api/frida/server/start", { deviceId }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32147,9 +32254,9 @@ server.tool(
   { deviceId: external_exports.string().optional().describe("adb serial (defaults to the last device frida-server was started on)") },
   async ({ deviceId }) => {
     try {
-      return ok2(await post("/api/frida/server/stop", deviceId ? { deviceId } : {}));
+      return ok3(await post("/api/frida/server/stop", deviceId ? { deviceId } : {}));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32165,7 +32272,7 @@ server.tool(
   },
   async ({ deviceId, target, source, spawnMode, scriptId }) => {
     try {
-      return ok2(
+      return ok3(
         await post("/api/frida/run", {
           deviceId,
           target,
@@ -32175,22 +32282,22 @@ server.tool(
         })
       );
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
 server.tool("frigg_frida_stop_script", "Stop the running Frida script session.", async () => {
   try {
-    return ok2(await post("/api/frida/stop", {}));
+    return ok3(await post("/api/frida/stop", {}));
   } catch (e) {
-    return err2(e);
+    return err3(e);
   }
 });
 server.tool("frigg_list_avds", "List Android Virtual Devices (AVDs) and whether each is currently booted.", async () => {
   try {
-    return ok2(await get("/api/avd"));
+    return ok3(await get("/api/avd"));
   } catch (e) {
-    return err2(e);
+    return err3(e);
   }
 });
 server.tool(
@@ -32199,9 +32306,9 @@ server.tool(
   { name: external_exports.string().min(1).describe("AVD name") },
   async ({ name }) => {
     try {
-      return ok2(await post("/api/avd/boot", { name }));
+      return ok3(await post("/api/avd/boot", { name }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );
@@ -32214,9 +32321,9 @@ server.tool(
   },
   async ({ name, apiLevel }) => {
     try {
-      return ok2(await post("/api/avd/create", { name, apiLevel: apiLevel ?? 34 }));
+      return ok3(await post("/api/avd/create", { name, apiLevel: apiLevel ?? 34 }));
     } catch (e) {
-      return err2(e);
+      return err3(e);
     }
   }
 );

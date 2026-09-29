@@ -73,6 +73,8 @@ import { setupPageHtml } from './setup-page.ts';
 import { buildAutomationRouter, type AutomationRouterOptions } from '../automation/router.ts';
 import { buildAgentIntegrationRouter } from '../agent-integrations/router.ts';
 import type { AgentIntegrationService } from '../agent-integrations/service.ts';
+import type { ApkStore } from '../apk-store/store.ts';
+import { buildApkStoreRouter } from '../apk-store/router.ts';
 
 export interface ApiDeps {
   traffic: TrafficStore;
@@ -93,6 +95,7 @@ export interface ApiDeps {
   androidProxyRegistry: AndroidProxyRegistry;
   reloadProxy: () => Promise<void>;
   agentIntegrations?: AgentIntegrationService;
+  apkStore?: ApkStore;
   configuredUiPort?: number;
   automation?: Omit<AutomationRouterOptions, 'apiPort'>;
 }
@@ -672,6 +675,13 @@ export function buildRouter(deps: ApiDeps): Router {
   if (deps.agentIntegrations) {
     router.use(buildAgentIntegrationRouter({
       service: deps.agentIntegrations,
+      apiPort: () => deps.apiPort,
+      configuredUiPort: deps.configuredUiPort ?? 5173,
+    }));
+  }
+  if (deps.apkStore) {
+    router.use(buildApkStoreRouter({
+      store: deps.apkStore,
       apiPort: () => deps.apiPort,
       configuredUiPort: deps.configuredUiPort ?? 5173,
     }));

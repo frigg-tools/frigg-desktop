@@ -14,6 +14,8 @@ import type {
   ApiRequest,
   ApiRunResult,
   ApiWorkspace,
+  ApkStoreEntry,
+  ApkStoreSnapshot,
   BreakpointResume,
   BreakpointRuleInput,
   BreakpointsSnapshot,
@@ -180,6 +182,53 @@ export function deleteFolder(id: string): Promise<{ ok: boolean }> {
 
 export function getDevices(): Promise<DevicesSnapshot> {
   return request('/api/devices');
+}
+
+export function getApkStore(): Promise<ApkStoreSnapshot> {
+  return request('/api/apk-store');
+}
+
+export async function importApk(
+  file: File,
+  metadata: { name: string; description: string },
+  onProgress?: (percent: number | null) => void,
+): Promise<ApkStoreEntry> {
+  const query = new URLSearchParams({ fileName: file.name, name: metadata.name, description: metadata.description });
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/apk-store?${query}`);
+    xhr.responseType = 'json';
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    xhr.setRequestHeader('X-Frigg-Locale', currentLocale());
+    xhr.upload.addEventListener('progress', (event) => {
+      onProgress?.(event.lengthComputable ? Math.round((event.loaded / event.total) * 100) : null);
+    });
+    xhr.addEventListener('load', () => {
+      const data = xhr.response as unknown;
+      if (xhr.status >= 200 && xhr.status < 300 && isRecord(data)) {
+        resolve(data as unknown as ApkStoreEntry);
+        return;
+      }
+      const message = isRecord(data) && typeof data.error === 'string'
+        ? data.error
+        : `${xhr.status} ${xhr.statusText}`.trim();
+      reject(new Error(message || 'APK import failed.'));
+    });
+    xhr.addEventListener('error', () => reject(new Error('APK upload failed because the connection was interrupted.')));
+    xhr.addEventListener('abort', () => reject(new Error('APK upload was cancelled.')));
+    xhr.send(file);
+  });
+}
+
+export function deleteApk(id: string): Promise<{ ok: boolean }> {
+  return request(`/api/apk-store/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function installApk(
+  id: string,
+  serial: string,
+): Promise<{ serial: string; durationMs: number; message: string }> {
+  return request(`/api/apk-store/${encodeURIComponent(id)}/install`, jsonInit('POST', { serial }));
 }
 
 export function setupAndroid(serial: string): Promise<AndroidSetupResult> {

@@ -47,7 +47,7 @@ import {
 import * as api from './api/client';
 import { recordSqlHistory } from './components/sql/history';
 
-export type Screen = 'traffic' | 'mocks' | 'automation' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida' | 'logs';
+export type Screen = 'traffic' | 'mocks' | 'automation' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida' | 'logs' | 'apk-store';
 export type LogLevelFilter = LogLevel | 'ALL';
 export type DeviceSetupPlatform = 'android' | 'ios' | 'manual';
 

@@ -13,6 +13,7 @@ import { breakpoints } from './breakpoints';
 import { sql } from './sql';
 import { frida } from './frida';
 import { automation } from './automation';
+import { apkStore } from './apkStore';
 
 export type { Locale };
 
@@ -35,6 +36,7 @@ const bundles: Record<string, Bundle> = {
   sql,
   frida,
   automation,
+  apkStore,
 };
 
 const flattened: Record<Locale, Record<string, string>> = { en: {}, pt: {} };

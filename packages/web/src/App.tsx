@@ -14,6 +14,7 @@ import ClientScreen from './screens/ClientScreen';
 import McpScreen from './screens/McpScreen';
 import FridaScreen from './screens/FridaScreen';
 import LogsScreen from './screens/LogsScreen';
+import ApkStoreScreen from './screens/ApkStoreScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
 import PausedExchangeModal from './components/breakpoints/PausedExchangeModal';
 
@@ -203,6 +204,16 @@ function FridaIcon() {
   );
 }
 
+function ApkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <path d="M5 3.5h9l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20v-15A1.5 1.5 0 0 1 6.5 3.5Z" />
+      <path d="M14 3.5V9h5" />
+      <path d="M8 14h8M8 17h5" />
+    </svg>
+  );
+}
+
 interface NavItem {
   screen: Screen;
   labelKey: string;
@@ -228,6 +239,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: 'nav.group.explore',
     items: [
       { screen: 'client', labelKey: 'nav.client', icon: <SendIcon /> },
+      { screen: 'apk-store', labelKey: 'apkStore.title', icon: <ApkIcon /> },
       { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
       { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
     ],
@@ -423,6 +435,8 @@ export default function App() {
           <FridaScreen />
         ) : screen === 'logs' ? (
           <LogsScreen />
+        ) : screen === 'apk-store' ? (
+          <ApkStoreScreen />
         ) : (
           <DevicesScreen />
         )}

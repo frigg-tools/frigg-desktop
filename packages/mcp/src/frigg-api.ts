@@ -29,6 +29,28 @@ export function post<T>(path: string, body: unknown): Promise<T> {
   return request<T>('POST', path, body);
 }
 
+export async function postBlob<T>(path: string, blob: Blob): Promise<T> {
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: blob,
+  });
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    throw new Error('Frigg returned an invalid APK Store response.');
+  }
+  if (!res.ok) {
+    const message = typeof json === 'object' && json !== null && 'error' in json && typeof json.error === 'string'
+      ? json.error
+      : `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  return json as T;
+}
+
 export function put<T>(path: string, body: unknown): Promise<T> {
   return request<T>('PUT', path, body);
 }

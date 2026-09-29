@@ -26,6 +26,8 @@ import {
   sqlConnectionsPath,
   sqlSecretKeyPath,
   sqlSecretsPath,
+  apkStoreDir,
+  apkStorePath,
   friggDir,
 } from './lib/paths.ts';
 import { agentSkillsSource, mcpServerInfo } from './api/mcp-info.ts';
@@ -55,6 +57,7 @@ import { AutomationReferenceStore } from './automation/reference-store.ts';
 import { AutomationManager } from './automation/manager.ts';
 import { AndroidAutomationDevice } from './automation/adb.ts';
 import { createAgentIntegrationService } from './agent-integrations/service.ts';
+import { ApkStore } from './apk-store/store.ts';
 
 export interface StartFriggOptions {
   proxyPort?: number;
@@ -149,6 +152,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   const logcat = new LogcatManager();
   const db = new DbInspector();
   const apiClient = await ApiClientStore.load(apiClientPath);
+  const apkStore = await ApkStore.load(apkStorePath, apkStoreDir);
   const androidProxyRegistry = await AndroidProxyRegistry.load(androidProxiesPath);
   const frida = new FridaManager();
   const deviceWatcher = new DeviceWatcher();
@@ -178,6 +182,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     certTrust,
     androidProxyRegistry,
     reloadProxy: () => engine.reload(),
+    apkStore,
     agentIntegrations: createAgentIntegrationService({
       homeDir: os.homedir(),
       dataDir: friggDir,
