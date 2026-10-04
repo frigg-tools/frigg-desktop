@@ -389,6 +389,10 @@ function reconcileLogTarget(target: LogTarget | null, devices: DevicesSnapshot):
   return isLogTargetAvailable(target, devices) ? target : null;
 }
 
+function sameLogTarget(left: LogTarget | null, right: LogTarget | null): boolean {
+  return left?.platform === right?.platform && left?.id === right?.id;
+}
+
 function appendFridaMessages(list: FridaMessage[], incoming: FridaMessage[]): FridaMessage[] {
   const next = list.concat(incoming);
   return next.length > FRIDA_MESSAGE_BUFFER_LIMIT
@@ -1221,6 +1225,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       api.getMocks(),
       api.getDevices(),
     ]);
+    const previousLogTarget = get().logTarget;
     const autoTarget = reconcileLogTarget(get().activeDevice, devices) ?? defaultDeviceTarget(devices);
     const activeDevice = get().logTargetManuallyCleared ? null : autoTarget;
     const logTarget = get().logTargetManuallyCleared
@@ -1236,6 +1241,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       logTarget,
       fridaDeviceId: reconcileFridaDevice(get().fridaDeviceId, devices, get().fridaSessionStatus.running),
     });
+    if (logTarget && !sameLogTarget(previousLogTarget, logTarget)) void get().loadLogApps();
   },
   refreshMocks: async () => {
     const mocks = await api.getMocks();
@@ -1243,6 +1249,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   refreshDevices: async () => {
     const devices = await api.getDevices();
+    const previousLogTarget = get().logTarget;
     const autoTarget = reconcileLogTarget(get().activeDevice, devices) ?? defaultDeviceTarget(devices);
     const activeDevice = get().logTargetManuallyCleared ? null : autoTarget;
     const logTarget = get().logTargetManuallyCleared
@@ -1254,6 +1261,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       logTarget,
       fridaDeviceId: reconcileFridaDevice(get().fridaDeviceId, devices, get().fridaSessionStatus.running),
     });
+    if (logTarget && !sameLogTarget(previousLogTarget, logTarget)) void get().loadLogApps();
   },
   refreshStatus: async () => {
     const status = await api.getStatus();
