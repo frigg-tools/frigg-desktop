@@ -47,8 +47,8 @@ export default function LogcatToolbar() {
         {t('logcat.title')}
       </h1>
       <div className="flex-1" />
-      <LogcatDevicePicker disabled={streaming} />
-      <LogcatPackagePicker disabled={streaming} />
+      <LogcatDevicePicker />
+      <LogcatPackagePicker />
       <select
         value={minLevel}
         onChange={(e) => setLogFilters({ minLevel: e.target.value as LogLevelFilter })}

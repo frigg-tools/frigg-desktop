@@ -17,11 +17,7 @@ function truncateMiddle(value: string, limit: number): string {
   return `${value.slice(0, head)}${ellipsis}${value.slice(value.length - tail)}`;
 }
 
-interface LogcatPackagePickerProps {
-  disabled: boolean;
-}
-
-export default function LogcatPackagePicker({ disabled }: LogcatPackagePickerProps) {
+export default function LogcatPackagePicker() {
   const t = useT();
   const logApps = useAppStore((s) => s.logApps);
   const logPackage = useAppStore((s) => s.logPackage);
@@ -43,7 +39,6 @@ export default function LogcatPackagePicker({ disabled }: LogcatPackagePickerPro
   return (
     <select
       value={logPackage}
-      disabled={disabled}
       onChange={(e) => setLogPackage(e.target.value)}
       className="max-w-[16rem] rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
     >

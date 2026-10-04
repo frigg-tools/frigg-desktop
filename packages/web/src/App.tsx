@@ -17,6 +17,7 @@ import LogsScreen from './screens/LogsScreen';
 import ApkStoreScreen from './screens/ApkStoreScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
 import PausedExchangeModal from './components/breakpoints/PausedExchangeModal';
+import LogcatSessionController from './components/logcat/LogcatSessionController';
 
 function ActivityIcon() {
   return (
@@ -335,6 +336,7 @@ export default function App() {
 
   return (
     <div className="flex h-full">
+      <LogcatSessionController />
       <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800/80">
         <div className="flex h-14 items-center gap-2.5 border-b border-zinc-800/80 px-4">
           <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-emerald-400">
