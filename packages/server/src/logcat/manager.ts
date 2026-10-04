@@ -88,7 +88,6 @@ export class LogcatManager extends EventEmitter {
     serial: string,
     packageFilter: string | null,
   ): Promise<SpawnPlan | null> {
-    await execClear(serial);
     const baseArgs = ['-s', serial, 'logcat', '-v', 'threadtime'];
     if (packageFilter === null) {
       return { command: 'adb', args: baseArgs, parse: parseAndroidLogcatLine };
@@ -210,12 +209,6 @@ function buildIosPlan(udid: string, packageFilter: string | null): SpawnPlan {
     args.push('--predicate', `process CONTAINS "${escaped}"`);
   }
   return { command: 'xcrun', args, parse: parseIosLogLine };
-}
-
-function execClear(serial: string): Promise<void> {
-  return new Promise((resolve) => {
-    execFile('adb', ['-s', serial, 'logcat', '-c'], { timeout: 5000, windowsHide: true }, () => resolve());
-  });
 }
 
 function resolveAndroidPids(serial: string, packageName: string): Promise<number[]> {
