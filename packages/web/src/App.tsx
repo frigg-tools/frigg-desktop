@@ -8,7 +8,7 @@ import TrafficScreen from './screens/TrafficScreen';
 import MocksScreen from './screens/MocksScreen';
 import AutomationScreen from './screens/AutomationScreen';
 import DevicesScreen from './screens/DevicesScreen';
-import LogcatScreen from './screens/LogcatScreen';
+import LogcatPanel from './components/logcat/LogcatPanel';
 import DatabaseScreen from './screens/DatabaseScreen';
 import SqlScreen from './screens/SqlScreen';
 import ClientScreen from './screens/ClientScreen';
@@ -468,7 +468,7 @@ export default function App() {
             className={logcatPanelOpen ? 'flex min-h-0 shrink-0 flex-col overflow-hidden border-t border-zinc-800/80' : 'hidden'}
             style={logcatPanelOpen ? { height: logcatPanel.size } : undefined}
           >
-            <LogcatScreen onClose={() => setLogcatPanelOpen(false)} />
+            <LogcatPanel visible={logcatPanelOpen} onClose={() => setLogcatPanelOpen(false)} />
           </section>
         </div>
         <aside aria-label={t('toolRail.label')} className="flex w-12 shrink-0 flex-col border-l border-zinc-800/80">

@@ -4,42 +4,11 @@ import { LOG_LEVEL_FILTERS } from './levels';
 import LogcatDevicePicker from './LogcatDevicePicker';
 import LogcatPackagePicker from './LogcatPackagePicker';
 
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
-      <path d="M8 5.5v13l11-6.5-11-6.5Z" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
-      <rect x="6" y="6" width="12" height="12" rx="1.5" />
-    </svg>
-  );
-}
-
 export default function LogcatToolbar({ onClose }: { onClose?: () => void }) {
   const t = useT();
-  const logStatus = useAppStore((s) => s.logStatus);
-  const logTarget = useAppStore((s) => s.logTarget);
   const minLevel = useAppStore((s) => s.logFilters.minLevel);
   const text = useAppStore((s) => s.logFilters.text);
   const setLogFilters = useAppStore((s) => s.setLogFilters);
-  const startLogs = useAppStore((s) => s.startLogs);
-  const stopLogs = useAppStore((s) => s.stopLogs);
-
-  const streaming = logStatus.streaming;
-  const noTarget = logTarget === null;
-
-  const toggle = () => {
-    if (streaming) {
-      void stopLogs().catch(() => undefined);
-    } else {
-      void startLogs().catch(() => undefined);
-    }
-  };
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
@@ -67,19 +36,6 @@ export default function LogcatToolbar({ onClose }: { onClose?: () => void }) {
         spellCheck={false}
         className="w-48 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
       />
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={noTarget}
-        className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${
-          streaming
-            ? 'border-rose-500/30 bg-rose-500/10 text-rose-400'
-            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-        }`}
-      >
-        {streaming ? <StopIcon /> : <PlayIcon />}
-        {streaming ? t('logcat.stop') : t('logcat.start')}
-      </button>
       <button
         type="button"
         onClick={() => void useAppStore.getState().clearLogs().catch(() => undefined)}
