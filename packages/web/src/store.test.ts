@@ -64,4 +64,13 @@ describe('Logcat target discovery', () => {
 
     expect(useAppStore.getState().logTarget).toBeNull();
   });
+
+  it('toggles the Logcat tool window without changing the primary screen', () => {
+    useAppStore.setState({ screen: 'database', logcatPanelOpen: false });
+
+    useAppStore.getState().toggleLogcatPanel();
+
+    expect(useAppStore.getState().screen).toBe('database');
+    expect(useAppStore.getState().logcatPanelOpen).toBe(true);
+  });
 });

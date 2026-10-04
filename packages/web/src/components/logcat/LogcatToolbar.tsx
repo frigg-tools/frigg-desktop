@@ -20,7 +20,7 @@ function StopIcon() {
   );
 }
 
-export default function LogcatToolbar() {
+export default function LogcatToolbar({ onClose }: { onClose?: () => void }) {
   const t = useT();
   const logStatus = useAppStore((s) => s.logStatus);
   const logTarget = useAppStore((s) => s.logTarget);
@@ -87,6 +87,19 @@ export default function LogcatToolbar() {
       >
         {t('logcat.clear')}
       </button>
+      {onClose ? (
+        <button
+          type="button"
+          aria-label={t('action.close')}
+          title={t('action.close')}
+          onClick={onClose}
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/60 text-zinc-400 transition hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+      ) : null}
     </div>
   );
 }

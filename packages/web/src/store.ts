@@ -51,7 +51,7 @@ import type { StartLogsInput } from './api/client';
 import { recordSqlHistory } from './components/sql/history';
 import { isLogTargetAvailable } from './components/logcat/session';
 
-export type Screen = 'traffic' | 'mocks' | 'automation' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida' | 'logs' | 'apk-store';
+export type Screen = 'traffic' | 'mocks' | 'automation' | 'devices' | 'database' | 'client' | 'mcp' | 'sql' | 'frida' | 'logs' | 'apk-store';
 export type LogLevelFilter = LogLevel | 'ALL';
 export type DeviceSetupPlatform = 'android' | 'ios' | 'manual';
 
@@ -115,6 +115,9 @@ function initialLocale(): Locale {
 export interface AppState {
   screen: Screen;
   setScreen: (s: Screen) => void;
+  logcatPanelOpen: boolean;
+  setLogcatPanelOpen: (open: boolean) => void;
+  toggleLogcatPanel: () => void;
   locale: Locale;
   setLocale: (locale: Locale) => void;
   deviceSetupPlatform: DeviceSetupPlatform | null;
@@ -463,6 +466,9 @@ function upsertExchange(
 export const useAppStore = create<AppState>((set, get) => ({
   screen: 'traffic',
   setScreen: (s) => set({ screen: s }),
+  logcatPanelOpen: false,
+  setLogcatPanelOpen: (open) => set({ logcatPanelOpen: open }),
+  toggleLogcatPanel: () => set((state) => ({ logcatPanelOpen: !state.logcatPanelOpen })),
   locale: initialLocale(),
   setLocale: (locale) => {
     try {

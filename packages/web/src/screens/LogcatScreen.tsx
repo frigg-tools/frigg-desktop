@@ -8,7 +8,7 @@ import LogcatEmptyState from '../components/logcat/LogcatEmptyState';
 import FindBar from '../components/FindBar';
 import { filterLogEntries, LOGCAT_RENDER_LIMIT } from '../components/logcat/filter';
 
-export default function LogcatScreen() {
+export default function LogcatScreen({ onClose }: { onClose?: () => void }) {
   const t = useT();
   const logEntries = useAppStore((s) => s.logEntries);
   const logTarget = useAppStore((s) => s.logTarget);
@@ -92,7 +92,7 @@ export default function LogcatScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <LogcatToolbar />
+      <LogcatToolbar onClose={onClose} />
       <LogcatStatusBar
         autoscroll={autoscroll}
         onToggleAutoscroll={() => setAutoscroll((value) => !value)}
