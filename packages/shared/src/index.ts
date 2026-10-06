@@ -120,6 +120,7 @@ export interface CapturedRequest {
   headers: Record<string, string | string[]>;
   body: BodyPayload;
   clientAddress?: string;
+  clientDeviceId?: string;
 }
 
 export interface CapturedResponse {
@@ -204,6 +205,14 @@ export interface AndroidDevice {
   proxyValue?: string;
   certTrusted?: boolean;
   lastDecryptedAt?: number;
+  proxy?: DeviceProxyStatus;
+}
+
+export interface DeviceProxyStatus {
+  host: string | null;
+  port: number | null;
+  ready: boolean;
+  error?: string;
 }
 
 export type ProxyState = 'frigg' | 'other' | 'off';
@@ -228,18 +237,39 @@ export interface IosSimulator {
   state: string;
 }
 
+export const IOS_SIMULATOR_STATE = {
+  booted: 'Booted',
+} as const;
+
+export const IOS_SIMULATOR_PROXY_GROUP_ID = 'ios-simulator:shared';
+
+export function androidDeviceProxyId(serial: string): string {
+  return `android:${serial}`;
+}
+
+export function iosPhysicalDeviceProxyId(udid: string): string {
+  return `ios-device:${udid}`;
+}
+
 export interface IosPhysicalDevice {
   udid: string;
   name: string;
   model: string;
   osVersion: string;
   paired: boolean;
+  proxy?: DeviceProxyStatus;
 }
 
 export interface ToolingStatus {
   adb: { available: boolean; version?: string };
   xcrun: { available: boolean };
-  macosProxy: { enabled: boolean; service: string | null };
+  macosProxy: {
+    enabled: boolean;
+    service: string | null;
+    host?: string | null;
+    port?: number | null;
+    proxy?: DeviceProxyStatus;
+  };
 }
 
 export interface DevicesSnapshot {

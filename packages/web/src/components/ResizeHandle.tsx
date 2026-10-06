@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 const STORAGE_KEY = 'frigg-panel-sizes';
 
@@ -29,9 +29,14 @@ interface ResizableOptions {
 }
 
 export function useResizable(key: string, defaultSize: number, options: ResizableOptions) {
-  const [size, setSize] = useState(() => loadSize(key, defaultSize));
+  const clamp = (value: number) => Math.min(options.max, Math.max(options.min, value));
+  const [size, setSize] = useState(() => clamp(loadSize(key, defaultSize)));
   const sizeRef = useRef(size);
   sizeRef.current = size;
+
+  useEffect(() => {
+    setSize((current) => clamp(current));
+  }, [options.max, options.min]);
 
   const onPointerDown = (event: ReactPointerEvent) => {
     event.preventDefault();

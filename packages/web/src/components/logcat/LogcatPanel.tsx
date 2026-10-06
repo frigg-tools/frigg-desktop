@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAppStore } from '../store';
-import { useT } from '../i18n';
-import LogcatToolbar from '../components/logcat/LogcatToolbar';
-import LogcatStatusBar from '../components/logcat/LogcatStatusBar';
-import LogcatList from '../components/logcat/LogcatList';
-import LogcatEmptyState from '../components/logcat/LogcatEmptyState';
-import FindBar from '../components/FindBar';
-import { filterLogEntries, LOGCAT_RENDER_LIMIT } from '../components/logcat/filter';
+import { useAppStore } from '../../store';
+import { useT } from '../../i18n';
+import LogcatToolbar from './LogcatToolbar';
+import LogcatStatusBar from './LogcatStatusBar';
+import LogcatList from './LogcatList';
+import LogcatEmptyState from './LogcatEmptyState';
+import FindBar from '../FindBar';
+import { filterLogEntries, LOGCAT_RENDER_LIMIT } from './filter';
 
-export default function LogcatScreen() {
+interface LogcatPanelProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export default function LogcatPanel({ visible, onClose }: LogcatPanelProps) {
   const t = useT();
   const logEntries = useAppStore((s) => s.logEntries);
   const logTarget = useAppStore((s) => s.logTarget);
@@ -16,36 +21,38 @@ export default function LogcatScreen() {
   const minLevel = useAppStore((s) => s.logFilters.minLevel);
   const text = useAppStore((s) => s.logFilters.text);
 
-  const [autoscroll, setAutoscroll] = useState(true);
   const [findOpen, setFindOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeMatch, setActiveMatch] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
+  const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const findInputRef = useRef<HTMLInputElement>(null);
   const lastScrolled = useRef(-1);
 
   const effectiveQuery = findOpen ? query : '';
 
-  const visible = useMemo(
+  const visibleEntries = useMemo(
     () => filterLogEntries(logEntries, minLevel, text, LOGCAT_RENDER_LIMIT),
     [logEntries, minLevel, text],
   );
 
   useEffect(() => {
+    if (!visible) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        setFindOpen(true);
-        requestAnimationFrame(() => {
-          findInputRef.current?.focus();
-          findInputRef.current?.select();
-        });
-      }
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return;
+      if (!panelRef.current?.contains(event.target as Node)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setFindOpen(true);
+      requestAnimationFrame(() => {
+        findInputRef.current?.focus();
+        findInputRef.current?.select();
+      });
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [visible]);
 
   useEffect(() => {
     setActiveMatch(0);
@@ -65,7 +72,7 @@ export default function LogcatScreen() {
       target.scrollIntoView({ block: 'center' });
       lastScrolled.current = activeMatch;
     }
-  }, [effectiveQuery, visible, activeMatch]);
+  }, [effectiveQuery, visibleEntries, activeMatch]);
 
   const closeFind = () => setFindOpen(false);
   const nextMatch = () => {
@@ -80,24 +87,34 @@ export default function LogcatScreen() {
     if (logEntries.length === 0) {
       return <LogcatEmptyState kind={streaming ? 'waiting' : 'idle'} />;
     }
-    if (visible.length === 0) {
+    if (visibleEntries.length === 0) {
       return (
         <div className="flex h-full items-center justify-center">
           <p className="font-mono text-[13px] text-zinc-600">{t('logcat.empty.filtered')}</p>
         </div>
       );
     }
-    return <LogcatList entries={visible} autoscroll={autoscroll && !findOpen} query={effectiveQuery} />;
+    return <LogcatList entries={visibleEntries} query={effectiveQuery} />;
   })();
 
   return (
-    <div className="flex h-full flex-col">
-      <LogcatToolbar />
-      <LogcatStatusBar
-        autoscroll={autoscroll}
-        onToggleAutoscroll={() => setAutoscroll((value) => !value)}
-        visibleCount={visible.length}
-      />
+    <div
+      ref={panelRef}
+      tabIndex={-1}
+      onMouseDown={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest('button, input, select, textarea, a, [tabindex]:not([tabindex="-1"])')
+        ) {
+          return;
+        }
+        event.currentTarget.focus({ preventScroll: true });
+      }}
+      className="flex h-full flex-col focus:outline-none"
+    >
+      <LogcatToolbar onClose={onClose} />
+      <LogcatStatusBar visibleCount={visibleEntries.length} />
       {findOpen ? (
         <div className="flex justify-end border-b border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5">
           <FindBar

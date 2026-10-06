@@ -7,6 +7,15 @@ export class DeviceWatcher extends EventEmitter {
   private polling = false;
   private last = '';
 
+  constructor(
+    private readonly readSnapshot: () => Promise<string | null> = async () => {
+      const result = await run('adb', ['devices']);
+      return result.ok ? result.stdout.trim() : null;
+    },
+  ) {
+    super();
+  }
+
   start(intervalMs = 2000): void {
     if (this.timer !== null) return;
     void this.poll();
@@ -24,13 +33,14 @@ export class DeviceWatcher extends EventEmitter {
     if (this.polling) return;
     this.polling = true;
     try {
-      const result = await run('adb', ['devices']);
-      if (!result.ok) return;
-      const snapshot = result.stdout.trim();
+      const snapshot = await this.readSnapshot();
+      if (snapshot === null) return;
       if (snapshot !== this.last) {
         this.last = snapshot;
         this.emit('event', { type: 'devices-updated' } satisfies ServerEvent);
       }
+    } catch {
+      return;
     } finally {
       this.polling = false;
     }

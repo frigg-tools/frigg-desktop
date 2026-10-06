@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import {
+  ANDROID_DEVICE_STATE,
   FRIDA_MESSAGE_BUFFER_LIMIT,
+  IOS_SIMULATOR_STATE,
   SQL_PAGE_SIZE,
   TRAFFIC_BUFFER_LIMIT,
   type SqlCell,
@@ -45,13 +47,16 @@ import {
   type TrafficExchange,
 } from '@frigg/shared';
 import * as api from './api/client';
+import type { StartLogsInput } from './api/client';
 import { recordSqlHistory } from './components/sql/history';
+import { isLogTargetAvailable } from './components/logcat/session';
 
-export type Screen = 'traffic' | 'mocks' | 'automation' | 'devices' | 'logcat' | 'database' | 'client' | 'mcp' | 'sql' | 'frida' | 'logs' | 'apk-store';
+export type Screen = 'traffic' | 'mocks' | 'automation' | 'devices' | 'database' | 'client' | 'mcp' | 'sql' | 'frida' | 'logs' | 'apk-store';
 export type LogLevelFilter = LogLevel | 'ALL';
 export type DeviceSetupPlatform = 'android' | 'ios' | 'manual';
 
 const LOG_BUFFER_LIMIT = 5000;
+let logAppsRequestId = 0;
 
 export interface LogFilters {
   minLevel: LogLevelFilter;
@@ -88,10 +93,20 @@ function initialActiveDevice(): LogTarget | null {
 }
 
 function defaultDeviceTarget(devices: DevicesSnapshot): LogTarget | null {
-  const android = devices.android.find((device) => device.state === 'device');
+  const android = devices.android.find((device) => device.state === ANDROID_DEVICE_STATE.connected);
   if (android) return { platform: 'android', id: android.serial, label: android.avdName ?? android.model };
-  const simulator = devices.iosSimulators.find((device) => device.state.toLowerCase() === 'booted');
+  const simulator = devices.iosSimulators.find(
+    (device) => device.state.toLowerCase() === IOS_SIMULATOR_STATE.booted.toLowerCase(),
+  );
   if (simulator) return { platform: 'ios', id: simulator.udid, label: simulator.name };
+  const physicalIosDevice = devices.iosDevices.find((device) => device.paired);
+  if (physicalIosDevice) {
+    return {
+      platform: 'ios',
+      id: physicalIosDevice.udid,
+      label: physicalIosDevice.name || physicalIosDevice.model,
+    };
+  }
   return null;
 }
 
@@ -109,6 +124,9 @@ function initialLocale(): Locale {
 export interface AppState {
   screen: Screen;
   setScreen: (s: Screen) => void;
+  logcatPanelOpen: boolean;
+  setLogcatPanelOpen: (open: boolean) => void;
+  toggleLogcatPanel: () => void;
   locale: Locale;
   setLocale: (locale: Locale) => void;
   deviceSetupPlatform: DeviceSetupPlatform | null;
@@ -133,6 +151,9 @@ export interface AppState {
   logEntries: LogEntry[];
   logStatus: LogSessionStatus;
   logTarget: LogTarget | null;
+  logTargetManuallyCleared: boolean;
+  logRetryVersion: number;
+  retryLogSession: () => void;
   logPackage: string;
   logApps: DeviceApp[];
   logFilters: LogFilters;
@@ -146,6 +167,8 @@ export interface AppState {
   loadLogApps: () => Promise<void>;
   startLogs: () => Promise<void>;
   stopLogs: () => Promise<void>;
+  startLogSession: (input: StartLogsInput) => Promise<LogSessionStatus>;
+  stopLogSession: () => Promise<LogSessionStatus>;
   clearLogs: () => Promise<void>;
   dbTarget: LogTarget | null;
   dbApps: DeviceApp[];
@@ -371,16 +394,12 @@ function resetPendingLogs(): void {
   }
 }
 
-function reconcileLogTarget(
-  target: LogTarget | null,
-  devices: DevicesSnapshot | null,
-  streaming: boolean,
-): LogTarget | null {
-  if (!target || streaming) return target;
-  if (target.platform === 'android') {
-    return devices?.android.some((device) => device.serial === target.id) ? target : null;
-  }
-  return devices?.iosSimulators.some((sim) => sim.udid === target.id) ? target : null;
+function reconcileLogTarget(target: LogTarget | null, devices: DevicesSnapshot): LogTarget | null {
+  return isLogTargetAvailable(target, devices) ? target : null;
+}
+
+function sameLogTarget(left: LogTarget | null, right: LogTarget | null): boolean {
+  return left?.platform === right?.platform && left?.id === right?.id;
 }
 
 function appendFridaMessages(list: FridaMessage[], incoming: FridaMessage[]): FridaMessage[] {
@@ -460,6 +479,9 @@ function upsertExchange(
 export const useAppStore = create<AppState>((set, get) => ({
   screen: 'traffic',
   setScreen: (s) => set({ screen: s }),
+  logcatPanelOpen: false,
+  setLogcatPanelOpen: (open) => set({ logcatPanelOpen: open }),
+  toggleLogcatPanel: () => set((state) => ({ logcatPanelOpen: !state.logcatPanelOpen })),
   locale: initialLocale(),
   setLocale: (locale) => {
     try {
@@ -486,7 +508,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch {
       void 0;
     }
-    set({ activeDevice: target });
+    set({
+      activeDevice: target,
+      ...(target === null ? {} : { logTargetManuallyCleared: false }),
+    });
   },
   status: null,
   wsConnected: false,
@@ -507,6 +532,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   logEntries: [],
   logStatus: { streaming: false, target: null, packageFilter: null, error: null },
   logTarget: null,
+  logTargetManuallyCleared: false,
+  logRetryVersion: 0,
+  retryLogSession: () => {
+    void get().loadLogApps();
+    set((s) => ({ logRetryVersion: s.logRetryVersion + 1 }));
+  },
   logPackage: '',
   logApps: [],
   logFilters: { minLevel: 'ALL', text: '' },
@@ -519,27 +550,45 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setLogTarget: (target) => {
     get().setActiveDevice(target);
-    set({ logTarget: target, logPackage: '', logApps: [] });
+    set({
+      logTarget: target,
+      logTargetManuallyCleared: target === null,
+      logPackage: '',
+      logApps: [],
+    });
     if (target) void get().loadLogApps();
   },
   setLogPackage: (value) => set({ logPackage: value }),
   setLogFilters: (patch) => set({ logFilters: { ...get().logFilters, ...patch } }),
   loadLogApps: async () => {
+    const requestId = ++logAppsRequestId;
     const target = get().logTarget;
     if (!target) return;
     try {
       const apps = await api.getDeviceApps(target.platform, target.id);
-      if (get().logTarget?.id === target.id) set({ logApps: apps });
+      const currentTarget = get().logTarget;
+      if (
+        requestId === logAppsRequestId &&
+        currentTarget?.platform === target.platform &&
+        currentTarget.id === target.id
+      ) {
+        set({ logApps: apps });
+      }
     } catch {
-      set({ logApps: [] });
+      const currentTarget = get().logTarget;
+      if (
+        requestId === logAppsRequestId &&
+        currentTarget?.platform === target.platform &&
+        currentTarget.id === target.id
+      ) {
+        set({ logApps: [] });
+      }
     }
   },
   startLogs: async () => {
     const { logTarget, logPackage } = get();
     if (!logTarget) return;
-    resetPendingLogs();
-    set({ logEntries: [] });
-    const status = await api.startLogs({
+    const status = await get().startLogSession({
       platform: logTarget.platform,
       id: logTarget.id,
       label: logTarget.label,
@@ -547,10 +596,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     set({ logStatus: status });
   },
-  stopLogs: async () => {
+  startLogSession: async (input) => {
     resetPendingLogs();
-    const status = await api.stopLogs();
+    set({ logEntries: [] });
+    return api.startLogs(input);
+  },
+  stopLogs: async () => {
+    const status = await get().stopLogSession();
     set({ logStatus: status });
+  },
+  stopLogSession: async () => {
+    resetPendingLogs();
+    return api.stopLogs();
   },
   clearLogs: async () => {
     resetPendingLogs();
@@ -1193,7 +1250,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       api.getMocks(),
       api.getDevices(),
     ]);
-    const activeDevice = reconcileLogTarget(get().activeDevice, devices, false) ?? defaultDeviceTarget(devices);
+    const previousLogTarget = get().logTarget;
+    const autoTarget = reconcileLogTarget(get().activeDevice, devices) ?? defaultDeviceTarget(devices);
+    const activeDevice = get().logTargetManuallyCleared ? null : autoTarget;
+    const logTarget = get().logTargetManuallyCleared
+      ? null
+      : reconcileLogTarget(get().logTarget, devices) ?? activeDevice;
+    const logTargetChanged = !sameLogTarget(previousLogTarget, logTarget);
     set({
       status,
       exchanges,
@@ -1201,9 +1264,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       rules: mocks.rules,
       devices,
       activeDevice,
-      logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming),
+      logTarget,
+      ...(logTargetChanged ? { logPackage: '', logApps: [] } : {}),
       fridaDeviceId: reconcileFridaDevice(get().fridaDeviceId, devices, get().fridaSessionStatus.running),
     });
+    if (logTarget && logTargetChanged) void get().loadLogApps();
   },
   refreshMocks: async () => {
     const mocks = await api.getMocks();
@@ -1211,13 +1276,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   refreshDevices: async () => {
     const devices = await api.getDevices();
-    const activeDevice = reconcileLogTarget(get().activeDevice, devices, false) ?? defaultDeviceTarget(devices);
+    const previousLogTarget = get().logTarget;
+    const autoTarget = reconcileLogTarget(get().activeDevice, devices) ?? defaultDeviceTarget(devices);
+    const activeDevice = get().logTargetManuallyCleared ? null : autoTarget;
+    const logTarget = get().logTargetManuallyCleared
+      ? null
+      : reconcileLogTarget(get().logTarget, devices) ?? activeDevice;
+    const logTargetChanged = !sameLogTarget(previousLogTarget, logTarget);
     set({
       devices,
       activeDevice,
-      logTarget: reconcileLogTarget(get().logTarget, devices, get().logStatus.streaming),
+      logTarget,
+      ...(logTargetChanged ? { logPackage: '', logApps: [] } : {}),
       fridaDeviceId: reconcileFridaDevice(get().fridaDeviceId, devices, get().fridaSessionStatus.running),
     });
+    if (logTarget && logTargetChanged) void get().loadLogApps();
   },
   refreshStatus: async () => {
     const status = await api.getStatus();

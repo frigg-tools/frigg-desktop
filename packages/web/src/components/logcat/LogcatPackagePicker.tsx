@@ -17,18 +17,18 @@ function truncateMiddle(value: string, limit: number): string {
   return `${value.slice(0, head)}${ellipsis}${value.slice(value.length - tail)}`;
 }
 
-interface LogcatPackagePickerProps {
-  disabled: boolean;
-}
-
-export default function LogcatPackagePicker({ disabled }: LogcatPackagePickerProps) {
+export default function LogcatPackagePicker() {
   const t = useT();
   const logApps = useAppStore((s) => s.logApps);
   const logPackage = useAppStore((s) => s.logPackage);
   const setLogPackage = useAppStore((s) => s.setLogPackage);
+  const logTarget = useAppStore((s) => s.logTarget);
+  const devices = useAppStore((s) => s.devices);
 
-  const userApps = logApps.filter((app) => !app.system);
-  const systemApps = logApps.filter((app) => app.system);
+  const isPhysicalIosDevice = logTarget?.platform === 'ios' &&
+    devices?.iosDevices.some((device) => device.udid === logTarget.id) === true;
+  const userApps = isPhysicalIosDevice ? [] : logApps.filter((app) => !app.system);
+  const systemApps = isPhysicalIosDevice ? [] : logApps.filter((app) => app.system);
 
   const renderOptions = (apps: DeviceApp[]) =>
     apps.map((app) => {
@@ -43,8 +43,8 @@ export default function LogcatPackagePicker({ disabled }: LogcatPackagePickerPro
   return (
     <select
       value={logPackage}
-      disabled={disabled}
       onChange={(e) => setLogPackage(e.target.value)}
+      onFocus={() => void useAppStore.getState().loadLogApps()}
       className="max-w-[16rem] rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <option value="">{t('logcat.package.allPackages')}</option>
@@ -53,6 +53,9 @@ export default function LogcatPackagePicker({ disabled }: LogcatPackagePickerPro
       ) : null}
       {systemApps.length > 0 ? (
         <optgroup label={t('logcat.package.systemApps')}>{renderOptions(systemApps)}</optgroup>
+      ) : null}
+      {isPhysicalIosDevice && logApps.length > 0 ? (
+        <optgroup label={t('logcat.package.processes')}>{renderOptions(logApps)}</optgroup>
       ) : null}
     </select>
   );

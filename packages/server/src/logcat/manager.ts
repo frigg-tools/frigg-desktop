@@ -2,6 +2,12 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { execFile } from 'node:child_process';
 import type { LogEntry, LogSessionStatus, LogTarget, ServerEvent } from '@frigg/shared';
+import {
+  classifyIosDeviceLogError,
+  IosDeviceLogTool,
+  iosDeviceLogError,
+  isIosSimulatorUdid,
+} from './ios-device-log-tool.ts';
 import { parseAndroidLogcatLine } from './parse-android.ts';
 import { parseIosLogLine } from './parse-ios.ts';
 
@@ -13,10 +19,15 @@ interface SpawnPlan {
   command: string;
   args: string[];
   parse: (line: string) => Omit<LogEntry, 'id'> | null;
+  iosDevice?: boolean;
+  processFilter?: string | null;
 }
+
+const IOS_LOG_STARTUP_TIMEOUT_MS = 10_000;
 
 export class LogcatManager extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | null = null;
+  private iosStartupTimer: NodeJS.Timeout | null = null;
   private buffer = '';
   private entryId = 0;
   private sessionStatus: LogSessionStatus = {
@@ -25,6 +36,10 @@ export class LogcatManager extends EventEmitter {
     packageFilter: null,
     error: null,
   };
+
+  constructor(private readonly iosDeviceLogTool = new IosDeviceLogTool()) {
+    super();
+  }
 
   get status(): LogSessionStatus {
     return { ...this.sessionStatus };
@@ -35,17 +50,12 @@ export class LogcatManager extends EventEmitter {
     const packageFilter = normalizeFilter(opts.packageFilter);
     this.sessionStatus = { streaming: false, target, packageFilter, error: null };
 
-    if (target.platform === 'ios' && !isSimulatorUdid(target.id)) {
-      this.setError(
-        'Physical iOS devices are not supported for log streaming. Use the iOS Simulator, or run idevicesyslog to stream a real device.',
-      );
-      return this.status;
-    }
-
     const plan =
       target.platform === 'android'
         ? await this.buildAndroidPlan(target.id, packageFilter)
-        : buildIosPlan(target.id, packageFilter);
+        : isIosSimulatorUdid(target.id)
+          ? buildIosSimulatorPlan(target.id, packageFilter)
+          : this.buildIosDevicePlan(target.id, packageFilter);
 
     if (plan === null) return this.status;
 
@@ -57,6 +67,7 @@ export class LogcatManager extends EventEmitter {
     this.child = null;
     this.buffer = '';
     if (child !== null) {
+      this.clearIosStartupTimer();
       child.removeAllListeners();
       child.stdout.removeAllListeners();
       child.stderr.removeAllListeners();
@@ -88,7 +99,6 @@ export class LogcatManager extends EventEmitter {
     serial: string,
     packageFilter: string | null,
   ): Promise<SpawnPlan | null> {
-    await execClear(serial);
     const baseArgs = ['-s', serial, 'logcat', '-v', 'threadtime'];
     if (packageFilter === null) {
       return { command: 'adb', args: baseArgs, parse: parseAndroidLogcatLine };
@@ -102,12 +112,21 @@ export class LogcatManager extends EventEmitter {
     return { command: 'adb', args: [...baseArgs, ...pidArgs], parse: parseAndroidLogcatLine };
   }
 
+  private buildIosDevicePlan(udid: string, processName: string | null): SpawnPlan {
+    return {
+      ...this.iosDeviceLogTool.streamCommand(udid, processName),
+      parse: parseIosLogLine,
+      iosDevice: true,
+      processFilter: processName,
+    };
+  }
+
   private spawnPlan(plan: SpawnPlan, target: LogTarget, packageFilter: string | null): LogSessionStatus {
     let child: ChildProcessWithoutNullStreams;
     try {
       child = spawn(plan.command, plan.args, { windowsHide: true });
     } catch (error) {
-      this.setError(`Could not start the log stream: ${describeError(error)}.`);
+      this.setError(this.spawnError(plan, error));
       return this.status;
     }
 
@@ -121,30 +140,63 @@ export class LogcatManager extends EventEmitter {
     };
     this.emitStatus();
 
+    if (plan.iosDevice) {
+      this.iosStartupTimer = setTimeout(() => {
+        this.failChild(
+          child,
+          iosDeviceLogError('stream-failed', 'Timed out while connecting to the iOS device.'),
+        );
+      }, IOS_LOG_STARTUP_TIMEOUT_MS);
+    }
+
     let lastStderr = '';
+    let stderrBuffer = '';
     child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => this.consume(chunk, plan.parse));
+    child.stdout.on('data', (chunk: string) => this.consume(chunk, plan, child));
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => {
-      const line = chunk
-        .split('\n')
-        .map((part) => part.trim())
-        .filter((part) => part !== '')
-        .pop();
-      if (line) lastStderr = line;
+      stderrBuffer += chunk;
+      const lines = stderrBuffer.split(/\r?\n/);
+      stderrBuffer = lines.pop() ?? '';
+      for (const part of lines) {
+        const line = part.trim();
+        if (line === '') continue;
+        lastStderr = line;
+        if (!plan.iosDevice) continue;
+        const errorCode = classifyIosDeviceLogError(line);
+        if (errorCode !== null) {
+          this.failChild(child, iosDeviceLogError(errorCode, line));
+          return;
+        }
+        if (isIosStartupFailure(line)) {
+          this.failChild(child, iosDeviceLogError('stream-failed', line));
+          return;
+        }
+      }
     });
 
     child.on('error', (error) => {
       if (this.child !== child) return;
+      this.clearIosStartupTimer();
       this.child = null;
-      this.setError(`Log stream failed: ${describeError(error)}.`);
+      this.setError(this.spawnError(plan, error));
     });
 
     child.on('exit', (code, signal) => {
       if (this.child !== child) return;
+      this.clearIosStartupTimer();
       this.child = null;
       if (signal === 'SIGTERM' || signal === 'SIGKILL') return;
-      const detail = lastStderr.replace(/^error:\s*/i, '').trim();
+      const detail = [stderrBuffer, lastStderr]
+        .map((part) => part.replace(/^error:\s*/i, '').trim())
+        .filter((part) => part !== '')
+        .join(' ');
+      if (plan.iosDevice) {
+        const errorCode = classifyIosDeviceLogError(detail);
+        const deviceErrorCode = errorCode ?? (code === 0 && detail === '' ? 'disconnected' : 'stream-failed');
+        this.setError(iosDeviceLogError(deviceErrorCode, detail));
+        return;
+      }
       const fallback =
         code !== null && code !== 0 ? `exit code ${code}` : signal !== null ? signal : 'stream ended';
       const reason = detail !== '' ? detail : fallback;
@@ -160,22 +212,59 @@ export class LogcatManager extends EventEmitter {
     return this.status;
   }
 
-  private consume(chunk: string, parse: (line: string) => Omit<LogEntry, 'id'> | null): void {
+  private spawnError(plan: SpawnPlan, error: unknown): string {
+    if (!plan.iosDevice) return `Could not start the log stream: ${describeError(error)}.`;
+    const code = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'helper-missing' : 'stream-failed';
+    return iosDeviceLogError(code, code === 'stream-failed' ? describeError(error) : undefined);
+  }
+
+  private failChild(child: ChildProcessWithoutNullStreams, message: string): void {
+    if (this.child !== child) return;
+    this.clearIosStartupTimer();
+    this.child = null;
+    child.removeAllListeners();
+    child.stdout.removeAllListeners();
+    child.stderr.removeAllListeners();
+    child.kill('SIGTERM');
+    child.unref();
+    this.setError(message);
+  }
+
+  private consume(chunk: string, plan: SpawnPlan, child: ChildProcessWithoutNullStreams): void {
     this.buffer += chunk;
     let newlineIndex = this.buffer.indexOf('\n');
     while (newlineIndex !== -1) {
       const line = this.buffer.slice(0, newlineIndex).replace(/\r$/, '');
       this.buffer = this.buffer.slice(newlineIndex + 1);
-      this.emitLine(line, parse);
+      const trimmed = line.trim();
+      if (plan.iosDevice && /^\[connected:[^\]]+\]$/i.test(trimmed)) {
+        this.clearIosStartupTimer();
+      } else if (plan.iosDevice && /^\[disconnected:[^\]]+\]$/i.test(trimmed)) {
+        this.failChild(child, iosDeviceLogError('disconnected', trimmed));
+        return;
+      } else {
+        this.emitLine(line, plan.parse, plan.processFilter);
+      }
       newlineIndex = this.buffer.indexOf('\n');
     }
   }
 
-  private emitLine(line: string, parse: (line: string) => Omit<LogEntry, 'id'> | null): void {
+  private emitLine(
+    line: string,
+    parse: (line: string) => Omit<LogEntry, 'id'> | null,
+    processFilter: string | null = null,
+  ): void {
     const parsed = parse(line);
     if (parsed === null) return;
+    if (processFilter !== null && parsed.tag !== processFilter) return;
     const entry: LogEntry = { id: ++this.entryId, ...parsed };
     this.emit('event', { type: 'log-entry', entry } satisfies ServerEvent);
+  }
+
+  private clearIosStartupTimer(): void {
+    if (this.iosStartupTimer === null) return;
+    clearTimeout(this.iosStartupTimer);
+    this.iosStartupTimer = null;
   }
 
   private setError(message: string): void {
@@ -199,23 +288,13 @@ function normalizeFilter(value: string | undefined): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
-function isSimulatorUdid(id: string): boolean {
-  return /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(id);
-}
-
-function buildIosPlan(udid: string, packageFilter: string | null): SpawnPlan {
+function buildIosSimulatorPlan(udid: string, packageFilter: string | null): SpawnPlan {
   const args = ['simctl', 'spawn', udid, 'log', 'stream', '--style', 'compact', '--level', 'debug'];
   if (packageFilter !== null) {
     const escaped = packageFilter.replace(/["\\]/g, '\\$&');
     args.push('--predicate', `process CONTAINS "${escaped}"`);
   }
   return { command: 'xcrun', args, parse: parseIosLogLine };
-}
-
-function execClear(serial: string): Promise<void> {
-  return new Promise((resolve) => {
-    execFile('adb', ['-s', serial, 'logcat', '-c'], { timeout: 5000, windowsHide: true }, () => resolve());
-  });
 }
 
 function resolveAndroidPids(serial: string, packageName: string): Promise<number[]> {
@@ -254,4 +333,10 @@ function pidofWith(serial: string, shellArgs: string[]): Promise<number[]> {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isIosStartupFailure(detail: string): boolean {
+  return /^(?:error:|\*\*\*|could not start logger\b|could not start .* service\b|could not connect to .* service\b|unable to start capturing syslog\b)/i.test(
+    detail.trim(),
+  );
 }

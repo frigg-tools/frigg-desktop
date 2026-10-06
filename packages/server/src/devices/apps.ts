@@ -3,9 +3,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DeviceApp, LogPlatform } from '@frigg/shared';
 import { run } from '../lib/exec.ts';
+import { IosDeviceLogTool, isIosSimulatorUdid } from '../logcat/ios-device-log-tool.ts';
 
-export async function listApps(platform: LogPlatform, id: string): Promise<DeviceApp[]> {
+export async function listApps(
+  platform: LogPlatform,
+  id: string,
+  iosDeviceLogTool: IosDeviceLogTool,
+): Promise<DeviceApp[]> {
   if (platform === 'android') return listAndroidApps(id);
+  if (!isIosSimulatorUdid(id)) return iosDeviceLogTool.listProcesses(id);
   return listIosApps(id);
 }
 

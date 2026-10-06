@@ -4,13 +4,18 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT } from '@frigg/shared';
+import { DEFAULT_API_PORT, DEFAULT_PROXY_PORT, IOS_SIMULATOR_PROXY_GROUP_ID } from '@frigg/shared';
 import type { ServerEvent, AppLogEvent } from '@frigg/shared';
 import { ApiClientStore } from './api-client/store.ts';
 import { buildRouter, type ApiDeps } from './api/router.ts';
 import { WsHub } from './api/ws.ts';
 import { DbInspector } from './db/index.ts';
-import { disableMacProxyIfEnabledByFrigg } from './devices/macos-proxy.ts';
+import {
+  disableMacProxyIfEnabledByFrigg,
+  getMacProxyState,
+  markMacProxyEnabledByFrigg,
+  setMacProxy,
+} from './devices/macos-proxy.ts';
 import { DeviceWatcher } from './devices/device-watcher.ts';
 import { getLanIp } from './lib/net.ts';
 import {
@@ -22,6 +27,7 @@ import {
   automationsPath,
   automationRunsPath,
   automationReferencesPath,
+  deviceProxiesPath,
   proxyCertsPath,
   sqlConnectionsPath,
   sqlSecretKeyPath,
@@ -34,6 +40,7 @@ import { agentSkillsSource, mcpServerInfo } from './api/mcp-info.ts';
 import { LoggerService } from './logging/logger-service.ts';
 import { FridaManager } from './frida/index.ts';
 import { LogcatManager } from './logcat/index.ts';
+import { IosDeviceLogTool } from './logcat/ios-device-log-tool.ts';
 import { MockStore } from './mocks/store.ts';
 import { BreakpointManager } from './proxy/breakpoint-manager.ts';
 import { ensureCa } from './proxy/ca.ts';
@@ -44,6 +51,9 @@ import { CertTrustTracker } from './devices/cert-trust-tracker.ts';
 import { teardownAndroidProxiesPointingAt } from './devices/android.ts';
 import { restoreTrackedAndroidProxies } from './devices/android.ts';
 import { AndroidProxyRegistry } from './devices/android-proxy-registry.ts';
+import { DeviceProxyRegistry } from './devices/device-proxy-registry.ts';
+import { DeviceProxyManager } from './devices/device-proxy-manager.ts';
+import { listDeviceProxyTargets, readDeviceProxyInventorySnapshot } from './devices/device-proxy-targets.ts';
 import {
   createFileSecretBox,
   SqlConnectionStore,
@@ -65,6 +75,7 @@ export interface StartFriggOptions {
   webDir?: string;
   uiPort?: number;
   secretBox?: SecretBox;
+  iosLogToolPath?: string;
 }
 
 export interface FriggHandles {
@@ -145,17 +156,50 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   automationManagerForGuard = automationManager;
   await automationManager.initialize();
 
+  const deviceProxyRegistry = await DeviceProxyRegistry.load(deviceProxiesPath);
   const engine = new ProxyEngine({ proxyPort, ca, mocks, traffic, breakpoints, proxyCerts });
   await engine.start();
   const actualProxyPort = engine.port;
 
-  const logcat = new LogcatManager();
+  const iosDeviceLogTool = new IosDeviceLogTool(options.iosLogToolPath ?? 'idevicesyslog');
+  const logcat = new LogcatManager(iosDeviceLogTool);
   const db = new DbInspector();
   const apiClient = await ApiClientStore.load(apiClientPath);
   const apkStore = await ApkStore.load(apkStorePath, apkStoreDir);
   const androidProxyRegistry = await AndroidProxyRegistry.load(androidProxiesPath);
   const frida = new FridaManager();
-  const deviceWatcher = new DeviceWatcher();
+  const deviceProxies = new DeviceProxyManager({
+    sharedProxyPort: actualProxyPort,
+    registry: deviceProxyRegistry,
+    ca,
+    mocks,
+    traffic,
+    breakpoints,
+    proxyCerts,
+  });
+  const initialProxyReconcileRevision = deviceProxies.beginReconcile();
+  const initialProxyTargets = await listDeviceProxyTargets(getLanIp());
+  await deviceProxies.reconcile(initialProxyTargets, initialProxyReconcileRevision);
+  const existingMacProxy = await getMacProxyState();
+  const simulatorProxy = deviceProxies.getStatus(IOS_SIMULATOR_PROXY_GROUP_ID);
+  if (
+    existingMacProxy.enabled &&
+    existingMacProxy.host === '127.0.0.1' &&
+    simulatorProxy?.ready === true &&
+    simulatorProxy.port !== null
+  ) {
+    if (existingMacProxy.port === actualProxyPort) {
+      const migrated = await setMacProxy(true, simulatorProxy.port, 'en');
+      if (!migrated.ok) {
+        loggerService.warn('server', 'macos-proxy-migration', 'Could not move the active macOS proxy to the simulator group listener.', {
+          message: migrated.message,
+        });
+      }
+    } else if (existingMacProxy.port === simulatorProxy.port) {
+      markMacProxyEnabledByFrigg();
+    }
+  }
+  const deviceWatcher = new DeviceWatcher(readDeviceProxyInventorySnapshot);
 
   const secretBox = options.secretBox ?? createFileSecretBox(sqlSecretKeyPath);
   const sqlSecrets = await SqlSecretStore.load(sqlSecretsPath, secretBox);
@@ -171,6 +215,7 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     proxyPort: actualProxyPort,
     apiPort,
     logcat,
+    iosDeviceLogTool,
     loggerService,
     db,
     apiClient,
@@ -181,7 +226,10 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     frida,
     certTrust,
     androidProxyRegistry,
-    reloadProxy: () => engine.reload(),
+    deviceProxies,
+    reloadProxy: async () => {
+      await Promise.all([engine.reload(), deviceProxies.reloadAll()]);
+    },
     apkStore,
     agentIntegrations: createAgentIntegrationService({
       homeDir: os.homedir(),
@@ -264,7 +312,16 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
   };
 
   deviceWatcher.on('event', (event: ServerEvent) => {
-    if (event.type === 'devices-updated') void reconcileAndroidProxies();
+    if (event.type !== 'devices-updated') return;
+    void reconcileAndroidProxies();
+    const proxyReconcileRevision = deviceProxies.beginReconcile();
+    void listDeviceProxyTargets(getLanIp())
+      .then((targets) => deviceProxies.reconcile(targets, proxyReconcileRevision))
+      .catch((error: unknown) => {
+        loggerService.warn('server', 'device-proxy-reconcile', 'Device proxy listeners could not be reconciled.', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
   });
   void reconcileAndroidProxies(true);
   deviceWatcher.start();
@@ -274,6 +331,8 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
     deviceWatcher.dispose();
     await proxyCleanupInFlight;
     await reconcileAndroidProxies(true, true);
+    await disableMacProxyIfEnabledByFrigg();
+    await deviceProxies.stop();
     await Promise.allSettled([
       engine.stop(),
       mocks.flush(),
@@ -284,7 +343,6 @@ export async function startFrigg(options: StartFriggOptions = {}): Promise<Frigg
       sqlConnections.flush(),
       sql.disposeAll(),
       frida.stop(),
-      disableMacProxyIfEnabledByFrigg(),
       androidProxyRegistry.flush(),
     ]);
     loggerService.dispose();

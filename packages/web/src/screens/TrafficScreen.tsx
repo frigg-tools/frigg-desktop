@@ -1,4 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ANDROID_DEVICE_STATE,
+  IOS_SIMULATOR_PROXY_GROUP_ID,
+  IOS_SIMULATOR_STATE,
+  androidDeviceProxyId,
+  iosPhysicalDeviceProxyId,
+} from '@frigg/shared';
 import type { TrafficExchange } from '@frigg/shared';
 import { useAppStore } from '../store';
 import { ResizeHandle, useResizable } from '../components/ResizeHandle';
@@ -10,6 +17,8 @@ import TrafficDetail from '../components/traffic/TrafficDetail';
 import TrafficEmptyState from '../components/traffic/TrafficEmptyState';
 
 const RENDER_LIMIT = 500;
+const DEVICE_SOURCE_PREFIX = 'device:';
+const ADDRESS_SOURCE_PREFIX = 'address:';
 const CONNECTIVITY_HOSTS = new Set([
   'connectivitycheck.gstatic.com',
   'clients3.google.com',
@@ -32,6 +41,21 @@ function isConnectivityCheck(exchange: TrafficExchange): boolean {
 
 function normalizeClientAddress(address: string): string {
   return address.replace(/^::ffff:/i, '').toLowerCase();
+}
+
+interface TrafficDeviceOption {
+  id: string;
+  label: string;
+  available: boolean;
+}
+
+function matchesSource(exchange: TrafficExchange, deviceId: string | null, address: string | null): boolean {
+  if (deviceId !== null) return exchange.request.clientDeviceId === deviceId;
+  if (address !== null) {
+    return exchange.request.clientDeviceId === undefined &&
+      normalizeClientAddress(exchange.request.clientAddress ?? '') === address;
+  }
+  return true;
 }
 
 function ListHeader() {
@@ -63,39 +87,84 @@ export default function TrafficScreen() {
   const [hideConnectivity, setHideConnectivity] = useState(false);
   const [frozen, setFrozen] = useState<TrafficExchange[] | null>(null);
 
-  const sources = useMemo(() => {
+  const addresses = useMemo(() => {
     const distinct = new Set<string>();
     for (const exchange of exchanges) {
+      if (exchange.request.clientDeviceId !== undefined) continue;
       const address = exchange.request.clientAddress;
-      if (address) distinct.add(address);
+      if (address) distinct.add(normalizeClientAddress(address));
     }
     return Array.from(distinct).sort((a, b) => a.localeCompare(b));
   }, [exchanges]);
 
-  const sourceLabels = useMemo(() => {
-    const labels: Record<string, string> = {};
-    for (const device of devices?.android ?? []) {
-      if (device.ipAddress) {
-        const label = device.avdName ?? device.model;
-        labels[device.ipAddress] = label;
-        labels[normalizeClientAddress(device.ipAddress)] = label;
-      }
-    }
-    return labels;
-  }, [devices]);
+  const deviceOptions = useMemo<TrafficDeviceOption[]>(() => {
+    if (devices === null) return [];
+    const hasBootedSimulators = devices.iosSimulators.some(
+      (simulator) => simulator.state.toLowerCase() === IOS_SIMULATOR_STATE.booted.toLowerCase(),
+    );
+    const macProxyUsesGroup = devices.tooling.macosProxy.enabled &&
+      devices.tooling.macosProxy.host === '127.0.0.1' &&
+      typeof devices.tooling.macosProxy.port === 'number' &&
+      devices.tooling.macosProxy.port === devices.tooling.macosProxy.proxy?.port;
+    const hasSharedMacProxyTraffic = exchanges.some(
+      (exchange) => exchange.request.clientDeviceId === IOS_SIMULATOR_PROXY_GROUP_ID,
+    );
+    return [
+      ...devices.android
+        .filter((device) => device.state === ANDROID_DEVICE_STATE.connected)
+        .map((device) => ({
+          id: androidDeviceProxyId(device.serial),
+          label: `${device.avdName ?? device.model} · ${device.serial}`,
+          available: device.proxy?.ready === true && device.proxy.host !== null && device.proxy.port !== null,
+        })),
+      ...(hasBootedSimulators || macProxyUsesGroup || hasSharedMacProxyTraffic
+        ? [{
+            id: IOS_SIMULATOR_PROXY_GROUP_ID,
+            label: t(hasBootedSimulators
+              ? 'traffic.device.iosSimulatorGroup'
+              : 'traffic.device.macSystemProxy'),
+            available: devices.tooling.macosProxy.proxy?.ready === true,
+          }]
+        : []),
+      ...devices.iosDevices
+        .filter((device) => device.paired)
+        .map((device) => ({
+          id: iosPhysicalDeviceProxyId(device.udid),
+          label: `${device.model} · ${device.name}`,
+          available: device.proxy?.ready === true && device.proxy.host !== null && device.proxy.port !== null,
+        })),
+    ];
+  }, [devices, exchanges, t]);
 
-  const activeSource = useMemo(() => {
+  const activeDeviceSource = useMemo(() => {
     if (activeDevice?.platform !== 'android') return '';
-    return devices?.android.find((item) => item.serial === activeDevice.id)?.ipAddress ?? '';
-  }, [activeDevice, devices]);
+    const id = androidDeviceProxyId(activeDevice.id);
+    return deviceOptions.some((option) => option.id === id) ? `${DEVICE_SOURCE_PREFIX}${id}` : '';
+  }, [activeDevice, deviceOptions]);
 
   useEffect(() => {
-    setSource(activeSource);
-  }, [activeSource]);
+    setSource(activeDeviceSource);
+  }, [activeDeviceSource]);
 
   useEffect(() => {
-    if (source !== '' && !sources.includes(source) && source !== activeSource) setSource('');
-  }, [source, sources, activeSource]);
+    if (source.startsWith(DEVICE_SOURCE_PREFIX)) {
+      const id = source.slice(DEVICE_SOURCE_PREFIX.length);
+      if (!deviceOptions.some((option) => option.id === id)) setSource('');
+    } else if (source.startsWith(ADDRESS_SOURCE_PREFIX)) {
+      const address = source.slice(ADDRESS_SOURCE_PREFIX.length);
+      if (!addresses.includes(address)) setSource('');
+    }
+  }, [source, deviceOptions, addresses]);
+
+  const selectedDeviceId = source.startsWith(DEVICE_SOURCE_PREFIX)
+    ? source.slice(DEVICE_SOURCE_PREFIX.length)
+    : null;
+  const selectedAddress = source.startsWith(ADDRESS_SOURCE_PREFIX)
+    ? source.slice(ADDRESS_SOURCE_PREFIX.length)
+    : null;
+  const selectedDevice = selectedDeviceId === null
+    ? undefined
+    : deviceOptions.find((option) => option.id === selectedDeviceId);
 
   const initialIdsRef = useRef<ReadonlySet<string> | null>(null);
   if (initialIdsRef.current === null) {
@@ -108,7 +177,7 @@ export default function TrafficScreen() {
     const query = filter.trim().toLowerCase();
     const matched = base.filter((e) => {
       if (method !== 'ALL' && e.request.method.toUpperCase() !== method) return false;
-      if (source !== '' && normalizeClientAddress(e.request.clientAddress ?? '') !== normalizeClientAddress(source)) return false;
+      if (!matchesSource(e, selectedDeviceId, selectedAddress)) return false;
       if (hideConnectivity && isConnectivityCheck(e)) return false;
       if (query.length > 0) {
         const url = e.request.url.toLowerCase();
@@ -118,7 +187,7 @@ export default function TrafficScreen() {
       return true;
     });
     return matched.slice(-RENDER_LIMIT).reverse();
-  }, [exchanges, frozen, filter, method, source, hideConnectivity]);
+  }, [exchanges, frozen, filter, method, selectedDeviceId, selectedAddress, hideConnectivity]);
 
   const hiddenConnectivityCount = useMemo(() => {
     const base = frozen ?? exchanges;
@@ -126,11 +195,11 @@ export default function TrafficScreen() {
     return base.filter((e) => {
       if (!isConnectivityCheck(e)) return false;
       if (method !== 'ALL' && e.request.method.toUpperCase() !== method) return false;
-      if (source !== '' && normalizeClientAddress(e.request.clientAddress ?? '') !== normalizeClientAddress(source)) return false;
+      if (!matchesSource(e, selectedDeviceId, selectedAddress)) return false;
       if (query.length > 0 && !e.request.url.toLowerCase().includes(query) && !e.request.host.toLowerCase().includes(query)) return false;
       return true;
     }).length;
-  }, [exchanges, frozen, filter, method, source]);
+  }, [exchanges, frozen, filter, method, selectedDeviceId, selectedAddress]);
 
   const bufferedCount = useMemo(() => {
     if (frozen === null) return 0;
@@ -164,8 +233,8 @@ export default function TrafficScreen() {
         filter={filter}
         method={method}
         source={source}
-        sources={sources}
-        sourceLabels={sourceLabels}
+        deviceOptions={deviceOptions}
+        addresses={addresses}
         hideConnectivity={hideConnectivity}
         hiddenConnectivityCount={hiddenConnectivityCount}
         paused={frozen !== null}
@@ -182,13 +251,18 @@ export default function TrafficScreen() {
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto">
           {exchanges.length === 0 ? (
-            <TrafficEmptyState deviceLabel={activeDevice?.label} />
+            <TrafficEmptyState
+              deviceLabel={selectedDevice?.label ?? activeDevice?.label}
+              sharedMacProxy={selectedDeviceId === IOS_SIMULATOR_PROXY_GROUP_ID}
+            />
           ) : visible.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <p className="max-w-lg px-6 text-center text-[13px] leading-relaxed text-zinc-400">
-                {source === activeSource && activeDevice
-                  ? t('traffic.waitingForDevice', { device: activeDevice.label })
-                  : t('traffic.noMatch')}
+                {selectedDevice?.id === IOS_SIMULATOR_PROXY_GROUP_ID
+                  ? t('traffic.waitingForSharedMacProxy')
+                  : selectedDevice !== undefined
+                    ? t('traffic.waitingForDevice', { device: selectedDevice.label })
+                    : t('traffic.noMatch')}
               </p>
             </div>
           ) : (

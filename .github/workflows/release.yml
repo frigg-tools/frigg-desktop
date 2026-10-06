@@ -15,8 +15,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x64]
-    runs-on: macos-14
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-large
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +28,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Install iOS log helper
+        run: brew install libimobiledevice
 
       - run: npm ci
 

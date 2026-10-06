@@ -13,6 +13,7 @@ import type {
 
 interface PausedEntry {
   exchange: PausedExchange;
+  ownerId: string;
   resolve: (resume: BreakpointResume) => void;
 }
 
@@ -84,7 +85,7 @@ export class BreakpointManager extends EventEmitter {
     return null;
   }
 
-  pauseRequest(ruleId: string, data: PausedRequestData): Promise<BreakpointResume> {
+  pauseRequest(ruleId: string, data: PausedRequestData, ownerId = 'shared'): Promise<BreakpointResume> {
     const exchange: PausedExchange = {
       id: randomUUID(),
       ruleId,
@@ -92,13 +93,14 @@ export class BreakpointManager extends EventEmitter {
       createdAt: Date.now(),
       request: data,
     };
-    return this.register(exchange);
+    return this.register(exchange, ownerId);
   }
 
   pauseResponse(
     ruleId: string,
     requestData: PausedRequestData,
     responseData: PausedResponseData,
+    ownerId = 'shared',
   ): Promise<BreakpointResume> {
     const exchange: PausedExchange = {
       id: randomUUID(),
@@ -108,7 +110,7 @@ export class BreakpointManager extends EventEmitter {
       request: requestData,
       response: responseData,
     };
-    return this.register(exchange);
+    return this.register(exchange, ownerId);
   }
 
   resume(id: string, resume: BreakpointResume): void {
@@ -119,6 +121,13 @@ export class BreakpointManager extends EventEmitter {
     this.emit('event', { type: 'breakpoint-resumed', id } satisfies ServerEvent);
   }
 
+  releaseOwner(ownerId: string): void {
+    for (const [id, entry] of [...this.paused]) {
+      if (entry.ownerId !== ownerId) continue;
+      this.resume(id, { action: 'abort' });
+    }
+  }
+
   releaseAll(): void {
     for (const entry of this.paused.values()) {
       entry.resolve({ action: 'abort' });
@@ -126,9 +135,9 @@ export class BreakpointManager extends EventEmitter {
     this.paused.clear();
   }
 
-  private register(exchange: PausedExchange): Promise<BreakpointResume> {
+  private register(exchange: PausedExchange, ownerId: string): Promise<BreakpointResume> {
     return new Promise<BreakpointResume>((resolve) => {
-      this.paused.set(exchange.id, { exchange, resolve });
+      this.paused.set(exchange.id, { exchange, ownerId, resolve });
       this.emit('event', { type: 'breakpoint-paused', paused: exchange } satisfies ServerEvent);
     });
   }

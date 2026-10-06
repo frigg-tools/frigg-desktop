@@ -2,15 +2,23 @@ import type { ReactNode } from 'react';
 import { useT } from '../../i18n';
 
 const METHOD_OPTIONS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+const DEVICE_SOURCE_PREFIX = 'device:';
+const ADDRESS_SOURCE_PREFIX = 'address:';
 
 const LOCALHOST_ADDRESSES = new Set(['::1', '127.0.0.1']);
+
+interface TrafficDeviceOption {
+  id: string;
+  label: string;
+  available: boolean;
+}
 
 interface TrafficToolbarProps {
   filter: string;
   method: string;
   source: string;
-  sources: string[];
-  sourceLabels: Record<string, string>;
+  deviceOptions: TrafficDeviceOption[];
+  addresses: string[];
   hideConnectivity: boolean;
   hiddenConnectivityCount: number;
   paused: boolean;
@@ -46,8 +54,8 @@ export default function TrafficToolbar({
   filter,
   method,
   source,
-  sources,
-  sourceLabels,
+  deviceOptions,
+  addresses,
   hideConnectivity,
   hiddenConnectivityCount,
   paused,
@@ -64,11 +72,6 @@ export default function TrafficToolbar({
   const t = useT();
   const sourceLabel = (address: string) =>
     LOCALHOST_ADDRESSES.has(address) ? t('traffic.source.localhost') : address;
-  const displayedSourceLabel = (address: string) => {
-    const normalized = address.replace(/^::ffff:/i, '').toLowerCase();
-    const deviceName = sourceLabels[address] ?? sourceLabels[normalized];
-    return deviceName ? `${deviceName} · ${sourceLabel(address)}` : sourceLabel(address);
-  };
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
       <h1 className="font-display text-base font-semibold tracking-wide text-zinc-100">{t('traffic.title')}</h1>
@@ -103,14 +106,30 @@ export default function TrafficToolbar({
         className="min-h-9 max-w-48 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
       >
         <option value="">{t('traffic.source.all')}</option>
-        {source !== '' && !sources.includes(source) ? (
-          <option value={source}>{displayedSourceLabel(source)}</option>
+        {source.startsWith(DEVICE_SOURCE_PREFIX) && !deviceOptions.some((option) => `${DEVICE_SOURCE_PREFIX}${option.id}` === source) ? (
+          <option value={source}>{t('traffic.deviceUnavailable')}</option>
         ) : null}
-        {sources.map((address) => (
-          <option key={address} value={address}>
-            {displayedSourceLabel(address)}
-          </option>
-        ))}
+        {source.startsWith(ADDRESS_SOURCE_PREFIX) && !addresses.some((address) => `${ADDRESS_SOURCE_PREFIX}${address}` === source) ? (
+          <option value={source}>{sourceLabel(source.slice(ADDRESS_SOURCE_PREFIX.length))}</option>
+        ) : null}
+        {deviceOptions.length > 0 ? (
+          <optgroup label={t('traffic.source.devices')}>
+            {deviceOptions.map((option) => (
+              <option key={option.id} value={`${DEVICE_SOURCE_PREFIX}${option.id}`}>
+                {option.label}{option.available ? '' : ` · ${t('traffic.deviceUnavailable')}`}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        {addresses.length > 0 ? (
+          <optgroup label={t('traffic.source.unassigned')}>
+            {addresses.map((address) => (
+              <option key={address} value={`${ADDRESS_SOURCE_PREFIX}${address}`}>
+                {sourceLabel(address)}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
       </select>
       <button
         type="button"

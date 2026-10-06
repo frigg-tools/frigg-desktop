@@ -1,5 +1,11 @@
-import { useEffect } from 'react';
-import type { AndroidDevice, IosSimulator, LogTarget } from '@frigg/shared';
+import {
+  ANDROID_DEVICE_STATE,
+  IOS_SIMULATOR_STATE,
+  type AndroidDevice,
+  type IosPhysicalDevice,
+  type IosSimulator,
+  type LogTarget,
+} from '@frigg/shared';
 import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
 
@@ -20,6 +26,7 @@ function buildTarget(
   value: string,
   android: AndroidDevice[],
   iosSimulators: IosSimulator[],
+  iosDevices: IosPhysicalDevice[],
 ): LogTarget | null {
   if (value.startsWith('android:')) {
     const serial = value.slice('android:'.length);
@@ -30,45 +37,40 @@ function buildTarget(
   if (value.startsWith('ios:')) {
     const udid = value.slice('ios:'.length);
     const simulator = iosSimulators.find((s) => s.udid === udid);
-    if (!simulator) return null;
-    return { platform: 'ios', id: simulator.udid, label: simulator.name };
+    if (simulator) return { platform: 'ios', id: simulator.udid, label: simulator.name };
+    const device = iosDevices.find((d) => d.udid === udid && d.paired);
+    if (!device) return null;
+    return { platform: 'ios', id: device.udid, label: device.name || device.model };
   }
   return null;
 }
 
-interface LogcatDevicePickerProps {
-  disabled: boolean;
-}
-
-export default function LogcatDevicePicker({ disabled }: LogcatDevicePickerProps) {
+export default function LogcatDevicePicker() {
   const t = useT();
   const devices = useAppStore((s) => s.devices);
-  const activeDevice = useAppStore((s) => s.activeDevice);
   const logTarget = useAppStore((s) => s.logTarget);
   const setLogTarget = useAppStore((s) => s.setLogTarget);
 
   const android = devices?.android ?? [];
   const iosSimulators = devices?.iosSimulators ?? [];
-
-  useEffect(() => {
-    if (!activeDevice || targetValue(logTarget) === targetValue(activeDevice)) return;
-    const next = buildTarget(targetValue(activeDevice), android, iosSimulators);
-    if (next) setLogTarget(next);
-  }, [activeDevice, logTarget, setLogTarget, devices]);
+  const iosDevices = devices?.iosDevices ?? [];
 
   return (
     <select
       value={targetValue(logTarget)}
       aria-label={t('logcat.device.placeholder')}
-      disabled={disabled}
-      onChange={(e) => setLogTarget(buildTarget(e.target.value, android, iosSimulators))}
+      onChange={(e) => setLogTarget(buildTarget(e.target.value, android, iosSimulators, iosDevices))}
       className="max-w-[16rem] rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1.5 font-mono text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <option value="">{t('logcat.device.placeholder')}</option>
       {android.length > 0 ? (
         <optgroup label={t('logcat.device.android')}>
           {android.map((device) => (
-            <option key={device.serial} value={androidValue(device.serial)}>
+            <option
+              key={device.serial}
+              value={androidValue(device.serial)}
+              disabled={device.state !== ANDROID_DEVICE_STATE.connected}
+            >
               {device.avdName ?? device.model}
               {device.isEmulator ? ` (${t('logcat.device.emulator')})` : ''} · {device.serial}
               {device.state !== 'device' ? ` · ${device.state}` : ''}
@@ -79,8 +81,22 @@ export default function LogcatDevicePicker({ disabled }: LogcatDevicePickerProps
       {iosSimulators.length > 0 ? (
         <optgroup label={t('logcat.device.ios')}>
           {iosSimulators.map((simulator) => (
-            <option key={simulator.udid} value={iosValue(simulator.udid)}>
+            <option
+              key={simulator.udid}
+              value={iosValue(simulator.udid)}
+              disabled={simulator.state.toLowerCase() !== IOS_SIMULATOR_STATE.booted.toLowerCase()}
+            >
               {simulator.name} · {simulator.runtime}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+      {iosDevices.length > 0 ? (
+        <optgroup label={t('logcat.device.iosDevices')}>
+          {iosDevices.map((device) => (
+            <option key={device.udid} value={iosValue(device.udid)} disabled={!device.paired}>
+              {device.name || device.model} · {device.model} · {device.udid}
+              {!device.paired ? ` · ${t('logcat.device.pairingRequired')}` : ''}
             </option>
           ))}
         </optgroup>

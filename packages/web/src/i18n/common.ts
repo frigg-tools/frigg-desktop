@@ -3,6 +3,8 @@ import type { Bundle } from './index';
 export const common: Bundle = {
   en: {
     'nav.label': 'Main navigation',
+    'toolRail.label': 'Tools',
+    'toolRail.logcat': 'Logcat',
     'nav.group.capture': 'Capture',
     'nav.group.explore': 'Explore',
     'nav.group.advanced': 'Advanced',
@@ -10,7 +12,6 @@ export const common: Bundle = {
     'nav.mocks': 'Mocks',
     'nav.automation': 'Automation',
     'nav.devices': 'Devices',
-    'nav.logcat': 'Logcat',
     'nav.database': 'Database',
     'nav.sql': 'SQL',
     'nav.client': 'API client',
@@ -48,6 +49,8 @@ export const common: Bundle = {
   },
   pt: {
     'nav.label': 'Navegação principal',
+    'toolRail.label': 'Ferramentas',
+    'toolRail.logcat': 'Logcat',
     'nav.group.capture': 'Capturar',
     'nav.group.explore': 'Explorar',
     'nav.group.advanced': 'Avançado',
@@ -55,7 +58,6 @@ export const common: Bundle = {
     'nav.mocks': 'Mocks',
     'nav.automation': 'Automação',
     'nav.devices': 'Dispositivos',
-    'nav.logcat': 'Logcat',
     'nav.database': 'Banco de dados',
     'nav.sql': 'SQL',
     'nav.client': 'API Client',

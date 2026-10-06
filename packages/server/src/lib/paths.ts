@@ -9,6 +9,7 @@ export const mocksPath = path.join(friggDir, 'mocks.json');
 export const apiClientPath = path.join(friggDir, 'api-client.json');
 export const proxyCertsPath = path.join(friggDir, 'proxy-certs.json');
 export const androidProxiesPath = path.join(friggDir, 'android-proxies.json');
+export const deviceProxiesPath = path.join(friggDir, 'device-proxies.json');
 export const automationsPath = path.join(friggDir, 'automations.json');
 export const automationRunsPath = path.join(friggDir, 'automation-runs');
 export const automationReferencesPath = path.join(friggDir, 'automation-references');

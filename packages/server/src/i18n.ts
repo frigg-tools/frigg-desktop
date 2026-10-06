@@ -43,6 +43,7 @@ const en: Dictionary = {
   'macos.proxy.noService':
     'No active network service found; configure the macOS proxy manually in System Settings.',
   'macos.proxy.commandFailed': 'networksetup {command} failed on {service}: {detail}.',
+  'macos.proxy.listenerUnavailable': 'Could not start the shared macOS and iOS simulator proxy listener: {detail}.',
   'macos.proxy.enabled': 'macOS HTTP and HTTPS proxy on {service} set to 127.0.0.1:{port}.',
   'macos.proxy.disabled': 'macOS HTTP and HTTPS proxy on {service} disabled.',
   'setup.title': 'Frigg — Device Setup',
@@ -152,6 +153,7 @@ const pt: Dictionary = {
   'macos.proxy.noService':
     'Nenhum serviço de rede ativo encontrado; configure o proxy do macOS manualmente nas Configurações do Sistema.',
   'macos.proxy.commandFailed': 'networksetup {command} falhou em {service}: {detail}.',
+  'macos.proxy.listenerUnavailable': 'Não foi possível iniciar o listener compartilhado do macOS e dos simuladores iOS: {detail}.',
   'macos.proxy.enabled': 'Proxy HTTP e HTTPS do macOS em {service} definido como 127.0.0.1:{port}.',
   'macos.proxy.disabled': 'Proxy HTTP e HTTPS do macOS em {service} desativado.',
   'setup.title': 'Frigg — Configuração do Dispositivo',

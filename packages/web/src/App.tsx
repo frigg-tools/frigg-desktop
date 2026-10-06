@@ -3,11 +3,12 @@ import { connectWs } from './api/ws';
 import { useAppStore, type Screen } from './store';
 import { initWebLogger } from './logging/web-logger';
 import { useT, useLocale } from './i18n';
+import { ResizeHandle, useResizable } from './components/ResizeHandle';
 import TrafficScreen from './screens/TrafficScreen';
 import MocksScreen from './screens/MocksScreen';
 import AutomationScreen from './screens/AutomationScreen';
 import DevicesScreen from './screens/DevicesScreen';
-import LogcatScreen from './screens/LogcatScreen';
+import LogcatPanel from './components/logcat/LogcatPanel';
 import DatabaseScreen from './screens/DatabaseScreen';
 import SqlScreen from './screens/SqlScreen';
 import ClientScreen from './screens/ClientScreen';
@@ -17,6 +18,7 @@ import LogsScreen from './screens/LogsScreen';
 import ApkStoreScreen from './screens/ApkStoreScreen';
 import OnboardingOverlay from './components/onboarding/OnboardingOverlay';
 import PausedExchangeModal from './components/breakpoints/PausedExchangeModal';
+import LogcatSessionController from './components/logcat/LogcatSessionController';
 
 function ActivityIcon() {
   return (
@@ -240,7 +242,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { screen: 'client', labelKey: 'nav.client', icon: <SendIcon /> },
       { screen: 'apk-store', labelKey: 'apkStore.title', icon: <ApkIcon /> },
-      { screen: 'logcat', labelKey: 'nav.logcat', icon: <TerminalIcon /> },
       { screen: 'database', labelKey: 'nav.database', icon: <DatabaseIcon /> },
     ],
   },
@@ -284,8 +285,24 @@ export default function App() {
   const setScreen = useAppStore((s) => s.setScreen);
   const wsConnected = useAppStore((s) => s.wsConnected);
   const status = useAppStore((s) => s.status);
+  const logcatPanelOpen = useAppStore((s) => s.logcatPanelOpen);
+  const setLogcatPanelOpen = useAppStore((s) => s.setLogcatPanelOpen);
+  const toggleLogcatPanel = useAppStore((s) => s.toggleLogcatPanel);
   const t = useT();
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight);
+  const logcatPanel = useResizable('logcat.panel', 300, {
+    axis: 'y',
+    min: 180,
+    max: Math.max(180, Math.min(640, viewportHeight - 240)),
+    invert: true,
+  });
+
+  useEffect(() => {
+    const updateViewportHeight = () => setViewportHeight(window.innerHeight);
+    window.addEventListener('resize', updateViewportHeight);
+    return () => window.removeEventListener('resize', updateViewportHeight);
+  }, []);
 
   useEffect(() => {
     initWebLogger();
@@ -335,6 +352,7 @@ export default function App() {
 
   return (
     <div className="flex h-full">
+      <LogcatSessionController />
       <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800/80">
         <div className="flex h-14 items-center gap-2.5 border-b border-zinc-800/80 px-4">
           <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-emerald-400">
@@ -414,33 +432,64 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 overflow-hidden">
-        {screen === 'traffic' ? (
-          <TrafficScreen />
-        ) : screen === 'mocks' ? (
-          <MocksScreen />
-        ) : screen === 'automation' ? (
-          <AutomationScreen />
-        ) : screen === 'logcat' ? (
-          <LogcatScreen />
-        ) : screen === 'database' ? (
-          <DatabaseScreen />
-        ) : screen === 'sql' ? (
-          <SqlScreen />
-        ) : screen === 'client' ? (
-          <ClientScreen />
-        ) : screen === 'mcp' ? (
-          <McpScreen />
-        ) : screen === 'frida' ? (
-          <FridaScreen />
-        ) : screen === 'logs' ? (
-          <LogsScreen />
-        ) : screen === 'apk-store' ? (
-          <ApkStoreScreen />
-        ) : (
-          <DevicesScreen />
-        )}
-      </main>
+      <div className="flex min-w-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
+            {screen === 'traffic' ? (
+              <TrafficScreen />
+            ) : screen === 'mocks' ? (
+              <MocksScreen />
+            ) : screen === 'automation' ? (
+              <AutomationScreen />
+            ) : screen === 'database' ? (
+              <DatabaseScreen />
+            ) : screen === 'sql' ? (
+              <SqlScreen />
+            ) : screen === 'client' ? (
+              <ClientScreen />
+            ) : screen === 'mcp' ? (
+              <McpScreen />
+            ) : screen === 'frida' ? (
+              <FridaScreen />
+            ) : screen === 'logs' ? (
+              <LogsScreen />
+            ) : screen === 'apk-store' ? (
+              <ApkStoreScreen />
+            ) : (
+              <DevicesScreen />
+            )}
+          </main>
+          {logcatPanelOpen ? (
+            <ResizeHandle axis="y" onPointerDown={logcatPanel.onPointerDown} />
+          ) : null}
+          <section
+            aria-label={t('toolRail.logcat')}
+            aria-hidden={!logcatPanelOpen}
+            className={logcatPanelOpen ? 'flex min-h-0 shrink-0 flex-col overflow-hidden border-t border-zinc-800/80' : 'hidden'}
+            style={logcatPanelOpen ? { height: logcatPanel.size } : undefined}
+          >
+            <LogcatPanel visible={logcatPanelOpen} onClose={() => setLogcatPanelOpen(false)} />
+          </section>
+        </div>
+        <aside aria-label={t('toolRail.label')} className="flex w-12 shrink-0 flex-col border-l border-zinc-800/80">
+          <div className="flex h-14 items-center justify-center border-b border-zinc-800/80">
+            <button
+              type="button"
+              aria-label={t('toolRail.logcat')}
+              aria-pressed={logcatPanelOpen}
+              title={t('toolRail.logcat')}
+              onClick={toggleLogcatPanel}
+              className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 ${
+                logcatPanelOpen
+                  ? 'bg-emerald-500/10 text-emerald-400'
+                  : 'text-zinc-500 hover:bg-zinc-900/60 hover:text-zinc-200'
+              }`}
+            >
+              <TerminalIcon />
+            </button>
+          </div>
+        </aside>
+      </div>
       <OnboardingOverlay />
       <PausedExchangeModal />
     </div>
