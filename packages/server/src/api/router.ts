@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import QRCode from 'qrcode';
+import {
+  ANDROID_DEVICE_STATE,
+  IOS_SIMULATOR_PROXY_GROUP_ID,
+  androidDeviceProxyId,
+  iosPhysicalDeviceProxyId,
+} from '@frigg/shared';
 import type {
   ApiBody,
   ApiClientCert,
@@ -48,6 +54,12 @@ import {
   teardownAndroid,
 } from '../devices/android.ts';
 import type { AndroidProxyRegistry } from '../devices/android-proxy-registry.ts';
+import type { DeviceProxyManager } from '../devices/device-proxy-manager.ts';
+import {
+  androidDeviceProxyTarget,
+  buildDeviceProxyTargets,
+  iosSimulatorProxyGroupTarget,
+} from '../devices/device-proxy-targets.ts';
 import type { CertTrustTracker } from '../devices/cert-trust-tracker.ts';
 import { bootAvd, createRootedAvd, listAvds } from '../devices/avd.ts';
 import { diagnoseInterception } from '../devices/interceptability.ts';
@@ -61,9 +73,10 @@ import { getMacProxyState, setMacProxy } from '../devices/macos-proxy.ts';
 import { mcpServerInfo } from './mcp-info.ts';
 import type { DbInspector } from '../db/index.ts';
 import type { FridaManager } from '../frida/index.ts';
-import { serverLocale, type ServerLocale } from '../i18n.ts';
+import { serverLocale, st, type ServerLocale } from '../i18n.ts';
 import { getLanIp } from '../lib/net.ts';
 import type { LogcatManager } from '../logcat/index.ts';
+import { IosDeviceLogTool } from '../logcat/ios-device-log-tool.ts';
 import type { MockStore } from '../mocks/store.ts';
 import type { BreakpointManager } from '../proxy/breakpoint-manager.ts';
 import { certToDer, type CaMaterial } from '../proxy/ca.ts';
@@ -83,6 +96,7 @@ export interface ApiDeps {
   proxyPort: number;
   apiPort: number;
   logcat: LogcatManager;
+  iosDeviceLogTool?: IosDeviceLogTool;
   loggerService: LoggerService;
   db: DbInspector;
   apiClient: ApiClientStore;
@@ -93,6 +107,7 @@ export interface ApiDeps {
   frida: FridaManager;
   certTrust: CertTrustTracker;
   androidProxyRegistry: AndroidProxyRegistry;
+  deviceProxies?: DeviceProxyManager;
   reloadProxy: () => Promise<void>;
   agentIntegrations?: AgentIntegrationService;
   apkStore?: ApkStore;
@@ -668,6 +683,7 @@ function rethrowNotFound(error: unknown): never {
 
 export function buildRouter(deps: ApiDeps): Router {
   const router = Router();
+  const iosDeviceLogTool = deps.iosDeviceLogTool ?? new IosDeviceLogTool();
 
   if (deps.automation) {
     router.use(buildAutomationRouter({ ...deps.automation, apiPort: () => deps.apiPort }));
@@ -792,6 +808,7 @@ export function buildRouter(deps: ApiDeps): Router {
   router.get(
     '/api/devices',
     asyncHandler(async (_req, res) => {
+      const proxyReconcileRevision = deps.deviceProxies?.beginReconcile();
       const [adb, android, xcrun, iosSimulators, iosDevices, macosProxy] = await Promise.all([
         adbStatus(),
         listAndroidDevices(),
@@ -801,16 +818,34 @@ export function buildRouter(deps: ApiDeps): Router {
         getMacProxyState(),
       ]);
       const now = Date.now();
+      const lanIp = getLanIp();
+      if (deps.deviceProxies && proxyReconcileRevision !== undefined) {
+        await deps.deviceProxies.reconcile(
+          buildDeviceProxyTargets(android, iosSimulators, iosDevices, lanIp),
+          proxyReconcileRevision,
+        );
+      }
       const androidWithCert = android.map((device) => ({
         ...device,
+        proxy: deps.deviceProxies?.getStatus(androidDeviceProxyId(device.serial)),
         certTrusted: device.ipAddress === undefined ? undefined : deps.certTrust.isTrusted(device.ipAddress, now),
         lastDecryptedAt: deps.certTrust.lastDecryptedAt(device.ipAddress),
       }));
       const snapshot: DevicesSnapshot = {
         android: androidWithCert,
         iosSimulators,
-        iosDevices,
-        tooling: { adb, xcrun, macosProxy },
+        iosDevices: iosDevices.map((device) => ({
+          ...device,
+          proxy: deps.deviceProxies?.getStatus(iosPhysicalDeviceProxyId(device.udid)),
+        })),
+        tooling: {
+          adb,
+          xcrun,
+          macosProxy: {
+            ...macosProxy,
+            proxy: deps.deviceProxies?.getStatus(IOS_SIMULATOR_PROXY_GROUP_ID),
+          },
+        },
       };
       res.json(snapshot);
     }),
@@ -821,15 +856,26 @@ export function buildRouter(deps: ApiDeps): Router {
     asyncHandler(async (req, res) => {
       const serial = req.params.serial;
       const lanIp = getLanIp();
-      const proxyValue = androidProxyAddress(serial, deps.proxyPort, lanIp);
+      const device = (await listAndroidDevices()).find((candidate) => candidate.serial === serial && candidate.state === ANDROID_DEVICE_STATE.connected);
+      if (!device) throw new Error(`Android device ${serial} is not connected.`);
+      const proxyStatus = deps.deviceProxies
+        ? await deps.deviceProxies.ensureTarget(androidDeviceProxyTarget(device, lanIp))
+        : { host: device.isEmulator ? '10.0.2.2' : lanIp, port: deps.proxyPort, ready: true };
+      if (!proxyStatus.ready || proxyStatus.port === null) {
+        throw new Error(proxyStatus.error ?? `The Frigg proxy listener is unavailable for ${device.avdName ?? device.model}.`);
+      }
+      const proxyValue = androidProxyAddress(serial, proxyStatus.port, lanIp);
+      let previousValueBeforeSetup: string | null = null;
+      let previousLease: ReturnType<AndroidProxyRegistry['get']> = undefined;
       if (proxyValue !== null) {
         const current = await readAndroidProxySetting(serial);
         if (!current.ok) {
           throw new Error(`Could not read the current Android proxy on ${serial}: ${current.detail}`);
         }
-        const oldLease = deps.androidProxyRegistry.get(serial);
-        const previousProxyValue = oldLease?.proxyValue === current.value
-          ? oldLease.previousProxyValue
+        previousValueBeforeSetup = current.value;
+        previousLease = deps.androidProxyRegistry.get(serial);
+        const previousProxyValue = previousLease?.proxyValue === current.value
+          ? previousLease.previousProxyValue
           : current.value;
         // Persist ownership before touching Android so a crash between these steps is recoverable.
         await deps.androidProxyRegistry.set(serial, { proxyValue, previousProxyValue });
@@ -837,7 +883,7 @@ export function buildRouter(deps: ApiDeps): Router {
       }
 
       const result = await setupAndroid(serial, {
-        proxyPort: deps.proxyPort,
+        proxyPort: proxyStatus.port,
         apiPort: deps.apiPort,
         lanIp,
         ca: deps.ca,
@@ -846,7 +892,24 @@ export function buildRouter(deps: ApiDeps): Router {
       if (proxyValue !== null && !result.proxySet) {
         deps.androidProxyRegistry.markInactive(serial);
         const current = await readAndroidProxySetting(serial);
-        if (current.ok && current.value !== proxyValue) {
+        if (current.ok && current.value === proxyValue) {
+          await setAndroidProxySetting(serial, previousValueBeforeSetup);
+          if (previousLease) {
+            await deps.androidProxyRegistry.set(serial, previousLease);
+            if (previousValueBeforeSetup === previousLease.proxyValue) deps.androidProxyRegistry.markActive(serial);
+            else await deps.androidProxyRegistry.delete(serial);
+          } else {
+            await deps.androidProxyRegistry.delete(serial);
+          }
+        } else if (current.ok && current.value === previousValueBeforeSetup) {
+          if (previousLease) {
+            await deps.androidProxyRegistry.set(serial, previousLease);
+            if (current.value === previousLease.proxyValue) deps.androidProxyRegistry.markActive(serial);
+            else await deps.androidProxyRegistry.delete(serial);
+          } else {
+            await deps.androidProxyRegistry.delete(serial);
+          }
+        } else if (current.ok) {
           await deps.androidProxyRegistry.delete(serial);
         }
       }
@@ -916,7 +979,21 @@ export function buildRouter(deps: ApiDeps): Router {
     asyncHandler(async (req, res) => {
       const record = asRecord(req.body, 'macos-proxy');
       if (typeof record.enabled !== 'boolean') badRequest('enabled must be a boolean');
-      res.json(await setMacProxy(record.enabled, deps.proxyPort, localeFromRequest(req)));
+      let port = deps.proxyPort;
+      if (record.enabled && deps.deviceProxies !== undefined) {
+        const proxy = await deps.deviceProxies.ensureTarget(iosSimulatorProxyGroupTarget());
+        if (!proxy.ready || proxy.port === null) {
+          res.json({
+            ok: false,
+            message: st(localeFromRequest(req), 'macos.proxy.listenerUnavailable', {
+              detail: proxy.error ?? 'unknown error',
+            }),
+          });
+          return;
+        }
+        port = proxy.port;
+      }
+      res.json(await setMacProxy(record.enabled, port, localeFromRequest(req)));
     }),
   );
 
@@ -1053,7 +1130,7 @@ export function buildRouter(deps: ApiDeps): Router {
     asyncHandler(async (req, res) => {
       const platform = parsePlatform(req.query.platform);
       const id = parseNonEmpty(req.query.id, 'id');
-      res.json(await listApps(platform, id));
+      res.json(await listApps(platform, id, iosDeviceLogTool));
     }),
   );
 

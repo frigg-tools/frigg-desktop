@@ -27,6 +27,9 @@ import type { TrafficStore } from './traffic-store.ts';
 
 export interface EngineDeps {
   proxyPort: number;
+  clientDeviceId?: string;
+  breakpointOwnerId?: string;
+  allowEphemeralFallback?: boolean;
   ca: CaMaterial;
   mocks: MockStore;
   traffic: TrafficStore;
@@ -41,6 +44,7 @@ interface ClientCertificateHostEntry {
 
 export class ProxyEngine {
   private readonly deps: EngineDeps;
+  private readonly breakpointOwnerId: string;
   private server: Mockttp | null = null;
   private boundPort = 0;
   private reloading: Promise<void> | null = null;
@@ -49,6 +53,7 @@ export class ProxyEngine {
 
   constructor(deps: EngineDeps) {
     this.deps = deps;
+    this.breakpointOwnerId = deps.breakpointOwnerId ?? 'shared';
   }
 
   get port(): number {
@@ -62,7 +67,7 @@ export class ProxyEngine {
     try {
       server = await this.buildAndStart(preferred);
     } catch (error) {
-      if (this.boundPort !== 0 || !isAddrInUse(error)) throw error;
+      if (this.deps.allowEphemeralFallback === false || this.boundPort !== 0 || !isAddrInUse(error)) throw error;
       server = await this.buildAndStart(0);
     }
     this.boundPort = server.port;
@@ -115,7 +120,7 @@ export class ProxyEngine {
     if (!this.server) return;
     const server = this.server;
     this.server = null;
-    this.deps.breakpoints.releaseAll();
+    this.deps.breakpoints.releaseOwner(this.breakpointOwnerId);
     await server.stop();
     this.mockedRuleIdByRequestId.clear();
     this.pendingRequestCaptures.clear();
@@ -177,7 +182,7 @@ export class ProxyEngine {
       body: (await safeGetText(req.body)) ?? '',
       bodyTruncated: false,
     };
-    const result = await this.deps.breakpoints.pauseRequest(rule.id, data);
+    const result = await this.deps.breakpoints.pauseRequest(rule.id, data, this.breakpointOwnerId);
     switch (result.action) {
       case 'send-request':
         return {
@@ -218,7 +223,7 @@ export class ProxyEngine {
       body: (await safeGetText(res.body)) ?? '',
       bodyTruncated: false,
     };
-    const result = await this.deps.breakpoints.pauseResponse(rule.id, requestData, responseData);
+    const result = await this.deps.breakpoints.pauseResponse(rule.id, requestData, responseData, this.breakpointOwnerId);
     switch (result.action) {
       case 'send-response':
         return {
@@ -254,6 +259,7 @@ export class ProxyEngine {
       headers: toHeaderRecord(req.headers),
       body: await captureBody(req.body),
       clientAddress: req.remoteIpAddress,
+      clientDeviceId: this.deps.clientDeviceId,
     };
     this.deps.traffic.addRequest(captured);
   }

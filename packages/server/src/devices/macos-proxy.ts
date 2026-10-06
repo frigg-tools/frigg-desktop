@@ -13,12 +13,24 @@ export async function disableMacProxyIfEnabledByFrigg(): Promise<void> {
   proxyEnabledByFrigg = false;
 }
 
-export async function getMacProxyState(): Promise<{ enabled: boolean; service: string | null }> {
+export async function getMacProxyState(): Promise<{
+  enabled: boolean;
+  service: string | null;
+  host: string | null;
+  port: number | null;
+}> {
   const service = await detectActiveService();
-  if (service === null) return { enabled: false, service: null };
+  if (service === null) return { enabled: false, service: null, host: null, port: null };
   const result = await run('networksetup', ['-getwebproxy', service]);
   const enabled = result.ok && /^Enabled:\s*Yes/im.test(result.stdout);
-  return { enabled, service };
+  const host = result.ok ? result.stdout.match(/^Server:\s*(.+)$/im)?.[1]?.trim() ?? null : null;
+  const rawPort = result.ok ? result.stdout.match(/^Port:\s*(\d+)\s*$/im)?.[1] : undefined;
+  const port = rawPort === undefined ? null : Number(rawPort);
+  return { enabled, service, host, port: Number.isInteger(port) ? port : null };
+}
+
+export function markMacProxyEnabledByFrigg(): void {
+  proxyEnabledByFrigg = true;
 }
 
 export async function setMacProxy(
@@ -39,6 +51,7 @@ export async function setMacProxy(
         ['-setwebproxystate', service, 'off'],
         ['-setsecurewebproxystate', service, 'off'],
       ];
+  if (enabled) proxyEnabledByFrigg = true;
   for (const args of commands) {
     const result = await run('networksetup', args);
     if (!result.ok) {

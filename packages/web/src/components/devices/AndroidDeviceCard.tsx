@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { deriveProxyState, type AndroidCertMode, type AndroidDevice, type AndroidSetupResult } from '@frigg/shared';
+import { ANDROID_DEVICE_STATE, deriveProxyState, type AndroidCertMode, type AndroidDevice, type AndroidSetupResult } from '@frigg/shared';
 import { installCertAndroid, openTrustedCreds, setupAndroid, teardownAndroid } from '../../api/client';
 import { useAppStore } from '../../store';
 import { useT, type TranslateFn } from '../../i18n';
 import Spinner from './Spinner';
+import CopyButton from './CopyButton';
 
 const WARN_HINTS = ['fail', 'error', 'unable', 'cannot', 'could not', 'manual', 'denied', 'fallback', 'not set', 'only trust'];
 
@@ -112,20 +113,29 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
   const [result, setResult] = useState<AndroidSetupResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const ready = device.state === 'device';
-  const friggAddr =
-    status === null
+  const ready = device.state === ANDROID_DEVICE_STATE.connected;
+  const friggAddr = device.proxy !== undefined
+    ? device.proxy.host === null || device.proxy.port === null
+      ? null
+      : `${device.proxy.host}:${device.proxy.port}`
+    : status === null
       ? null
       : device.isEmulator
         ? `10.0.2.2:${status.proxyPort}`
         : status.lanIp === null
           ? null
           : `${status.lanIp}:${status.proxyPort}`;
+  const proxyUnavailable = device.proxy !== undefined && (
+    !device.proxy.ready || device.proxy.host === null || device.proxy.port === null
+  );
+  const assignedProxyAddress = device.proxy && device.proxy.host !== null && device.proxy.port !== null
+    ? `${device.proxy.host}:${device.proxy.port}`
+    : null;
   const proxyState = deriveProxyState(device.proxyValue, friggAddr);
   const ago = decryptedAgo(t, device.lastDecryptedAt);
   const selectedForTools = activeDevice?.platform === 'android' && activeDevice.id === device.serial;
   const httpsObserved = ago !== null;
-  const currentStep = !ready ? 'device' : proxyState !== 'frigg' ? 'proxy' : !httpsObserved ? 'https' : null;
+  const currentStep = !ready ? 'device' : proxyUnavailable || proxyState !== 'frigg' ? 'proxy' : !httpsObserved ? 'https' : null;
   const certStatusKey = device.isEmulator
     ? 'certUnknown'
     : device.certTrusted
@@ -133,6 +143,8 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
       : 'certUnverified';
   const nextStep = !ready
     ? 'nextDevice'
+    : proxyUnavailable
+      ? 'nextProxyUnavailable'
     : proxyState === 'other'
       ? 'nextOtherProxy'
       : proxyState === 'off'
@@ -150,8 +162,8 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
     {
       id: 'proxy',
       label: t('devices.setup.step.proxy'),
-      status: t(proxyState === 'frigg' ? 'devices.setup.proxyReady' : proxyState === 'other' ? 'devices.setup.proxyOther' : 'devices.setup.proxyPending'),
-      done: proxyState === 'frigg',
+      status: t(proxyUnavailable ? 'devices.setup.proxyUnavailable' : proxyState === 'frigg' ? 'devices.setup.proxyReady' : proxyState === 'other' ? 'devices.setup.proxyOther' : 'devices.setup.proxyPending'),
+      done: proxyState === 'frigg' && !proxyUnavailable,
     },
     {
       id: 'https',
@@ -186,7 +198,7 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
       'devices.android.installCertFailed',
     );
 
-  const dotClass = proxyState === 'frigg' ? 'pulse-dot bg-emerald-400' : proxyState === 'other' ? 'bg-amber-400' : 'bg-zinc-600';
+  const dotClass = proxyUnavailable ? 'bg-rose-400' : proxyState === 'frigg' ? 'pulse-dot bg-emerald-400' : proxyState === 'other' ? 'bg-amber-400' : 'bg-zinc-600';
   const configure = () => void run('setup', () => setupAndroid(device.serial), 'devices.android.setupFailed');
   const openTraffic = () => {
     setActiveDevice({ platform: 'android', id: device.serial, label: device.avdName ?? device.model });
@@ -250,6 +262,11 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
           );
         })}
       </ol>
+      {proxyUnavailable ? (
+        <p role="status" className="border-t border-rose-500/20 bg-rose-500/5 px-4 py-2 text-xs text-rose-300">
+          {device.proxy?.error ?? t('devices.proxy.unavailable')}
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-800/80 bg-zinc-950/30 px-4 py-4">
         <div className="min-w-0 flex-1">
@@ -257,7 +274,7 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
           <p className="mt-1 text-[13px] font-medium text-zinc-200">{t(`devices.android.${nextStep}Title`)}</p>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">{t(`devices.android.${nextStep}Hint`, { device: device.avdName ?? device.model, ago: ago ?? '' })}</p>
         </div>
-        {ready && proxyState !== 'frigg' ? (
+        {ready && (proxyState !== 'frigg' || proxyUnavailable) ? (
           <button
             type="button"
             onClick={configure}
@@ -265,9 +282,9 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
             className="flex min-h-10 shrink-0 items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {pending === 'setup' ? <Spinner /> : null}
-            {t(proxyState === 'other' ? 'devices.android.switchToFrigg' : 'devices.android.connectProxyToFrigg')}
+            {t(proxyUnavailable ? 'devices.android.retryProxyListener' : proxyState === 'other' ? 'devices.android.switchToFrigg' : 'devices.android.connectProxyToFrigg')}
           </button>
-        ) : proxyState === 'frigg' ? (
+        ) : proxyState === 'frigg' && !proxyUnavailable ? (
           <button
             type="button"
             onClick={openTraffic}
@@ -306,6 +323,15 @@ export default function AndroidDeviceCard({ device }: { device: AndroidDevice })
               <p className="mt-1 font-mono text-[11px] text-zinc-500">
                 {device.proxyValue ?? t(proxyState === 'off' ? 'devices.android.proxyOff' : 'devices.android.proxyPointsOther')}
               </p>
+              {device.proxy !== undefined ? (
+                <p className="mt-1 flex items-center gap-1 font-mono text-[11px] text-zinc-500">
+                  <span>{t('devices.proxy.endpoint')}:</span>
+                  {assignedProxyAddress ?? t('devices.proxy.unavailable')}
+                  {assignedProxyAddress !== null ? (
+                    <CopyButton value={assignedProxyAddress} label={t('devices.strip.copyProxyAddress')} />
+                  ) : null}
+                </p>
+              ) : null}
             </div>
             {proxyState !== 'off' ? (
               <button

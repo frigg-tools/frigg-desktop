@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
-module.exports = async function beforePack() {
+module.exports = async function beforePack(context) {
   console.log('[frigg] rebuilding the web UI before packaging…');
   execSync('npm run build --workspace @frigg/web', { stdio: 'inherit', cwd: repoRoot });
 
@@ -21,4 +21,17 @@ module.exports = async function beforePack() {
     stdio: 'inherit',
     cwd: repoRoot,
   });
+
+  if (context.electronPlatformName === 'darwin') {
+    const { Arch } = require('builder-util');
+    const arch = Arch[context.arch];
+    if (arch !== 'arm64' && arch !== 'x64') {
+      throw new Error(`[frigg] unsupported macOS packaging architecture for iOS log helper: ${String(arch)}`);
+    }
+    console.log(`[frigg] staging idevicesyslog for ${arch}…`);
+    execFileSync('node', [path.join(__dirname, 'stage-ios-tools.cjs'), '--arch', arch], {
+      stdio: 'inherit',
+      cwd: repoRoot,
+    });
+  }
 };

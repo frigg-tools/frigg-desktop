@@ -22,7 +22,7 @@ Frigg is free and open source, with an English and Brazilian Portuguese interfac
 ### Device diagnostics
 
 - **Device setup** — configure Android emulators and iOS simulators in a few clicks. Physical phones can connect through a QR setup page.
-- **Logs** — stream Android logcat and iOS logs, filtered by app, level, and text.
+- **Logs** — stream Android logcat and iOS logs, filtered by app or running process, level, and text. The macOS app includes support for paired physical iPhones and iPads.
 - **On-device databases** — browse and query Android Room and iOS app databases from a connected device.
 
 ### Advanced tools
@@ -38,6 +38,7 @@ Frigg is free and open source, with an English and Brazilian Portuguese interfac
 | Android emulator or USB device | One-click proxy and CA setup in **Devices** | Uses a system CA when `adb root` is available; otherwise install the user CA manually. |
 | iOS Simulator | Install the CA in **Devices** and enable the macOS proxy toggle | The simulator uses the Mac's proxy settings. |
 | Physical Android or iPhone | Open the QR setup page and configure the Wi-Fi proxy and certificate | The phone and Frigg host must be on the same Wi-Fi network. |
+| Paired iPhone or iPad logs | Select the device in **Logcat** in the macOS app | The DMG includes the log helper; the process filter lists currently running processes. |
 | Rooted Android emulator | Select an AVD in **Frida** | Attach to a running app or spawn it and run Frida scripts. |
 
 ## Download

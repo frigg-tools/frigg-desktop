@@ -79,6 +79,9 @@ async function resolveAppUrl(): Promise<string> {
   const secretBox = buildSecretBox();
   const frigg = await startFrigg({
     webDir: path.join(process.resourcesPath, 'web'),
+    ...(app.isPackaged && process.platform === 'darwin'
+      ? { iosLogToolPath: path.join(process.resourcesPath, 'ios-tools', 'bin', 'idevicesyslog') }
+      : {}),
     ...(secretBox ? { secretBox } : {}),
   });
   setDesktopLogService(frigg.loggerService);

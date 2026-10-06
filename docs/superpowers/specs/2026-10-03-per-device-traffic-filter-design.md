@@ -18,9 +18,13 @@ filter cannot tell those requests apart.
   and paired physical iOS device returned by the Devices API.
 - Selecting a device shows requests captured through that device's assigned proxy endpoint only.
 - Android setup continues to configure the device automatically, using its assigned endpoint.
-- iOS devices and simulators show a per-device endpoint and concise manual proxy setup steps.
+- Paired physical iOS devices show a per-device endpoint and concise manual proxy setup steps.
 - The shared proxy remains available for the host and manually configured clients. Requests entering
   through it stay unassigned and remain filterable by source address.
+- Booted iOS simulators are one selectable group because they inherit the macOS system proxy and
+  cannot be directed to individual ports. Traffic from Mac apps using that same system proxy is part
+  of the group and must be disclosed in its label. Keep that group selectable while buffered group
+  requests exist, even if the simulators are no longer booted.
 - Existing buffered exchanges without device identity remain available as unassigned traffic. They
   cannot be attributed retroactively.
 - Selecting All devices restores the current combined view.
@@ -40,8 +44,8 @@ filter cannot tell those requests apart.
 ### Proxy ownership and request identity
 
 Add a `DeviceProxyManager` that owns one `ProxyEngine` listener per discovered device target. It
-allocates a stable, persisted port for each namespaced device ID (`android:<serial>`,
-`ios-simulator:<udid>`, or `ios-device:<udid>`), starts and restores the listeners, and reconciles
+allocates stable persisted ports for `android:<serial>` and `ios-device:<udid>`, plus one stable
+group listener (`ios-simulator:shared`) for the macOS system proxy. It starts and reconciles
 them with the device watcher. The existing shared listener remains the default for host and manual
 traffic.
 
@@ -66,9 +70,12 @@ device's proxy error; the manager must not silently fall back to an untagged sha
 - On startup, restore listeners for devices whose current proxy settings use a registered Frigg
   device port. Reconcile listener creation/removal on device updates and stop all listeners during
   shutdown.
-- iOS proxy settings are currently manual. Show each simulator/device its dedicated host and port,
-  with copy controls and steps to enter that address in its network proxy settings. Do not change
-  iOS settings automatically. The shared manual setup instructions remain for generic clients.
+- Paired physical iOS proxy settings are currently manual. Show each device its dedicated host and
+  port, with copy controls and steps to enter that address in its network proxy settings. Do not
+  change iOS settings automatically.
+- Simulators inherit the macOS system proxy. The macOS proxy toggle must point to the group listener;
+  do not show per-simulator endpoints or claim requests can be attributed to one simulator. The
+  group also includes Mac apps using the system proxy. Keep generic manual setup on the shared proxy.
 - Reload operations that affect the shared proxy configuration must reload all device listeners as
   well.
 
@@ -79,7 +86,8 @@ names and identifiers shown by the device pickers. Keep observed IP addresses as
 options so host and legacy traffic can still be inspected.
 
 Represent the selected filter as All, a device ID, or an unassigned source address. A device filter
-matches `request.clientDeviceId`; an unassigned source filter matches normalized
+matches `request.clientDeviceId`; the simulator group matches `ios-simulator:shared`; an unassigned
+source filter matches normalized
 `request.clientAddress`. Keep the existing initial active-device behavior where a selected Android
 device is available, while allowing the user to choose any listed device. If the selected device
 has no captured requests yet, show the existing waiting-for-device message with its name.
@@ -107,8 +115,9 @@ unassigned traffic rather than guessing which device sent them.
   source address.
 - Confirm physical Android setup points to its dedicated listener and shutdown restores the prior
   Android proxy lease.
-- Confirm iOS simulator and physical-device cards show distinct copyable proxy addresses and
-  requests are attributed after manual configuration.
+- Confirm all booted simulators appear as one group backed by the macOS proxy listener and are not
+  labeled as individually identified; confirm paired physical-device cards show their own copyable
+  addresses and requests are attributed after manual configuration.
 - Confirm a port collision reports a device-level unavailable state and never labels the request as
   belonging to a different device.
 - Review the web filter for All, each device, and unassigned traffic, including a device with no

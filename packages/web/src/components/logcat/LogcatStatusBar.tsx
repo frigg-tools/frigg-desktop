@@ -2,16 +2,20 @@ import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
 
 interface LogcatStatusBarProps {
-  autoscroll: boolean;
-  onToggleAutoscroll: () => void;
   visibleCount: number;
 }
 
-export default function LogcatStatusBar({
-  autoscroll,
-  onToggleAutoscroll,
-  visibleCount,
-}: LogcatStatusBarProps) {
+function displayLogError(error: string, translate: (key: string) => string): string {
+  const match = /^ios-device:([^|]+)(?:\|([\s\S]*))?$/.exec(error);
+  if (match === null) return error;
+  const key = `logcat.status.iosDevice.${match[1]}`;
+  const message = translate(key);
+  if (message === key) return error;
+  if (match[1] === 'stream-failed' && match[2]?.trim()) return `${message}: ${match[2].trim()}`;
+  return message;
+}
+
+export default function LogcatStatusBar({ visibleCount }: LogcatStatusBarProps) {
   const t = useT();
   const logStatus = useAppStore((s) => s.logStatus);
   const logTarget = useAppStore((s) => s.logTarget);
@@ -43,7 +47,7 @@ export default function LogcatStatusBar({
       </span>
       {logStatus.error ? (
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-rose-400">
-          {logStatus.error}
+          {displayLogError(logStatus.error, t)}
         </span>
       ) : (
         <div className="flex-1" />
@@ -57,17 +61,6 @@ export default function LogcatStatusBar({
           {t('logcat.retry')}
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={onToggleAutoscroll}
-        className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition active:scale-[0.98] ${
-          autoscroll
-            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-            : 'border-zinc-800 bg-zinc-900/60 text-zinc-500 hover:text-zinc-300'
-        }`}
-      >
-        {t('logcat.autoscroll')}
-      </button>
     </div>
   );
 }

@@ -1,7 +1,13 @@
 import { useAppStore } from '../../store';
 import { useT } from '../../i18n';
 
-export default function TrafficEmptyState({ deviceLabel }: { deviceLabel?: string }) {
+export default function TrafficEmptyState({
+  deviceLabel,
+  sharedMacProxy = false,
+}: {
+  deviceLabel?: string;
+  sharedMacProxy?: boolean;
+}) {
   const t = useT();
   const setScreen = useAppStore((s) => s.setScreen);
   return (
@@ -18,7 +24,11 @@ export default function TrafficEmptyState({ deviceLabel }: { deviceLabel?: strin
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
       </svg>
       <p className="max-w-md text-center text-[13px] leading-relaxed text-zinc-400">
-        {deviceLabel ? t('traffic.emptyStateForDevice', { device: deviceLabel }) : t('traffic.emptyState')}
+        {deviceLabel
+          ? sharedMacProxy
+            ? t('traffic.emptyStateForSharedMacProxy')
+            : t('traffic.emptyStateForDevice', { device: deviceLabel })
+          : t('traffic.emptyState')}
       </p>
       <button
         type="button"

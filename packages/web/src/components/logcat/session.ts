@@ -100,5 +100,5 @@ export function isLogTargetAvailable(target: LogTarget | null, devices: DevicesS
     (simulator) =>
       simulator.udid === target.id &&
       simulator.state.toLowerCase() === IOS_SIMULATOR_STATE.booted.toLowerCase(),
-  );
+  ) || devices.iosDevices.some((device) => device.udid === target.id && device.paired);
 }

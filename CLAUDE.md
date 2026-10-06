@@ -59,7 +59,8 @@ Every new capability exposed through MCP needs a dedicated skill under `plugin/s
 ## Devices
 
 - **Android** (`adb`): Devices → Set up interception sets the proxy and installs the CA (system cert via `adb root`, else a guided user-cert install). Logcat: Logcat tab → pick the device → Start. Filter by package (resolved to `--pid` via `pidof`), level and text.
-- **iOS Simulator** (`xcrun simctl`): install the CA cert per simulator; simulators inherit the **Mac's** proxy (toggle on the Devices screen). Logcat via `log stream`. Physical iOS logs need `idevicesyslog` (not bundled).
+- **iOS Simulator** (`xcrun simctl`): install the CA cert per simulator; simulators inherit the **Mac's** proxy (toggle on the Devices screen). Logcat via `log stream`.
+- **Physical iOS** (`idevicesyslog`): paired iPhones and iPads can stream logs from the macOS desktop app. The helper and its runtime libraries are bundled in the DMG; the Logcat process filter lists processes currently running on the device.
 - **Any physical device**: open the `/setup` page (QR on the Devices screen) — manual Wi-Fi proxy + CA trust.
 
 ## SQL (database client)
