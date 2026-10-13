@@ -21,7 +21,7 @@
     "landing:build": "npm run build -w @frigg/landing"
   },
   "devDependencies": {
-    "concurrently": "^9.2.4"
+    "concurrently": "^9.2.5"
   },
   "engines": {
     "node": ">=20"
