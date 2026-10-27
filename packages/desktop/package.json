@@ -16,7 +16,7 @@
   "devDependencies": {
     "@frigg/server": "*",
     "cross-env": "^7.0.3",
-    "electron": "^43.7.5",
+    "electron": "^43.8.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "wait-on": "^8.0.1"
